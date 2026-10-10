@@ -51,7 +51,12 @@ import java.util.concurrent.atomic.AtomicInteger
 @DisplayName("RelayTunnelProvider")
 @Timeout(value = 30, unit = TimeUnit.SECONDS)
 class RelayTunnelProviderTest {
-    private val json = Json { ignoreUnknownKeys = true }
+    /** `encodeDefaults`: `RelayRequestFrame.type` defaults to `request` and must be sent, as the relay does. */
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            encodeDefaults = true
+        }
 
     private fun withRelay(
         deviceHandler: suspend DefaultWebSocketServerSession.() -> Unit,
