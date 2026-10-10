@@ -76,7 +76,7 @@ internal object RelayFrameCodec {
         try {
             decodeElement(json.parseToJsonElement(text))
         } catch (e: SerializationException) {
-            RelayInbound.Malformed(e::class.simpleName ?: "SerializationException")
+            RelayInbound.Malformed("malformed")
         } catch (e: IllegalArgumentException) {
             RelayInbound.Malformed(e::class.simpleName ?: "IllegalArgumentException")
         }
