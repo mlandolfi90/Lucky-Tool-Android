@@ -53,6 +53,7 @@ internal sealed class RelayInbound {
         val type: String,
     ) : RelayInbound()
 
+    /** [reason] is the error class name only: it is logged, and parser messages quote the frame. */
     data class Malformed(
         val reason: String,
     ) : RelayInbound()
@@ -70,14 +71,14 @@ internal object RelayFrameCodec {
             encodeDefaults = true
         }
 
-    /** Never throws: malformed input yields [RelayInbound.Malformed]. */
+    /** Never throws: malformed input yields [RelayInbound.Malformed] naming the error class. */
     fun decode(text: String): RelayInbound =
         try {
             decodeElement(json.parseToJsonElement(text))
         } catch (e: SerializationException) {
-            RelayInbound.Malformed(e.message ?: "invalid JSON")
+            RelayInbound.Malformed(e::class.simpleName ?: "SerializationException")
         } catch (e: IllegalArgumentException) {
-            RelayInbound.Malformed(e.message ?: "invalid frame")
+            RelayInbound.Malformed(e::class.simpleName ?: "IllegalArgumentException")
         }
 
     fun encode(frame: RelayResponseFrame): String = json.encodeToString(RelayResponseFrame.serializer(), frame)
