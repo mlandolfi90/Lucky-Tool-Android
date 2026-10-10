@@ -60,9 +60,12 @@ connected.
   traefik.http.routers.<relay router>.middlewares=relay-buffering
   ```
 
-  A router takes a comma-separated middleware list: append `relay-buffering` to the one it already has.
-- Values of `BODY_TIMEOUT_MS` above Node's own `requestTimeout` (300 s) have no effect, since Node answers `408`
-  first; behind Traefik, values above its entry point `readTimeout` (60 s by default) need that timeout raised too.
+  Keep `maxRequestBodyBytes` equal to `MAX_BODY_BYTES`: below it, Traefik refuses bodies the relay would accept;
+  above it, Traefik buffers bodies the relay then refuses. A router takes a comma-separated middleware list: append
+  `relay-buffering` to the one it already has.
+- Node itself answers `408` between 300 and 330 s after a request starts (its `requestTimeout`, checked every 30 s),
+  so a `BODY_TIMEOUT_MS` above 300000 is not reliably reached. Behind Traefik, values above its entry point
+  `readTimeout` (60 s by default) need that timeout raised too.
 
 ## Test
 
