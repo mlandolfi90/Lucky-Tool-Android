@@ -236,9 +236,12 @@ sólo se declara en qué hilo cae cada uno y dónde corre.
   `edge-release`.
 - **CI=** `.github/workflows/ci.yml`, en push a `main` y en cada PR. El
   resultado se **lee**: `gh run list -R mlandolfi90/Lucky-Tool-Android` y
-  `gh run view <id>`. Duraciones reales en el fork: no medidas (cero
-  ejecuciones); los topes declarados son 15/25/30/25 min. El test de ngrok se
-  salta sin token (ver «Repo y upstream»).
+  `gh run view <id>`. Primera corrida en el fork, medida el 2026-10-09 con
+  cachés frías (PR #2): Lint 2 min 37 s, Unit & Integration Tests 14 min 07 s,
+  Build Release GMS 16 min 26 s, FOSS 16 min 17 s, E2E 17 min 47 s; unos 18 min
+  de pared. Los topes declarados son 15/25/30/25 min. En esa corrida, por
+  sabor, más de 2.200 pruebas, cero fallos y una sola salteada: la clase de
+  ngrok, como estaba previsto (ver «Repo y upstream»).
 - **MANUAL=** `make privacy-benchmark` (baja modelo y dataset; obligatorio
   cuando cambia la detección de privacidad, `CLAUDE.md` §7) y las pruebas en
   teléfono real (`make install`, `make grant-permissions`). Se avisa antes.
