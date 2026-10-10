@@ -49,6 +49,8 @@ export class RelayError extends Error {
 export function createRelay(config, logger = console) {
   const pending = new Map();
   let device = null;
+  /** Requests between admission and answer, uploads still being read included (bounded by maxPending). */
+  let inFlight = 0;
 
   const largestBody = Math.max(config.maxBodyBytes, config.maxResponseBytes);
   const wss = new WebSocketServer({
@@ -179,11 +181,16 @@ export function createRelay(config, logger = console) {
     }
     try {
       if (device === null) throw new RelayError(503, 'device not connected');
-      if (pending.size >= config.maxPending) throw new RelayError(503, 'too many pending requests');
-      const body = await readBody(req, config.maxBodyBytes);
-      const response = await forward(req, url, body);
-      if (response.body.length > config.maxResponseBytes) throw new RelayError(502, 'device response too large');
-      writeResponse(req, res, response);
+      if (inFlight >= config.maxPending) throw new RelayError(503, 'too many pending requests');
+      inFlight += 1;
+      try {
+        const body = await readBody(req, config.maxBodyBytes);
+        const response = await forward(req, url, body);
+        if (response.body.length > config.maxResponseBytes) throw new RelayError(502, 'device response too large');
+        writeResponse(req, res, response);
+      } finally {
+        inFlight -= 1;
+      }
     } catch (err) {
       if (err instanceof RelayError) {
         sendJson(res, err.status, { error: err.message }, err.status === 413);
@@ -281,23 +288,29 @@ function readBody(req, maxBytes) {
   return new Promise((resolve, reject) => {
     const chunks = [];
     let total = 0;
-    let rejected = false;
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
     req.on('data', (chunk) => {
-      if (rejected) return;
+      if (settled) return;
       total += chunk.length;
       if (total > maxBytes) {
-        rejected = true;
-        reject(new RelayError(413, `request body exceeds ${maxBytes} bytes`));
+        fail(new RelayError(413, `request body exceeds ${maxBytes} bytes`));
         return;
       }
       chunks.push(chunk);
     });
     req.on('end', () => {
-      if (!rejected) resolve(Buffer.concat(chunks));
+      if (settled) return;
+      settled = true;
+      resolve(Buffer.concat(chunks));
     });
-    req.on('error', (err) => {
-      if (!rejected) reject(new RelayError(400, `failed to read request body: ${err.message}`));
-    });
+    // Also fires when the client disconnects mid-upload (Node destroys the request with 'aborted'),
+    // which is what frees the in-flight slot.
+    req.on('error', (err) => fail(new RelayError(400, `failed to read request body: ${err.message}`)));
   });
 }
 

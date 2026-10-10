@@ -28,6 +28,17 @@ function rawRequest(port, text) {
   });
 }
 
+/** Opens a raw connection, writes `text` and leaves the socket open (e.g. a request whose body never ends). */
+function openSocket(port, text) {
+  return new Promise((resolve, reject) => {
+    const socket = connect(port, '127.0.0.1', () => {
+      socket.write(text);
+      resolve(socket);
+    });
+    socket.on('error', reject);
+  });
+}
+
 /** Resolves with the next frame of any type, or with NO_FRAME when none arrives within `ms`. */
 function frameOrNothing(ws, ms) {
   return Promise.race([nextFrame(ws, null), sleep(ms, NO_FRAME)]);
@@ -317,6 +328,30 @@ describe('relay', () => {
     respond(ws, frame2.id, { status: 201 });
     assert.equal((await first).res.status, 200);
     assert.equal((await second).res.status, 201);
+  });
+
+  it('pending limit counts uploads in progress and frees aborted ones', async () => {
+    const ws = await device();
+    const partial = 'POST /mcp HTTP/1.1\r\nHost: relay.invalid\r\nContent-Length: 100\r\n\r\npartial';
+    const uploads = await Promise.all([openSocket(ctx.port, partial), openSocket(ctx.port, partial)]);
+    try {
+      await sleep(100);
+      const { res, text } = await fetchText(`${ctx.baseUrl}/three`);
+      assert.equal(res.status, 503);
+      assert.equal(JSON.parse(text).error, 'too many pending requests');
+    } finally {
+      for (const socket of uploads) socket.destroy();
+    }
+    await sleep(100);
+
+    const framePromise = nextFrame(ws);
+    const fetchPromise = fetchText(`${ctx.baseUrl}/after`);
+    const frame = await framePromise;
+    assert.equal(frame.path, '/after');
+    respond(ws, frame.id, { body: 'freed' });
+    const { res, text } = await fetchPromise;
+    assert.equal(res.status, 200);
+    assert.equal(text, 'freed');
   });
 
   it('malformed and unknown device frames are ignored', async () => {
