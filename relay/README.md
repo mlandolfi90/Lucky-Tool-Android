@@ -16,6 +16,7 @@ RELAY_DEVICE_TOKEN='<at least 16 random characters>' node src/server.js
 | `RELAY_DEVICE_TOKEN` | — (required, ≥ 16 chars) | Bearer the phone presents on `/device` |
 | `PORT` | `8080` | Listen port (1–65535) |
 | `REQUEST_TIMEOUT_MS` | `120000` | Wait for the phone's answer before `504` |
+| `BODY_TIMEOUT_MS` | `30000` | Time to receive a request body before `408`; a stalled upload stops holding a `MAX_PENDING` slot |
 | `MAX_BODY_BYTES` | `16777216` | Request body limit (`413` above) |
 | `MAX_RESPONSE_BYTES` | `8388608` | Response body limit (`502` above; the phone enforces the same 8 MiB) |
 | `MAX_PENDING` | `32` | Requests in flight before new ones get `503` |
@@ -37,8 +38,9 @@ connected.
 
 ## HTTP semantics
 
-- `400` malformed request target · `503` no phone connected or `MAX_PENDING` reached · `504` phone did not answer in
-  time · `413` body too large · `502` phone dropped mid-request or answered with more than `MAX_RESPONSE_BYTES`
+- `400` malformed request target · `408` request body not received within `BODY_TIMEOUT_MS` · `503` no phone
+  connected or `MAX_PENDING` reached · `504` phone did not answer in time · `413` body too large · `502` phone
+  dropped mid-request or answered with more than `MAX_RESPONSE_BYTES`
 - One phone at a time: a new authenticated `/device` connection replaces the previous one (closed with code `4000`).
 - Responses above 8 MiB (e.g. large `/s/` capability downloads) are not served through the relay.
 

@@ -21,6 +21,8 @@ const HOP_BY_HOP_HEADERS = new Set([
   'content-length',
 ]);
 const NO_BODY_STATUSES = new Set([204, 304]);
+/** Answered before the request body was fully read: the connection cannot be reused. */
+const CLOSE_CONNECTION_STATUSES = new Set([408, 413]);
 const FRAME_OVERHEAD_BYTES = 64 * 1024;
 const CLOSE_GOING_AWAY = 1001;
 
@@ -49,7 +51,10 @@ export class RelayError extends Error {
 export function createRelay(config, logger = console) {
   const pending = new Map();
   let device = null;
-  /** Requests between admission and answer, uploads still being read included (bounded by maxPending). */
+  /**
+   * Requests between admission and answer, uploads still being read included (bounded by maxPending).
+   * An upload that stalls is answered 408 after bodyTimeoutMs, which frees its slot.
+   */
   let inFlight = 0;
 
   const largestBody = Math.max(config.maxBodyBytes, config.maxResponseBytes);
@@ -184,7 +189,7 @@ export function createRelay(config, logger = console) {
       if (inFlight >= config.maxPending) throw new RelayError(503, 'too many pending requests');
       inFlight += 1;
       try {
-        const body = await readBody(req, config.maxBodyBytes);
+        const body = await readBody(req, config.maxBodyBytes, config.bodyTimeoutMs);
         const response = await forward(req, url, body);
         if (response.body.length > config.maxResponseBytes) throw new RelayError(502, 'device response too large');
         writeResponse(req, res, response);
@@ -193,7 +198,7 @@ export function createRelay(config, logger = console) {
       }
     } catch (err) {
       if (err instanceof RelayError) {
-        sendJson(res, err.status, { error: err.message }, err.status === 413);
+        sendJson(res, err.status, { error: err.message }, CLOSE_CONNECTION_STATUSES.has(err.status));
         return;
       }
       throw err;
@@ -279,7 +284,11 @@ export function createRelay(config, logger = console) {
   };
 }
 
-function readBody(req, maxBytes) {
+/**
+ * Buffers the request body: 413 above `maxBytes`, 408 when it has not fully arrived within `timeoutMs`
+ * (a stalled upload would otherwise hold its MAX_PENDING slot until the socket dies).
+ */
+function readBody(req, maxBytes, timeoutMs) {
   const declared = Number.parseInt(req.headers['content-length'] ?? '', 10);
   if (Number.isFinite(declared) && declared > maxBytes) {
     req.resume();
@@ -292,8 +301,12 @@ function readBody(req, maxBytes) {
     const fail = (error) => {
       if (settled) return;
       settled = true;
+      clearTimeout(timer);
       reject(error);
     };
+    const timer = setTimeout(() => {
+      fail(new RelayError(408, `request body not received within ${timeoutMs} ms`));
+    }, timeoutMs);
     req.on('data', (chunk) => {
       if (settled) return;
       total += chunk.length;
@@ -306,6 +319,7 @@ function readBody(req, maxBytes) {
     req.on('end', () => {
       if (settled) return;
       settled = true;
+      clearTimeout(timer);
       resolve(Buffer.concat(chunks));
     });
     // Also fires when the client disconnects mid-upload (Node destroys the request with 'aborted'),

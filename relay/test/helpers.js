@@ -4,11 +4,15 @@ import { createRelay } from '../src/relay.js';
 
 export const TEST_TOKEN = 'test-device-token-0123456789';
 
-/** Heartbeat is slow by default so pings never interleave with test traffic; heartbeat tests override it. */
+/**
+ * Heartbeat is slow by default so pings never interleave with test traffic; heartbeat tests override it.
+ * The body timeout is long for the same reason: only the stalled-upload test shortens it.
+ */
 export const TEST_CONFIG = Object.freeze({
   port: 0,
   deviceToken: TEST_TOKEN,
   requestTimeoutMs: 300,
+  bodyTimeoutMs: 5_000,
   maxBodyBytes: 1024,
   maxResponseBytes: 2048,
   maxPending: 2,

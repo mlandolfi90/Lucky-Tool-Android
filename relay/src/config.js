@@ -1,6 +1,7 @@
 const DEFAULTS = Object.freeze({
   PORT: 8080,
   REQUEST_TIMEOUT_MS: 120_000,
+  BODY_TIMEOUT_MS: 30_000,
   MAX_BODY_BYTES: 16 * 1024 * 1024,
   MAX_RESPONSE_BYTES: 8 * 1024 * 1024,
   MAX_PENDING: 32,
@@ -52,6 +53,7 @@ export function loadConfig(env = process.env) {
     port: readPort(env),
     deviceToken,
     requestTimeoutMs: readPositiveInt(env, 'REQUEST_TIMEOUT_MS', DEFAULTS.REQUEST_TIMEOUT_MS),
+    bodyTimeoutMs: readPositiveInt(env, 'BODY_TIMEOUT_MS', DEFAULTS.BODY_TIMEOUT_MS),
     maxBodyBytes: readPositiveInt(env, 'MAX_BODY_BYTES', DEFAULTS.MAX_BODY_BYTES),
     maxResponseBytes: readPositiveInt(env, 'MAX_RESPONSE_BYTES', DEFAULTS.MAX_RESPONSE_BYTES),
     maxPending: readPositiveInt(env, 'MAX_PENDING', DEFAULTS.MAX_PENDING),

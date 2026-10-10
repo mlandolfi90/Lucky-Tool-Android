@@ -8,6 +8,10 @@ import { TEST_TOKEN, connectDevice, nextFrame, rejectedUpgradeStatus, respond, s
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NO_FRAME = 'no frame';
+const DEADLINE_MS = 2_000;
+const POLL_MS = 20;
+/** A POST whose declared body never fully arrives. */
+const STALLED_UPLOAD = 'POST /mcp HTTP/1.1\r\nHost: relay.invalid\r\nContent-Length: 100\r\n\r\npartial';
 
 async function fetchText(url, init) {
   const res = await fetch(url, init);
@@ -42,6 +46,38 @@ function openSocket(port, text) {
 /** Resolves with the next frame of any type, or with NO_FRAME when none arrives within `ms`. */
 function frameOrNothing(ws, ms) {
   return Promise.race([nextFrame(ws, null), sleep(ms, NO_FRAME)]);
+}
+
+/** Rejects when `promise` has not settled within `ms`, so a regression fails the test instead of hanging it. */
+function withDeadline(promise, ms, what) {
+  let timer;
+  const deadline = new Promise((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`timed out after ${ms} ms waiting for ${what}`)), ms);
+  });
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
+/** Polls `check` until it resolves truthy; fails after `ms` instead of hanging the test. */
+async function eventually(check, ms, what) {
+  const deadline = Date.now() + ms;
+  while (!(await check())) {
+    if (Date.now() > deadline) assert.fail(`timed out after ${ms} ms waiting for ${what}`);
+    await sleep(POLL_MS);
+  }
+}
+
+/** Resolves once `server` has dispatched `count` requests (the relay's own listener runs first: they are admitted). */
+function requestsDispatched(server, count) {
+  return new Promise((resolve) => {
+    let seen = 0;
+    const onRequest = () => {
+      seen += 1;
+      if (seen < count) return;
+      server.off('request', onRequest);
+      resolve();
+    };
+    server.on('request', onRequest);
+  });
 }
 
 describe('relay', () => {
@@ -332,26 +368,47 @@ describe('relay', () => {
 
   it('pending limit counts uploads in progress and frees aborted ones', async () => {
     const ws = await device();
-    const partial = 'POST /mcp HTTP/1.1\r\nHost: relay.invalid\r\nContent-Length: 100\r\n\r\npartial';
-    const uploads = await Promise.all([openSocket(ctx.port, partial), openSocket(ctx.port, partial)]);
+    const dispatched = requestsDispatched(ctx.relay.server, 2);
+    const uploads = await Promise.all([openSocket(ctx.port, STALLED_UPLOAD), openSocket(ctx.port, STALLED_UPLOAD)]);
     try {
-      await sleep(100);
+      await withDeadline(dispatched, DEADLINE_MS, 'both uploads to be admitted');
       const { res, text } = await fetchText(`${ctx.baseUrl}/three`);
       assert.equal(res.status, 503);
       assert.equal(JSON.parse(text).error, 'too many pending requests');
     } finally {
       for (const socket of uploads) socket.destroy();
     }
-    await sleep(100);
 
+    ws.on('message', (data) => {
+      const frame = JSON.parse(data.toString('utf8'));
+      if (frame.type === 'request') respond(ws, frame.id, { body: 'freed' });
+    });
+    await eventually(
+      async () => (await fetchText(`${ctx.baseUrl}/after`)).text === 'freed',
+      DEADLINE_MS,
+      'the aborted uploads to free their slots',
+    );
+  });
+
+  it('stalled upload gets 408 after the body timeout and frees its slot', async () => {
+    const strict = await extraRelay({ maxPending: 1, bodyTimeoutMs: 150 });
+    const ws = await device(strict.wsUrl);
+
+    const raw = await withDeadline(
+      rawRequest(strict.port, STALLED_UPLOAD),
+      DEADLINE_MS,
+      'the stalled upload to be answered',
+    );
+
+    assert.match(raw, /^HTTP\/1\.1 408 /);
+    assert.match(raw, /\r\nconnection: close\r\n/i);
+    assert.match(raw, /request body not received within 150 ms/);
     const framePromise = nextFrame(ws);
-    const fetchPromise = fetchText(`${ctx.baseUrl}/after`);
-    const frame = await framePromise;
+    const fetchPromise = fetchText(`${strict.baseUrl}/after`);
+    const frame = await withDeadline(framePromise, DEADLINE_MS, 'the next request to reach the device');
     assert.equal(frame.path, '/after');
     respond(ws, frame.id, { body: 'freed' });
-    const { res, text } = await fetchPromise;
-    assert.equal(res.status, 200);
-    assert.equal(text, 'freed');
+    assert.equal((await fetchPromise).res.status, 200);
   });
 
   it('malformed and unknown device frames are ignored', async () => {
