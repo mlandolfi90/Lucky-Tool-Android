@@ -10,8 +10,10 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{
 const NO_FRAME = 'no frame';
 const DEADLINE_MS = 2_000;
 const POLL_MS = 20;
+/** Headers of a POST that declares a 100-byte body; the body is written separately. */
+const UPLOAD_HEADERS = 'POST /mcp HTTP/1.1\r\nHost: relay.invalid\r\nContent-Length: 100\r\n\r\n';
 /** A POST whose declared body never fully arrives. */
-const STALLED_UPLOAD = 'POST /mcp HTTP/1.1\r\nHost: relay.invalid\r\nContent-Length: 100\r\n\r\npartial';
+const STALLED_UPLOAD = `${UPLOAD_HEADERS}partial`;
 
 async function fetchText(url, init) {
   const res = await fetch(url, init);
@@ -436,6 +438,20 @@ describe('relay', () => {
     assert.equal(frame.path, '/after');
     respond(ws, frame.id, { body: 'freed' });
     assert.equal((await fetchPromise).res.status, 200);
+  });
+
+  it('upload trickling its body still gets 408 at the body deadline', async () => {
+    const strict = await extraRelay({ bodyTimeoutMs: 150 });
+    await device(strict.wsUrl);
+    const socket = await openSocket(strict.port, UPLOAD_HEADERS);
+    // 100 bytes at one per 30 ms take 3 s: a deadline that each byte pushed back would miss DEADLINE_MS.
+    const trickle = setInterval(() => socket.write('a'), 30);
+    socket.once('data', () => clearInterval(trickle));
+    try {
+      assert.match(await replyOf(socket), /^HTTP\/1\.1 408 /);
+    } finally {
+      clearInterval(trickle);
+    }
   });
 
   it('malformed and unknown device frames are ignored', async () => {
