@@ -37,8 +37,8 @@ connected.
 
 ## HTTP semantics
 
-- `503` no phone connected or `MAX_PENDING` reached · `504` phone did not answer in time · `413` body too large ·
-  `502` phone dropped mid-request or answered with more than `MAX_RESPONSE_BYTES`
+- `400` malformed request target · `503` no phone connected or `MAX_PENDING` reached · `504` phone did not answer in
+  time · `413` body too large · `502` phone dropped mid-request or answered with more than `MAX_RESPONSE_BYTES`
 - One phone at a time: a new authenticated `/device` connection replaces the previous one (closed with code `4000`).
 - Responses above 8 MiB (e.g. large `/s/` capability downloads) are not served through the relay.
 

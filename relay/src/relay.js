@@ -24,6 +24,15 @@ const NO_BODY_STATUSES = new Set([204, 304]);
 const FRAME_OVERHEAD_BYTES = 64 * 1024;
 const CLOSE_GOING_AWAY = 1001;
 
+/** WHATWG parse of a request target; `null` when Node's parser accepted something `URL` rejects. */
+function parseTarget(target) {
+  try {
+    return new URL(target, 'http://relay.invalid');
+  } catch {
+    return null;
+  }
+}
+
 export class RelayError extends Error {
   constructor(status, message) {
     super(message);
@@ -61,8 +70,12 @@ export function createRelay(config, logger = console) {
   }
 
   function handleUpgrade(req, socket, head) {
-    const { pathname } = new URL(req.url, 'http://relay.invalid');
-    if (pathname !== DEVICE_PATH) {
+    const url = parseTarget(req.url);
+    if (url === null) {
+      rejectUpgrade(socket, 400, 'Bad Request');
+      return;
+    }
+    if (url.pathname !== DEVICE_PATH) {
       rejectUpgrade(socket, 404, 'Not Found');
       return;
     }
@@ -155,7 +168,11 @@ export function createRelay(config, logger = console) {
   }
 
   async function handleHttp(req, res) {
-    const url = new URL(req.url, 'http://relay.invalid');
+    const url = parseTarget(req.url);
+    if (url === null) {
+      sendJson(res, 400, { error: 'invalid request target' }, true);
+      return;
+    }
     if (url.pathname === HEALTH_PATH) {
       sendJson(res, 200, { status: 'ok', deviceConnected: device !== null });
       return;

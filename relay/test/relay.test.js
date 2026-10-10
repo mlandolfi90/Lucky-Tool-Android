@@ -88,6 +88,28 @@ describe('relay', () => {
     assert.equal(await rejectedUpgradeStatus(url, { authorization: `Bearer ${TEST_TOKEN}` }), 404);
   });
 
+  it('malformed upgrade target is refused with 400', async () => {
+    const raw = await rawRequest(
+      ctx.port,
+      'GET http://[/x HTTP/1.1\r\nHost: relay.invalid\r\nConnection: Upgrade\r\nUpgrade: websocket\r\n' +
+        'Sec-WebSocket-Version: 13\r\nSec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\r\n',
+    );
+
+    assert.match(raw, /^HTTP\/1\.1 400 /);
+    const { res } = await fetchText(`${ctx.baseUrl}/relay/health`);
+    assert.equal(res.status, 200);
+  });
+
+  it('malformed request target returns 400', async () => {
+    const raw = await rawRequest(
+      ctx.port,
+      'GET http://[/x HTTP/1.1\r\nHost: relay.invalid\r\nConnection: close\r\n\r\n',
+    );
+
+    assert.match(raw, /^HTTP\/1\.1 400 /);
+    assert.match(raw, /invalid request target/);
+  });
+
   it('request without device returns 503', async () => {
     const { res, text } = await fetchText(`${ctx.baseUrl}/mcp`, { method: 'POST', body: '{}' });
 
