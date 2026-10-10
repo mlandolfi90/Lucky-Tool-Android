@@ -71,19 +71,28 @@ internal class LocalRequestReplayer(
                 }
             packResponse(frame.id, response)
         } catch (e: HttpRequestTimeoutException) {
-            Logger.w(TAG, "Local replay timed out: ${frame.method} ${sanitizedPath(frame.path)}", e)
+            logFailure("timed out", frame, e)
             errorFrame(frame.id, HttpStatusCode.GatewayTimeout, "local MCP server did not answer in time")
         } catch (e: IOException) {
-            Logger.w(TAG, "Local replay failed: ${frame.method} ${sanitizedPath(frame.path)}", e)
+            logFailure("failed", frame, e)
             errorFrame(frame.id, HttpStatusCode.BadGateway, "local MCP server unreachable")
         } catch (e: IllegalArgumentException) {
-            Logger.w(TAG, "Local replay rejected: ${frame.method} ${sanitizedPath(frame.path)}", e)
+            logFailure("rejected", frame, e)
             errorFrame(frame.id, HttpStatusCode.BadRequest, "invalid relayed request")
         } catch (e: IllegalStateException) {
             currentCoroutineContext().ensureActive()
-            Logger.w(TAG, "Local replay rejected: ${frame.method} ${sanitizedPath(frame.path)}", e)
+            logFailure("rejected", frame, e)
             errorFrame(frame.id, HttpStatusCode.BadRequest, "invalid relayed request")
         }
+
+    /** Ktor exception messages embed the full local URL (query string, capability token): log only the class. */
+    private fun logFailure(
+        what: String,
+        frame: RelayRequestFrame,
+        e: Exception,
+    ) {
+        Logger.w(TAG, "Local replay $what: ${frame.method} ${sanitizedPath(frame.path)} (${e::class.simpleName})")
+    }
 
     private suspend fun packResponse(
         id: String,
