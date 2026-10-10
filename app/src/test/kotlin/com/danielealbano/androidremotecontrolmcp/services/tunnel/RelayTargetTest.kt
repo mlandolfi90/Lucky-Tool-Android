@@ -82,6 +82,16 @@ class RelayTargetTest {
     }
 
     @Test
+    fun `resolve accepts port 65535`() {
+        assertEquals("https://r.example.com:65535", resolve("wss://r.example.com:65535").getOrThrow().publicUrl)
+    }
+
+    @Test
+    fun `resolve fails on port 65536`() {
+        assertTrue(failureMessage("wss://r.example.com:65536").contains("port"))
+    }
+
+    @Test
     fun `resolve fails on credentials query or fragment`() {
         assertTrue(resolve("wss://u:p@r.example.com").isFailure)
         assertTrue(resolve("wss://r.example.com/?a=1").isFailure)

@@ -353,7 +353,7 @@ class RelayTunnelProviderTest {
             provider.start(server.port, server.config())
 
             val message = awaitError(provider)
-            assertTrue(message.contains("Relay connection closed"), message)
+            assertTrue(message.contains("Relay connection closed (code 1000: bye)"), message)
             assertTrue(message.contains("reconnecting in 1s"), message)
             awaitCondition { server.handshakeAttempts.get() >= 2 }
         }

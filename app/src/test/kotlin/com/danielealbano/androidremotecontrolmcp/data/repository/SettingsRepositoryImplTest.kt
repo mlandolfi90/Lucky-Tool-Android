@@ -681,6 +681,16 @@ class SettingsRepositoryImplTest {
         }
 
         @Test
+        fun `port 65535 is accepted`() {
+            assertTrue(repository.validateRelayUrl("wss://relay.example.com:65535").isSuccess)
+        }
+
+        @Test
+        fun `port 65536 is rejected`() {
+            assertTrue(repository.validateRelayUrl("wss://relay.example.com:65536").isFailure)
+        }
+
+        @Test
         fun `dangling port separator is rejected`() {
             assertTrue(repository.validateRelayUrl("wss://relay.example.com:").isFailure)
         }
