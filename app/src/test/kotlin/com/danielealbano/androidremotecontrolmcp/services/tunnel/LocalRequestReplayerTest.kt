@@ -1,5 +1,6 @@
 package com.danielealbano.androidremotecontrolmcp.services.tunnel
 
+import android.util.Log
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockRequestHandleScope
@@ -15,14 +16,20 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
+import io.mockk.every
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
+import io.mockk.verify
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
 import java.io.IOException
@@ -34,6 +41,19 @@ import java.util.concurrent.atomic.AtomicReference
 class LocalRequestReplayerTest {
     private val captured = AtomicReference<HttpRequestData?>(null)
     private val calls = AtomicInteger(0)
+    private val warnings = mutableListOf<String>()
+
+    @BeforeEach
+    fun captureWarnings() {
+        mockkStatic(Log::class)
+        every { Log.w(any<String>(), capture(warnings)) } returns 0
+        every { Log.w(any<String>(), any<String>(), any()) } returns 0
+    }
+
+    @AfterEach
+    fun releaseLog() {
+        unmockkStatic(Log::class)
+    }
 
     private fun replayer(
         maxResponseBytes: Long = 64,
@@ -297,5 +317,40 @@ class LocalRequestReplayerTest {
     fun `sanitizedPath strips the query and redacts capability links`() {
         assertEquals("/mcp", LocalRequestReplayer.sanitizedPath("/mcp?x=1"))
         assertEquals("/s/<redacted>", LocalRequestReplayer.sanitizedPath("/s/abc?x=1"))
+    }
+
+    @Test
+    fun `replay timeout log keeps the local url and exception message out`() =
+        runTest {
+            val replayer = replayer { throw HttpRequestTimeoutException(LEAKY_URL, 1_000L, null) }
+
+            replayer.replay(frame(path = LEAKY_PATH), localPort = 8081)
+
+            assertSanitizedFailureLog("HttpRequestTimeoutException")
+        }
+
+    @Test
+    fun `replay io failure log keeps the local url and exception message out`() =
+        runTest {
+            val replayer = replayer { throw IOException("connection refused: $LEAKY_URL") }
+
+            replayer.replay(frame(path = LEAKY_PATH), localPort = 8081)
+
+            assertSanitizedFailureLog("IOException")
+        }
+
+    private fun assertSanitizedFailureLog(exceptionClass: String) {
+        val message = warnings.single()
+        assertTrue(message.contains("/s/<redacted>"), message)
+        assertTrue(message.contains("($exceptionClass)"), message)
+        listOf("secret-token", "code=abc", "127.0.0.1").forEach {
+            assertFalse(message.contains(it), "log must not contain '$it': $message")
+        }
+        verify(exactly = 0) { Log.w(any<String>(), any<String>(), any()) }
+    }
+
+    private companion object {
+        const val LEAKY_PATH = "/s/secret-token?code=abc"
+        const val LEAKY_URL = "http://127.0.0.1:8081$LEAKY_PATH"
     }
 }
