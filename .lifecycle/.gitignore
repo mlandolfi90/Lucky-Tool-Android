@@ -1,0 +1,3 @@
+# Estado local de la sesión: mapa de despliegue, sextante, locks. Fuera de git por diseño:
+# aun sin valores, revela topología (proyectos, apps, endpoints).
+local/
