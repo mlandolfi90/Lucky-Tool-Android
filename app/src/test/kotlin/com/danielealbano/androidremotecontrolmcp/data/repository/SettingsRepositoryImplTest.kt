@@ -675,6 +675,17 @@ class SettingsRepositoryImplTest {
         }
 
         @Test
+        fun `port out of range is rejected`() {
+            assertTrue(repository.validateRelayUrl("wss://relay.example.com:99999").isFailure)
+            assertTrue(repository.validateRelayUrl("wss://relay.example.com:0").isFailure)
+        }
+
+        @Test
+        fun `dangling port separator is rejected`() {
+            assertTrue(repository.validateRelayUrl("wss://relay.example.com:").isFailure)
+        }
+
+        @Test
         fun `trailing slash is stripped`() {
             assertEquals("wss://relay.example.com", repository.validateRelayUrl("wss://relay.example.com/").getOrNull())
         }

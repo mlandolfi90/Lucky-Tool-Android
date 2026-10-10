@@ -16,6 +16,7 @@ internal val RELAY_DEVICE_TOKEN_KEY = stringPreferencesKey("relay_device_token")
 
 private const val SECURE_RELAY_SCHEME = "wss"
 private val RELAY_SCHEMES = setOf("ws", SECURE_RELAY_SCHEME)
+private val VALID_PORTS = ServerConfig.MIN_PORT..ServerConfig.MAX_PORT
 
 /** Loopback and RFC 1918 literals (optionally bracketed IPv6 loopback) for which cleartext `ws://` is acceptable. */
 private val PRIVATE_HOST_PATTERN =
@@ -108,6 +109,10 @@ class RelaySettingsImpl
                     invalid("Relay URL must include a valid host")
                 }
 
+                hasInvalidPort(uri) -> {
+                    invalid("Relay URL port must be between ${ServerConfig.MIN_PORT} and ${ServerConfig.MAX_PORT}")
+                }
+
                 uri.rawUserInfo != null || uri.rawQuery != null || uri.rawFragment != null -> {
                     invalid("Relay URL must not contain credentials, query or fragment")
                 }
@@ -120,6 +125,12 @@ class RelaySettingsImpl
                     Result.success(original.trimEnd('/'))
                 }
             }
+
+        /** `URI` accepts a dangling `host:` (port -1) and any numeric port; both are rejected before use. */
+        private fun hasInvalidPort(uri: URI): Boolean {
+            if (uri.rawAuthority.endsWith(':')) return true
+            return uri.port != -1 && uri.port !in VALID_PORTS
+        }
 
         private fun invalid(message: String): Result<String> = Result.failure(IllegalArgumentException(message))
     }

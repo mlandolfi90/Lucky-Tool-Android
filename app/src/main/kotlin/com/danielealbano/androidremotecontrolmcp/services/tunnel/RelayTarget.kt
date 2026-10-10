@@ -19,6 +19,7 @@ internal data class RelayTarget(
         const val DEVICE_PATH = "/device"
         private const val SECURE_SCHEME = "wss"
         private val WS_SCHEMES = setOf("ws", SECURE_SCHEME)
+        private val VALID_PORTS = ServerConfig.MIN_PORT..ServerConfig.MAX_PORT
 
         /** Defensive re-check of what `RelaySettings` validation guarantees; providers never read settings. */
         fun resolve(config: ServerConfig): Result<RelayTarget> {
@@ -48,6 +49,10 @@ internal data class RelayTarget(
                     failure("Relay URL must be ws:// or wss:// with a host")
                 }
 
+                hasInvalidPort(uri) -> {
+                    failure("Relay URL port must be between ${ServerConfig.MIN_PORT} and ${ServerConfig.MAX_PORT}")
+                }
+
                 uri.rawUserInfo != null || uri.rawQuery != null || uri.rawFragment != null -> {
                     failure("Relay URL must not contain credentials, query or fragment")
                 }
@@ -60,6 +65,12 @@ internal data class RelayTarget(
                     Result.success(RelayTarget(base + DEVICE_PATH, publicUrlFor(uri), token))
                 }
             }
+        }
+
+        /** `URI` accepts a dangling `host:` (port -1) and any numeric port; both are rejected before use. */
+        private fun hasInvalidPort(uri: URI): Boolean {
+            if (uri.rawAuthority.endsWith(':')) return true
+            return uri.port != -1 && uri.port !in VALID_PORTS
         }
 
         private fun publicUrlFor(uri: URI): String {

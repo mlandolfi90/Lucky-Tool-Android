@@ -75,6 +75,13 @@ class RelayTargetTest {
     }
 
     @Test
+    fun `resolve fails on invalid port`() {
+        assertTrue(failureMessage("wss://r.example.com:99999").contains("port"))
+        assertTrue(resolve("wss://r.example.com:0").isFailure)
+        assertTrue(resolve("wss://r.example.com:").isFailure)
+    }
+
+    @Test
     fun `resolve fails on credentials query or fragment`() {
         assertTrue(resolve("wss://u:p@r.example.com").isFailure)
         assertTrue(resolve("wss://r.example.com/?a=1").isFailure)
