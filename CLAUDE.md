@@ -664,3 +664,16 @@ Local development requires Android SDK, emulator/device, and standard Android de
 - Jobs: lint → test-unit (includes JVM integration tests) → test-e2e → build-release.
 - Upload APK as artifact on successful build.
 - Fail build if any test or lint check fails.
+
+---
+
+## Fork Lucky-Tool-Android: leer también `REGLAS.md`
+
+Este archivo es el de upstream (`danielealbano/android-remote-control-mcp`) y rige
+el código tal cual; no se reescribe. Las reglas de la casa del fork viven en
+[`REGLAS.md`](REGLAS.md), en la raíz, y se leen al arrancar junto con este
+archivo: qué es el repo y por qué, las reglas de upstream que chocan con
+hábitos de la casa, túneles de upstream y sello de firma, upstream y Actions
+en el fork, aviso privado de vulnerabilidades, despliegue y secretos, qué corre
+y qué no en esta PC, los hilos de testing y el alcance. Si las dos chocan, se
+le pregunta al humano; ninguna se cambia por cuenta propia.
