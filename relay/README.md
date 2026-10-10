@@ -47,6 +47,23 @@ connected.
 - One phone at a time: a new authenticated `/device` connection replaces the previous one (closed with code `4000`).
 - Responses above 8 MiB (e.g. large `/s/` capability downloads) are not served through the relay.
 
+## Limits
+
+- `MAX_PENDING` is shared by every client, and the relay does not authenticate clients (the phone checks their
+  bearer). A client that keeps opening uploads that never finish holds one slot per upload for up to
+  `BODY_TIMEOUT_MS`, so enough of them keep every slot busy and other requests get `503`. Behind Traefik, a
+  `buffering` middleware reads each body completely before forwarding it, so unfinished uploads never reach the
+  relay; bodies above `maxRequestBodyBytes` get `413` from Traefik itself:
+
+  ```text
+  traefik.http.middlewares.relay-buffering.buffering.maxRequestBodyBytes=16777216
+  traefik.http.routers.<relay router>.middlewares=relay-buffering
+  ```
+
+  A router takes a comma-separated middleware list: append `relay-buffering` to the one it already has.
+- Values of `BODY_TIMEOUT_MS` above Node's own `requestTimeout` (300 s) have no effect, since Node answers `408`
+  first; behind Traefik, values above its entry point `readTimeout` (60 s by default) need that timeout raised too.
+
 ## Test
 
 ```bash
