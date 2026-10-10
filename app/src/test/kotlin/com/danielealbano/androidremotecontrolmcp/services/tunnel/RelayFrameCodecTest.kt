@@ -1,11 +1,13 @@
 package com.danielealbano.androidremotecontrolmcp.services.tunnel
 
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 @DisplayName("RelayFrameCodec")
 class RelayFrameCodecTest {
@@ -64,9 +66,11 @@ class RelayFrameCodecTest {
     @Test
     fun `malformed reason names the error class without quoting the frame`() {
         val text = """{"type":"request","id":"r1","headers":{"authorization":["Bearer secret-jwt"]}"""
+        val parserError = assertThrows<SerializationException> { Json.parseToJsonElement(text) }
 
         val reason = (RelayFrameCodec.decode(text) as RelayInbound.Malformed).reason
 
+        assertEquals(parserError::class.simpleName, reason)
         assertFalse(reason.contains("secret-jwt"), reason)
         assertFalse(reason.contains("JSON input"), reason)
     }
