@@ -19,7 +19,7 @@ internal data class RelayTarget(
         const val DEVICE_PATH = "/device"
         private const val SECURE_SCHEME = "wss"
         private val WS_SCHEMES = setOf("ws", SECURE_SCHEME)
-        private val VALID_PORTS = ServerConfig.MIN_PORT..ServerConfig.MAX_PORT
+        private val VALID_PORTS = ServerConfig.MIN_PORT until ServerConfig.MAX_PORT
 
         /** Defensive re-check of what `RelaySettings` validation guarantees; providers never read settings. */
         fun resolve(config: ServerConfig): Result<RelayTarget> {

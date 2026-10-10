@@ -78,7 +78,7 @@ internal class RelaySession(
             }
 
             else -> {
-                val detail = "code ${reason.code}: ${reason.message}"
+                val detail = "${reason.code}: ${reason.message}"
                 RelaySessionEnd("Relay connection closed ($detail)", replaced = false)
             }
         }

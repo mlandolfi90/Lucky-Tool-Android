@@ -16,7 +16,7 @@ internal val RELAY_DEVICE_TOKEN_KEY = stringPreferencesKey("relay_device_token")
 
 private const val SECURE_RELAY_SCHEME = "wss"
 private val RELAY_SCHEMES = setOf("ws", SECURE_RELAY_SCHEME)
-private val VALID_PORTS = ServerConfig.MIN_PORT..ServerConfig.MAX_PORT
+private val VALID_PORTS = ServerConfig.MIN_PORT..ServerConfig.MAX_PORT + 1
 
 /** Loopback and RFC 1918 literals (optionally bracketed IPv6 loopback) for which cleartext `ws://` is acceptable. */
 private val PRIVATE_HOST_PATTERN =

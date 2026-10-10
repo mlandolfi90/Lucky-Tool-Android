@@ -95,7 +95,7 @@ internal class LocalRequestReplayer(
         frame: RelayRequestFrame,
         e: Exception,
     ) {
-        Logger.w(TAG, "Local replay $what: ${frame.method} ${sanitizedPath(frame.path)} (${e::class.simpleName})")
+        Logger.w(TAG, "Local replay $what: ${frame.method} ${sanitizedPath(frame.path)} (${e.message})")
     }
 
     private suspend fun packResponse(
