@@ -60,15 +60,24 @@ internal class RelaySession(
                 }
             }
         }
-        return end ?: RelaySessionEnd("Relay connection closed", replaced = false)
+        return end
     }
 
     private suspend fun closedEnd(): RelaySessionEnd {
         val reason = withTimeoutOrNull(CLOSE_TIMEOUT_MS) { session.closeReason.await() }
         return when {
-            reason == null -> RelaySessionEnd("Relay connection closed", replaced = false)
-            reason.code == CLOSE_CODE_REPLACED -> RelaySessionEnd(REPLACED_MESSAGE, replaced = true)
-            else -> RelaySessionEnd("Relay connection closed (${reason.code}: ${reason.message})", replaced = false)
+            reason == null -> {
+                RelaySessionEnd("Relay connection closed", replaced = false)
+            }
+
+            reason.code == CLOSE_CODE_REPLACED -> {
+                RelaySessionEnd(REPLACED_MESSAGE, replaced = true)
+            }
+
+            else -> {
+                val detail = "code ${reason.code}: ${reason.message}"
+                RelaySessionEnd("Relay connection closed ($detail)", replaced = false)
+            }
         }
     }
 

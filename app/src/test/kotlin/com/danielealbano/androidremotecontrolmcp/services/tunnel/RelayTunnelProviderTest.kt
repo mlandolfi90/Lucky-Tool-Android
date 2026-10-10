@@ -23,6 +23,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -56,13 +57,13 @@ class RelayTunnelProviderTest {
         deviceHandler: suspend DefaultWebSocketServerSession.() -> Unit,
         localRoutes: Route.() -> Unit = {},
         handshakeDelayMs: Long = 0,
-        block: suspend (RelayTestServer, RelayTunnelProvider) -> Unit,
+        block: suspend CoroutineScope.(RelayTestServer, RelayTunnelProvider) -> Unit,
     ) = runBlocking {
         val server = RelayTestServer(deviceHandler, localRoutes, handshakeDelayMs)
         server.start()
         val provider = RelayTunnelProvider()
         try {
-            block(server, provider)
+            this.block(server, provider)
         } finally {
             provider.stop()
             server.stop()
