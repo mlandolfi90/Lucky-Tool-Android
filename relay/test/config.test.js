@@ -68,6 +68,22 @@ describe('loadConfig', () => {
     assert.throws(() => loadConfig({ RELAY_DEVICE_TOKEN: TOKEN, PORT: '70000' }), /PORT/);
   });
 
+  it('accepts timers up to the Node timer limit and rejects longer ones', () => {
+    const timers = {
+      REQUEST_TIMEOUT_MS: 'requestTimeoutMs',
+      BODY_TIMEOUT_MS: 'bodyTimeoutMs',
+      HEARTBEAT_INTERVAL_MS: 'heartbeatIntervalMs',
+    };
+    for (const [name, key] of Object.entries(timers)) {
+      assert.equal(loadConfig({ RELAY_DEVICE_TOKEN: TOKEN, [name]: '2147483647' })[key], 2_147_483_647, name);
+      assert.throws(
+        () => loadConfig({ RELAY_DEVICE_TOKEN: TOKEN, [name]: '2147483648' }),
+        new RegExp(`${name} must be at most 2147483647`),
+        name,
+      );
+    }
+  });
+
   it('rejects invalid booleans', () => {
     assert.throws(() => loadConfig({ RELAY_DEVICE_TOKEN: TOKEN, TRUST_PROXY: 'maybe' }), /TRUST_PROXY/);
   });

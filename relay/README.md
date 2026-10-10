@@ -24,6 +24,9 @@ RELAY_DEVICE_TOKEN='<at least 16 random characters>' node src/server.js
 | `HEARTBEAT_TIMEOUT_MS` | `60000` | Silence after which the phone socket is dropped |
 | `TRUST_PROXY` | `true` | Keep incoming `X-Forwarded-Host`/`X-Forwarded-Proto` (set by your TLS proxy). Set `false` when the relay is reached directly, so clients cannot spoof them |
 
+`REQUEST_TIMEOUT_MS`, `BODY_TIMEOUT_MS` and `HEARTBEAT_INTERVAL_MS` are timer delays: values above `2147483647`,
+the longest delay Node can schedule, are refused at startup.
+
 ## Container
 
 ```bash

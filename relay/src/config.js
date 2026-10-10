@@ -12,6 +12,8 @@ const DEFAULTS = Object.freeze({
 
 const MIN_TOKEN_LENGTH = 16;
 const MAX_PORT = 65535;
+/** Node runs a longer timer after 1 ms instead (TimeoutOverflowWarning). */
+const MAX_TIMER_MS = 2_147_483_647;
 const TRUE_WORDS = new Set(['true', '1', 'yes']);
 const FALSE_WORDS = new Set(['false', '0', 'no']);
 
@@ -29,6 +31,13 @@ function readPort(env) {
   const port = readPositiveInt(env, 'PORT', DEFAULTS.PORT);
   if (port > MAX_PORT) throw new Error(`PORT must be between 1 and ${MAX_PORT}, got "${port}"`);
   return port;
+}
+
+/** A delay handed to setTimeout or setInterval: refused above what Node can schedule. */
+function readTimerMs(env, name, fallback) {
+  const ms = readPositiveInt(env, name, fallback);
+  if (ms > MAX_TIMER_MS) throw new Error(`${name} must be at most ${MAX_TIMER_MS}, got "${ms}"`);
+  return ms;
 }
 
 function readBoolean(env, name, fallback) {
@@ -52,12 +61,12 @@ export function loadConfig(env = process.env) {
   return Object.freeze({
     port: readPort(env),
     deviceToken,
-    requestTimeoutMs: readPositiveInt(env, 'REQUEST_TIMEOUT_MS', DEFAULTS.REQUEST_TIMEOUT_MS),
-    bodyTimeoutMs: readPositiveInt(env, 'BODY_TIMEOUT_MS', DEFAULTS.BODY_TIMEOUT_MS),
+    requestTimeoutMs: readTimerMs(env, 'REQUEST_TIMEOUT_MS', DEFAULTS.REQUEST_TIMEOUT_MS),
+    bodyTimeoutMs: readTimerMs(env, 'BODY_TIMEOUT_MS', DEFAULTS.BODY_TIMEOUT_MS),
     maxBodyBytes: readPositiveInt(env, 'MAX_BODY_BYTES', DEFAULTS.MAX_BODY_BYTES),
     maxResponseBytes: readPositiveInt(env, 'MAX_RESPONSE_BYTES', DEFAULTS.MAX_RESPONSE_BYTES),
     maxPending: readPositiveInt(env, 'MAX_PENDING', DEFAULTS.MAX_PENDING),
-    heartbeatIntervalMs: readPositiveInt(env, 'HEARTBEAT_INTERVAL_MS', DEFAULTS.HEARTBEAT_INTERVAL_MS),
+    heartbeatIntervalMs: readTimerMs(env, 'HEARTBEAT_INTERVAL_MS', DEFAULTS.HEARTBEAT_INTERVAL_MS),
     heartbeatTimeoutMs: readPositiveInt(env, 'HEARTBEAT_TIMEOUT_MS', DEFAULTS.HEARTBEAT_TIMEOUT_MS),
     trustProxy: readBoolean(env, 'TRUST_PROXY', DEFAULTS.TRUST_PROXY),
   });
