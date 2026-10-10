@@ -117,14 +117,14 @@ compiles against. `ktor-client-websockets` is Ktor's documented marker artifact 
 `ktor-client-core`); `ktor-server-websockets` backs the in-process relay stand-in used by the provider tests.
 
 **Acceptance criteria:**
-- [ ] `TunnelProviderType.RELAY` exists; `ServerConfig.relayUrl` and `ServerConfig.relayDeviceToken` default to `""`.
-- [ ] `SettingsRepository` exposes `updateRelayUrl`, `updateRelayDeviceToken`, `validateRelayUrl`,
+- [x] `TunnelProviderType.RELAY` exists; `ServerConfig.relayUrl` and `ServerConfig.relayDeviceToken` default to `""`.
+- [x] `SettingsRepository` exposes `updateRelayUrl`, `updateRelayDeviceToken`, `validateRelayUrl`,
       `validateRelayDeviceToken`, `isRelayUrlInsecure` (via `RelaySettings`).
-- [ ] `validateRelayUrl` accepts `""`, `ws://host`, `wss://host:port`; rejects `https://`, no-host, user-info, path,
+- [x] `validateRelayUrl` accepts `""`, `ws://host`, `wss://host:port`; rejects `https://`, no-host, user-info, path,
       query, fragment, unparsable input. `validateRelayDeviceToken` accepts `""` and ≥ 16 trimmed characters.
-- [ ] `isRelayUrlInsecure` is `true` only for `ws://` outside loopback / RFC 1918 hosts.
-- [ ] Values round-trip through DataStore (trimmed) and appear in `serverConfig`; changes are logged without values.
-- [ ] `RelaySettingsImpl` is Hilt-bound and every `SettingsRepositoryImpl(...)` construction site passes it.
+- [x] `isRelayUrlInsecure` is `true` only for `ws://` outside loopback / RFC 1918 hosts.
+- [x] Values round-trip through DataStore (trimmed) and appear in `serverConfig`; changes are logged without values.
+- [x] `RelaySettingsImpl` is Hilt-bound and every `SettingsRepositoryImpl(...)` construction site passes it.
 
 ### Task 1.1 — Add the Ktor WebSocket artifacts
 
@@ -155,7 +155,7 @@ ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", v
 ```
 
 **Definition of Done:**
-- [ ] `io.ktor.client.plugins.websocket.*` and `io.ktor.server.websocket.*` resolve in main and test sources.
+- [x] `io.ktor.client.plugins.websocket.*` and `io.ktor.server.websocket.*` resolve in main and test sources.
 
 ### Task 1.2 — Provider type and config fields
 
@@ -196,7 +196,7 @@ ktor-client-websockets = { group = "io.ktor", name = "ktor-client-websockets", v
 ```
 
 **Definition of Done:**
-- [ ] `ServerConfig()` has both new fields empty; `TunnelProviderType.entries.size == 3`.
+- [x] `ServerConfig()` has both new fields empty; `TunnelProviderType.entries.size == 3`.
 
 ### Task 1.3 — Relay settings slice
 
@@ -437,7 +437,7 @@ import com.danielealbano.androidremotecontrolmcp.data.repository.RelaySettingsIm
   ```
 
 **Definition of Done:**
-- [ ] `SettingsRepository` exposes the five `RelaySettings` members through delegation; Hilt resolves `RelaySettings`.
+- [x] `SettingsRepository` exposes the five `RelaySettings` members through delegation; Hilt resolves `RelaySettings`.
 
 ### Task 1.4 — Tests for US1
 
@@ -490,7 +490,7 @@ others into NEW `@Nested` classes `UpdateRelayUrl`, `UpdateRelayDeviceToken`, `V
 | `relay device token logs without value` | `updateRelayDeviceToken("super-secret-relay-token")` → `Relay device token changed`, message does not contain `super-secret` |
 
 **Definition of Done:**
-- [ ] Every validation branch above has a row; no test touches `RelaySettingsImpl` directly (always via the repository).
+- [x] Every validation branch above has a row; no test touches `RelaySettingsImpl` directly (always via the repository).
 
 ---
 ## User Story 2 — Relay tunnel provider
@@ -500,19 +500,19 @@ detekt's size thresholds: frame codec, replayer (local HTTP), target resolver, o
 provider that owns the client, the reconnect loop and the status.
 
 **Acceptance criteria:**
-- [ ] `start()` publishes `Error` for missing URL/token, token shorter than 16, bad scheme or a path; otherwise connects
+- [x] `start()` publishes `Error` for missing URL/token, token shorter than 16, bad scheme or a path; otherwise connects
       with `Authorization: Bearer <token>` to `<relayUrl>/device`, publishes `Connected([TunnelEndpoint(publicUrl,
       true)], RELAY)` and returns after the first outcome (connected or first failure).
-- [ ] A `request` frame is replayed to `http://127.0.0.1:<localPort><path>` (origin-form only) with method, headers
+- [x] A `request` frame is replayed to `http://127.0.0.1:<localPort><path>` (origin-form only) with method, headers
       (hop-by-hop dropped) and body; the answer returns as a `response` frame with status, headers (`Content-Length` /
       `Transfer-Encoding` dropped) and base64 body. `3xx` answers pass through unfollowed. Failures become `400` /
       `502` / `503` / `504` frames with generic JSON messages, never exceptions; responses above 8 MiB become `502`.
-- [ ] At most 8 replays run concurrently; the 9th gets a `503` frame immediately. `ping` → `pong`; malformed/unknown
+- [x] At most 8 replays run concurrently; the 9th gets a `503` frame immediately. `ping` → `pong`; malformed/unknown
       frames are ignored; the session stays up.
-- [ ] Handshake rejection, socket drop, idle silence and relay errors lead to `Error("…; reconnecting in Ns")` then a
+- [x] Handshake rejection, socket drop, idle silence and relay errors lead to `Error("…; reconnecting in Ns")` then a
       retry with 1 s, 2 s, 4 s, 8 s, 16 s, 30 s, 30 s…; a session ≥ 10 s long resets the backoff; close code `4000`
       waits 30 s. The status does not flip back to `Connecting` between retries.
-- [ ] `stop()` cancels the loop, closes the socket (Close frame observed by the relay within 2 s), cancels and closes
+- [x] `stop()` cancels the loop, closes the socket (Close frame observed by the relay within 2 s), cancels and closes
       the client, sets `Disconnected`; idempotent. Cancelling a pending `start()` stops everything too. `start()`
       twice throws `IllegalStateException("Tunnel is already running")`.
 
@@ -620,7 +620,7 @@ internal object RelayFrameCodec {
 ```
 
 **Definition of Done:**
-- [ ] `RelayFrameCodec.decode` never throws for arbitrary text.
+- [x] `RelayFrameCodec.decode` never throws for arbitrary text.
 
 ### Task 2.2 — Local request replayer
 
@@ -816,7 +816,7 @@ twice); an empty body is never attached (OkHttp rejects a body on `GET`/`HEAD`).
 lives on the client (Task 2.5), so `3xx` answers are packed as-is.
 
 **Definition of Done:**
-- [ ] Every failure path yields a frame whose body is `{"error":"…"}` JSON without host/port details.
+- [x] Every failure path yields a frame whose body is `{"error":"…"}` JSON without host/port details.
 
 ### Task 2.3 — Relay target resolver
 
@@ -876,7 +876,7 @@ internal data class RelayTarget(
 ```
 
 **Definition of Done:**
-- [ ] `resolve(ServerConfig(relayUrl = "wss://r.example.com/", relayDeviceToken = "0123456789abcdef"))` →
+- [x] `resolve(ServerConfig(relayUrl = "wss://r.example.com/", relayDeviceToken = "0123456789abcdef"))` →
       `deviceUrl == "wss://r.example.com/device"`, `publicUrl == "https://r.example.com"`.
 
 ### Task 2.4 — Session pump
@@ -1012,7 +1012,7 @@ internal class RelaySession(
 ```
 
 **Definition of Done:**
-- [ ] A session whose relay closes with `4000` ends with `replaced == true`; any other close carries the code and
+- [x] A session whose relay closes with `4000` ends with `replaced == true`; any other close carries the code and
       message in `reason`.
 
 ### Task 2.5 — The provider
@@ -1249,7 +1249,7 @@ client's scope. A `CancellationException` caught around `_status.first { … }` 
 provider before rethrowing), so detekt's `RethrowCaughtException` does not apply.
 
 **Definition of Done:**
-- [ ] No `@Suppress` annotation anywhere in the five new files.
+- [x] No `@Suppress` annotation anywhere in the five new files.
 
 ### Task 2.6 — Tests for US2
 
@@ -1438,7 +1438,7 @@ handler and the test uses `CompletableDeferred<String>`. A device handler that m
 | `failure count resets only after a stable session` | `nextFailureCount(4, 0) == 5`; `nextFailureCount(4, 9_999) == 5`; `nextFailureCount(4, 10_000) == 1` |
 
 **Definition of Done:**
-- [ ] Every acceptance criterion of US2 maps to at least one row above; timed waits allow ≥ 2× the expected delay.
+- [x] Every acceptance criterion of US2 maps to at least one row above; timed waits allow ≥ 2× the expected delay.
 
 ---
 ## User Story 3 — Wire the provider into `TunnelManager`
@@ -1447,7 +1447,7 @@ handler and the test uses `CompletableDeferred<String>`. A device handler that m
 non-exhaustive.
 
 **Acceptance criteria:**
-- [ ] `tunnelProvider == RELAY` starts a fresh `RelayTunnelProvider` from its `Provider` factory.
+- [x] `tunnelProvider == RELAY` starts a fresh `RelayTunnelProvider` from its `Provider` factory.
 
 ### Task 3.1 — Factory and branch
 
@@ -1487,7 +1487,7 @@ non-exhaustive.
 | `start with tunnel enabled and relay provider starts relay tunnel` | `coVerify { mockRelayProvider.start(8080, config) }` with `tunnelProvider = RELAY` (mirror of the ngrok case) |
 
 **Definition of Done:**
-- [ ] The `when` over `TunnelProviderType` in `TunnelManager` is exhaustive without an `else` branch.
+- [x] The `when` over `TunnelProviderType` in `TunnelManager` is exhaustive without an `else` branch.
 
 ---
 
@@ -1501,8 +1501,8 @@ the token is masked with a visibility toggle.
 - [ ] Tunnel screen lists a third radio "WebSocket relay — Your own relay server"; selecting it reveals the two fields.
 - [ ] Invalid URL / token → `isError` + supporting text from the validators; valid or empty → saved.
 - [ ] `ws://` to a non-private host shows the cleartext warning as supporting text (not an error).
-- [ ] ADB/external changes are reflected (inputs sync from `serverConfig`).
-- [ ] `settings_tunnel_subtitle` reads "Cloudflare, ngrok, WebSocket relay".
+- [x] ADB/external changes are reflected (inputs sync from `serverConfig`).
+- [x] `settings_tunnel_subtitle` reads "Cloudflare, ngrok, WebSocket relay".
 
 ### Task 4.1 — ViewModel inputs and updates
 
@@ -1572,7 +1572,7 @@ the token is masked with a visibility toggle.
 ```
 
 **Definition of Done:**
-- [ ] Both update functions mirror `updateCertificateHostname` (validate → error or save) exactly.
+- [x] Both update functions mirror `updateCertificateHostname` (validate → error or save) exactly.
 
 ### Task 4.2 — Strings
 
@@ -1595,7 +1595,7 @@ the token is masked with a visibility toggle.
 ```
 
 **Definition of Done:**
-- [ ] Every new string is referenced from `TunnelSettingsScreen.kt`.
+- [x] Every new string is referenced from `TunnelSettingsScreen.kt`.
 
 ### Task 4.3 — Tunnel screen
 
@@ -1744,7 +1744,7 @@ private fun RelayTokenField(
 ```
 
 **Definition of Done:**
-- [ ] Both `when (provider)` expressions stay exhaustive; no new imports needed (all symbols already imported).
+- [x] Both `when (provider)` expressions stay exhaustive; no new imports needed (all symbols already imported).
 
 ### Task 4.4 — ViewModel tests
 
@@ -1761,7 +1761,7 @@ private fun RelayTokenField(
 | `serverConfig collection sets relay input fields` | config with `relayUrl`/`relayDeviceToken` before ViewModel creation → both inputs populated, both errors null (mirror of the ngrok test) |
 
 **Definition of Done:**
-- [ ] Tests green; no change to existing tests.
+- [x] Tests green; no change to existing tests.
 
 ---
 
@@ -1770,8 +1770,8 @@ private fun RelayTokenField(
 **Why:** Headless setup parity: every tunnel setting is configurable via `AdbConfigReceiver.ACTION_CONFIGURE`.
 
 **Acceptance criteria:**
-- [ ] `--es relay_url <url>` validates then saves (empty clears); invalid is logged and ignored.
-- [ ] `--es relay_device_token <token>` validates then saves; empty or too short is logged and ignored.
+- [x] `--es relay_url <url>` validates then saves (empty clears); invalid is logged and ignored.
+- [x] `--es relay_device_token <token>` validates then saves; empty or too short is logged and ignored.
       `--es tunnel_provider RELAY` already works via the enum.
 
 ### Task 5.1 — Handler and receiver KDoc
@@ -1829,7 +1829,7 @@ private fun RelayTokenField(
 ```
 
 **Definition of Done:**
-- [ ] `handleConfigure` applies both extras after the ngrok ones; no new suppression anywhere.
+- [x] `handleConfigure` applies both extras after the ngrok ones; no new suppression anywhere.
 
 ### Task 5.2 — Handler tests
 
@@ -1870,7 +1870,7 @@ non-Unit function MUST be stubbed):
 | `short relay_device_token is ignored` | `short` → `exactly = 0` |
 
 **Definition of Done:**
-- [ ] Tests green; `handleConfigure` keeps its existing `@Suppress("LongMethod")` (no new suppression).
+- [x] Tests green; `handleConfigure` keeps its existing `@Suppress("LongMethod")` (no new suppression).
 
 ---
 ## User Story 6 — Relay service (`relay/`)
@@ -1879,15 +1879,15 @@ non-Unit function MUST be stubbed):
 operator's TLS proxy. Tests exercise real sockets on ephemeral ports with the built-in runner.
 
 **Acceptance criteria:**
-- [ ] `RELAY_DEVICE_TOKEN` (≥ 16 chars) is mandatory; `/device` upgrades without the exact bearer get `401`, other
+- [x] `RELAY_DEVICE_TOKEN` (≥ 16 chars) is mandatory; `/device` upgrades without the exact bearer get `401`, other
       upgrade paths `404`; comparison is constant-time. `PORT` must be 1–65535.
-- [ ] HTTP requests are forwarded as frames (origin-form path, hop-by-hop headers dropped, `X-Forwarded-*` per
+- [x] HTTP requests are forwarded as frames (origin-form path, hop-by-hop headers dropped, `X-Forwarded-*` per
       `TRUST_PROXY`) and answered from `response` frames (`HEAD`/`204`/`304` without body); `503` (no device or
       `MAX_PENDING` reached), `504`, `413` (also from `Content-Length` alone, connection closed), `502` (device
       dropped or response above `MAX_RESPONSE_BYTES`); `/relay/health` always `200`.
-- [ ] One device at a time (replacement closes the old socket with `4000`); heartbeat ping every
+- [x] One device at a time (replacement closes the old socket with `4000`); heartbeat ping every
       `HEARTBEAT_INTERVAL_MS`, terminate after `HEARTBEAT_TIMEOUT_MS` of silence.
-- [ ] Image runs as `node`, exposes `8080`, base image pinned by digest.
+- [x] Image runs as `node`, exposes `8080`, base image pinned by digest.
 
 ### Task 6.1 — Package files
 
@@ -1936,7 +1936,7 @@ README.md
 ```
 
 **Definition of Done:**
-- [ ] `npm ci` installs exactly one package (`ws`) and `npm run lint` passes.
+- [x] `npm ci` installs exactly one package (`ws`) and `npm run lint` passes.
 
 ### Task 6.2 — Source
 
@@ -2392,7 +2392,7 @@ process.on('SIGINT', () => shutdown('SIGINT'));
 ```
 
 **Definition of Done:**
-- [ ] `RELAY_DEVICE_TOKEN=0123456789abcdef node src/server.js` listens on 8080 and `GET /relay/health` returns
+- [x] `RELAY_DEVICE_TOKEN=0123456789abcdef node src/server.js` listens on 8080 and `GET /relay/health` returns
       `{"status":"ok","deviceConnected":false}`.
 
 ### Task 6.3 — Tests
@@ -2540,7 +2540,7 @@ request only for the absolute-form case); device via `connectDevice`.
 | `shutdown closes device socket with 1001` | `stop()` → device receives close code 1001 |
 
 **Definition of Done:**
-- [ ] Every status code and header rule in the US6 acceptance criteria has a row above.
+- [x] Every status code and header rule in the US6 acceptance criteria has a row above.
 
 ### Task 6.4 — Container and README
 
@@ -2624,7 +2624,7 @@ npm test
 ````
 
 **Definition of Done:**
-- [ ] Every environment variable read by `config.js` appears in the README table.
+- [x] Every environment variable read by `config.js` appears in the README table.
 
 ---
 
@@ -2634,7 +2634,7 @@ npm test
 `main`, scoped by path so Android-only changes do not trigger it.
 
 **Acceptance criteria:**
-- [ ] Workflow runs on `pull_request`/`push main` when `relay/**` or the workflow file changes; runs `npm ci`,
+- [x] Workflow runs on `pull_request`/`push main` when `relay/**` or the workflow file changes; runs `npm ci`,
       `npm run lint`, `npm test`, `docker build`.
 
 ### Task 7.1 — Workflow
@@ -2696,7 +2696,7 @@ jobs:
 ```
 
 **Definition of Done:**
-- [ ] The PR shows the `Relay tests and image` check next to the five Android checks (`Lint`, `Unit & Integration
+- [x] The PR shows the `Relay tests and image` check next to the five Android checks (`Lint`, `Unit & Integration
       Tests`, `E2E Tests`, `Build Release - GMS`, `Build Release - FOSS`).
 
 ---
@@ -2707,9 +2707,9 @@ the operator's; every enumeration of tunnel providers, the structure lists and t
 Placed last because it links to `relay/README.md`.
 
 **Acceptance criteria:**
-- [ ] `grep -n "ngrok" docs/PROJECT.md README.md docs/ARCHITECTURE.md CONTRIBUTING.md` shows no provider enumeration
+- [x] `grep -n "ngrok" docs/PROJECT.md README.md docs/ARCHITECTURE.md CONTRIBUTING.md` shows no provider enumeration
       without the relay (ngrok-only lines about ngrok itself are fine).
-- [ ] Both Mermaid diagrams touched render with `mmdc`.
+- [x] Both Mermaid diagrams touched render with `mmdc`.
 
 ### Task 8.1 — `docs/PROJECT.md`
 
@@ -2759,7 +2759,7 @@ with `RemoteAccessSection (tunnel toggle, provider selection, ngrok / relay conf
 ```
 
 **Definition of Done:**
-- [ ] `grep -c RelayTunnelProvider docs/PROJECT.md` ≥ 1 and the defaults list has both relay entries.
+- [x] `grep -c RelayTunnelProvider docs/PROJECT.md` ≥ 1 and the defaults list has both relay entries.
 
 ### Task 8.2 — `README.md`
 
@@ -2804,7 +2804,7 @@ with `RemoteAccessSection (tunnel toggle, provider selection, ngrok / relay conf
 ```
 
 **Definition of Done:**
-- [ ] README mentions `RELAY`, `relay_url` and `relay_device_token` exactly where the other providers' extras are listed.
+- [x] README mentions `RELAY`, `relay_url` and `relay_device_token` exactly where the other providers' extras are listed.
 
 ### Task 8.3 — `docs/ARCHITECTURE.md` and `CONTRIBUTING.md`
 
@@ -2835,7 +2835,7 @@ with `RemoteAccessSection (tunnel toggle, provider selection, ngrok / relay conf
 ```
 
 **Definition of Done:**
-- [ ] Both modified diagrams, extracted to `.mmd`, render to SVG with `npx -p @mermaid-js/mermaid-cli mmdc`.
+- [x] Both modified diagrams, extracted to `.mmd`, render to SVG with `npx -p @mermaid-js/mermaid-cli mmdc`.
 
 ---
 
@@ -2919,3 +2919,73 @@ with `RemoteAccessSection (tunnel toggle, provider selection, ngrok / relay conf
 | I18 | TARGET statement | Context: declared in `.lifecycle/local/DESPLIEGUE.env`, not copied (REGLAS) |
 | I19 | Underscore hosts rejected | Accepted behavior; message says "valid host" |
 | I20 | Test placement ambiguity | Task 1.4 setup names the existing vs new `@Nested` classes |
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), 2026-10-10
+
+First pass on `97df60a`; fixes in `faf063e`..`1f22b68`, plus the CI-found test fixes `c97285f` and `d84526d` (PR #3).
+Unless stated, each fix has a test.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| C1 | `withRelay` block had no `CoroutineScope` receiver: two `launch { provider.start(...) }` calls did not compile, so the unit suite never ran | Block typed `suspend CoroutineScope.(RelayTestServer, RelayTunnelProvider) -> Unit` |
+| C2 | Relay: `new URL(req.url)` in the synchronous `upgrade` listener throws for targets Node accepts (e.g. `http://[/x`), killing the process | `parseTarget()` answers `400` on the upgrade and HTTP paths; tests `malformed upgrade target…`, `malformed request target…`; removing the guard makes the upgrade test fail |
+| W1 | Always-non-null elvis after the `pump()` loop (compiler warning) | `return end` |
+| W2 | Replay failure logs passed the exception, whose Ktor message embeds the full local URL (query, `/s/` token) | `logFailure()` logs method, `sanitizedPath()` and the exception class only (test added in the second pass, R2-W2) |
+| W3 | `URI` accepts port 0, ports above 65535 and a dangling `host:` | `hasInvalidPort()` in `RelaySettingsImpl.validateRelayUri` and `RelayTarget.resolve`; tests in `SettingsRepositoryImplTest`, `RelayTargetTest` |
+| W4 | OkHttp closes the socket (`1001`) when its outgoing queue would exceed 16 MiB: several large concurrent responses drop the tunnel | Not changed: needs relay acknowledgements plus a device byte budget (protocol change). Escalated to the user; listed in PR #3 |
+| I1 | OkHttp `maxRequestsPerHost` raised outside the plan | Kept: without it replays 6–8 queue inside OkHttp while holding slots. Disclosed in PR #3 |
+| I2 | `SettingsRepositoryImpl.serverConfig` collapsed to one line | Kept (`LargeClass`); disclosed |
+| I3 | ktlint layouts; relay validator stubs moved to `stubRelayValidators()` | Kept; disclosed |
+| I4 | Ninth-request test sends the 9th frame after observing 8 in-flight replays | Kept (deterministic); disclosed |
+| I5 | Close message lost the word `code` | Restored: `Relay connection closed (code N: message)` (pinned in the second pass, R2-I4) |
+| I6 | `EmptyContent` assertion | Plan wording; no change |
+| I7 | Lint-driven restructures not listed in the PR | Listed in PR #3 |
+| I8 | Commit `c3dc17c` uses `ci:` (TOOLS.md types: `chore:`) | Needs a history rewrite and force-push: user decision |
+| I9 | Commits between adding `RELAY` and its `when` branches do not compile on their own | Needs a history rewrite and force-push: user decision |
+| I10 | CPU-bound base64/JSON on the IO pool; high peak memory with 8 concurrent 8 MiB responses | Frame and body encode/decode on `Dispatchers.Default` (PROJECT.md), completed in the second pass (R2-I1); the memory bound is tied to W4 and escalated with it |
+| I11 | Relay `MAX_PENDING` checked before bodies are read; `//host/x` rewritten to `/x` | Requests count from admission until answered; an aborted upload frees its slot through the request `error` event; test `pending limit counts uploads in progress…`. The `//` rewrite is kept: harmless, the device serves origin-form paths only |
+| I12 | Review started before CI finished; Manual QA not run; PR deviation list incomplete | Later passes ran after green CI; Manual QA needs a device (user); PR description completed |
+
+Second pass on `d84526d`: 0 critical, 2 warnings, 6 info; fixes in `aa0dac0`..`4ba3667`.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| R2-W1 | The I11 fix let `MAX_PENDING` idle partial uploads hold every relay slot until the socket died (5 min reached directly, about 60 s behind Traefik) | New `BODY_TIMEOUT_MS` (default 30 s): a body not fully received in time gets `408`, the connection is closed and the slot freed; test `stalled upload gets 408…`; README row and HTTP semantics |
+| R2-W2 | The W2 log fix had no test | `LocalRequestReplayerTest` captures `Log.w`: timeout and IO failures log the sanitized path and the exception class, never the URL, token or query, never the three-argument `Log.w` |
+| R2-I1 | I10 partly applied: `frame.readText()` and `Frame.Text(text)` still ran on the IO pool | Both moved into the `Dispatchers.Default` blocks |
+| R2-I2 | The malformed-frame log carried the kotlinx-serialization message, which quotes the frame (a client `authorization` included) | `RelayInbound.Malformed.reason` is the error class name only; test `malformed reason names the error class…` |
+| R2-I3 | The relay upload-slot test hung instead of failing when the abort guard broke; fixed sleeps | Waits for the dispatched requests, then polls with deadlines (`withDeadline`, `eventually`) |
+| R2-I4 | Nothing pinned the I5 wording | The close test asserts `Relay connection closed (code 1000: bye)` |
+| R2-I5 | W3 port boundaries untested | 65535 accepted and 65536 rejected in `RelayTargetTest` and `SettingsRepositoryImplTest` |
+| R2-I6 | PR description stale | Checklist, CI-found test fixes, lowercased response header names and the braced `when` in `validateRelayDeviceToken` added |
+
+Third pass on `4ba3667`: 0 critical, 1 warning, 6 info; fixes in `fb48f8e`..`fc8dd24`.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| R3-W1 | R2-W1 bounds accidental stalls only: a client that keeps opening unfinished uploads holds every `MAX_PENDING` slot | Relay unchanged: README "Limits" documents it with a measured mitigation (Traefik `buffering` middleware, unfinished uploads never reach the relay). A per-client cap in the relay is new behaviour: escalated to the user, listed in PR #3 |
+| R3-I1 | Timer settings above 2147483647 were accepted; Node runs them after 1 ms | `REQUEST_TIMEOUT_MS`, `BODY_TIMEOUT_MS` and `HEARTBEAT_INTERVAL_MS` above it are refused at startup; config test |
+| R3-I2 | `BODY_TIMEOUT_MS` above Node's `requestTimeout` (300 s) or Traefik's `readTimeout` (60 s) has no effect | Both ceilings stated in the README and in PR #3 |
+| R3-I3 | `rawRequest` had no deadline, so a broken request-target guard hung the suite; PR #3 claimed otherwise | A raw reply still open after `DEADLINE_MS` fails with what arrived; `npm test` gives each test 10 s, since the broken guard also hung `afterEach`; PR text corrected |
+| R3-I4 | The upload-slot test relied on the shared body timeout outlasting `DEADLINE_MS` | Runs on its own relay with 60 s body and answer timeouts; helpers comment corrected |
+| R3-I5 | Three tests checked less than claimed: the malformed reason, the fixed body deadline, the second freed slot | The reason equals the parser exception's class name; test `upload trickling its body…`; the slot test holds one request at the device and requires a second |
+| R3-I6 | PR #3 said 2337 tests passed in PR #4 | Corrected: 2343 run, 6 failed, 1 skipped, FOSS task only |
+
+Guard reversion. Relay, on scratch copies with the `npm test` command: removing each guard above (request target, in-flight
+count and release, abort listener, body timer, `408` connection close, fixed deadline, timer cap) fails its test at its
+2 s deadline or sooner. Device, in CI: draft PR #4 (closed unmerged): five guards reverted on top of `4ba3667`; the FOSS unit task failed exactly the six expected tests, 2343 run, 6 failed, 1 skipped; draft PR #5 (closed unmerged): the malformed reason made a constant on top of `fc8dd24`; only the new class-name assertion failed, 2343 run, 1 failed, 1 skipped
+
+Fourth pass on `fc8dd24`: 0 critical, 0 warnings, 2 info; fixed in `892bc9a`.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| R4-I1 | The README said `BODY_TIMEOUT_MS` above Node's 300 s `requestTimeout` has no effect; Node checks it every 30 s, so its own `408` arrives 300–330 s after a request starts | README states the 300–330 s window, measured on the image's Node 24.21.0 |
+| R4-I2 | The Traefik label hard-codes the default `MAX_BODY_BYTES` without saying the two must match | README: keep `maxRequestBodyBytes` equal to `MAX_BODY_BYTES`, and what happens when they differ |
+
+Last pass on `892bc9a`: 0 critical, 0 warnings, 0 info. CI green on `892bc9a`: runs 38042381933 (Lint, Unit & Integration, E2E, Build GMS, Build FOSS) and 38042381936 (Relay).
+
+Unchecked acceptance criteria: the three US4 criteria about what the Tunnel screen shows (third radio and its fields,
+`isError` with supporting text, the cleartext warning) wait for Manual QA steps 1–2 on the installed APK; their logic is
+covered by `MainViewModelTest`.
