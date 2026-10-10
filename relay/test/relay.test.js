@@ -18,20 +18,6 @@ async function fetchText(url, init) {
   return { res, text: await res.text() };
 }
 
-/** Writes a raw HTTP/1.1 request (with `Connection: close`) and resolves with everything the server sent back. */
-function rawRequest(port, text) {
-  return new Promise((resolve, reject) => {
-    const socket = connect(port, '127.0.0.1');
-    let data = '';
-    socket.on('connect', () => socket.write(text));
-    socket.on('data', (chunk) => {
-      data += chunk.toString('utf8');
-    });
-    socket.on('close', () => resolve(data));
-    socket.on('error', reject);
-  });
-}
-
 /** Opens a raw connection, writes `text` and leaves the socket open (e.g. a request whose body never ends). */
 function openSocket(port, text) {
   return new Promise((resolve, reject) => {
@@ -41,6 +27,34 @@ function openSocket(port, text) {
     });
     socket.on('error', reject);
   });
+}
+
+/**
+ * Resolves with everything the server sent on `socket` once the connection closes. A connection still open after
+ * DEADLINE_MS is destroyed and the promise rejects with what had arrived, so a regression fails instead of hanging.
+ */
+function replyOf(socket) {
+  return new Promise((resolve, reject) => {
+    let data = '';
+    const timer = setTimeout(() => {
+      reject(new Error(`connection still open after ${DEADLINE_MS} ms, received ${JSON.stringify(data)}`));
+      socket.destroy();
+    }, DEADLINE_MS);
+    socket.on('data', (chunk) => {
+      data += chunk.toString('utf8');
+    });
+    // 'close' follows any error and settles with what arrived (e.g. a reset after the server already answered).
+    socket.on('error', () => {});
+    socket.on('close', () => {
+      clearTimeout(timer);
+      resolve(data);
+    });
+  });
+}
+
+/** Writes a raw HTTP/1.1 request and resolves with the server's whole reply (see `replyOf`). */
+async function rawRequest(port, text) {
+  return replyOf(await openSocket(port, text));
 }
 
 /** Resolves with the next frame of any type, or with NO_FRAME when none arrives within `ms`. */
@@ -394,11 +408,7 @@ describe('relay', () => {
     const strict = await extraRelay({ maxPending: 1, bodyTimeoutMs: 150 });
     const ws = await device(strict.wsUrl);
 
-    const raw = await withDeadline(
-      rawRequest(strict.port, STALLED_UPLOAD),
-      DEADLINE_MS,
-      'the stalled upload to be answered',
-    );
+    const raw = await rawRequest(strict.port, STALLED_UPLOAD);
 
     assert.match(raw, /^HTTP\/1\.1 408 /);
     assert.match(raw, /\r\nconnection: close\r\n/i);
