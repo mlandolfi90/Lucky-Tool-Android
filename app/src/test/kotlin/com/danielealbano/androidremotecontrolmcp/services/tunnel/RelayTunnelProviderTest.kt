@@ -113,6 +113,10 @@ class RelayTunnelProviderTest {
 
     private fun decodedBody(response: RelayResponseFrame): String = String(Base64.getDecoder().decode(response.body))
 
+    /** Header names are case-insensitive; the OkHttp engine hands them over lowercased. */
+    private fun RelayResponseFrame.header(name: String): List<String>? =
+        headers.entries.firstOrNull { it.key.equals(name, ignoreCase = true) }?.value
+
     private suspend fun DefaultWebSocketServerSession.nextText(): String =
         withTimeout(WAIT_MS) {
             var text: String? = null
@@ -216,7 +220,7 @@ class RelayTunnelProviderTest {
             val response = decodeResponse(withTimeout(WAIT_MS) { reply.await() })
             assertEquals("r1", response.id)
             assertEquals(200, response.status)
-            assertEquals(listOf("abc"), response.headers["Mcp-Session-Id"])
+            assertEquals(listOf("abc"), response.header("Mcp-Session-Id"))
             assertFalse(response.headers.keys.any { it.equals("content-length", ignoreCase = true) })
             assertEquals("""{"hello":"world"} via 1""", decodedBody(response))
         }
@@ -237,7 +241,7 @@ class RelayTunnelProviderTest {
 
             val response = decodeResponse(withTimeout(WAIT_MS) { reply.await() })
             assertEquals(302, response.status)
-            assertEquals(listOf("/elsewhere"), response.headers["Location"])
+            assertEquals(listOf("/elsewhere"), response.header("Location"))
         }
     }
 
