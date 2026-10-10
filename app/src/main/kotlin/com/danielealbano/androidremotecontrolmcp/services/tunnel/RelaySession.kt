@@ -31,7 +31,8 @@ internal data class RelaySessionEnd(
  * Pumps one open device socket: answers pings, replays request frames concurrently (bounded by [replaySlots])
  * and ends when the relay closes the socket or stays silent for [idleTimeoutMs]. In-flight replays are
  * cancelled when the socket goes away; the Close frame is sent even if the caller is being cancelled.
- * Frame JSON is decoded and encoded on the Default dispatcher: bodies reach several MiB of base64.
+ * Frame text (UTF-8 and JSON) is decoded and encoded on the Default dispatcher: bodies reach several MiB of
+ * base64.
  */
 internal class RelaySession(
     private val session: DefaultClientWebSocketSession,
@@ -51,7 +52,7 @@ internal class RelaySession(
                 when {
                     received == null -> end = RelaySessionEnd("Relay silent for $idleTimeoutMs ms", replaced = false)
                     frame == null -> end = closedEnd()
-                    frame is Frame.Text -> handleText(replayScope, frame.readText())
+                    frame is Frame.Text -> handleText(replayScope, frame)
                 }
             }
         } finally {
@@ -85,11 +86,11 @@ internal class RelaySession(
 
     private suspend fun handleText(
         replayScope: CoroutineScope,
-        text: String,
+        frame: Frame.Text,
     ) {
-        when (val inbound = withContext(Dispatchers.Default) { RelayFrameCodec.decode(text) }) {
+        when (val inbound = withContext(Dispatchers.Default) { RelayFrameCodec.decode(frame.readText()) }) {
             is RelayInbound.Request -> replayScope.launch { answer(inbound.frame) }
-            RelayInbound.Ping -> replayScope.launch { sendText(RelayFrameCodec.encodePong()) }
+            RelayInbound.Ping -> replayScope.launch { sendFrame(Frame.Text(RelayFrameCodec.encodePong())) }
             RelayInbound.Pong -> Unit
             is RelayInbound.Unknown -> Logger.w(TAG, "Ignoring relay frame of unknown type '${inbound.type}'")
             is RelayInbound.Malformed -> Logger.w(TAG, "Ignoring malformed relay frame: ${inbound.reason}")
@@ -108,12 +109,12 @@ internal class RelaySession(
                 Logger.w(TAG, "Relay request refused: all replay slots are busy")
                 replayer.errorFrame(frame.id, HttpStatusCode.ServiceUnavailable, "device busy")
             }
-        sendText(withContext(Dispatchers.Default) { RelayFrameCodec.encode(response) })
+        sendFrame(withContext(Dispatchers.Default) { Frame.Text(RelayFrameCodec.encode(response)) })
     }
 
-    private suspend fun sendText(text: String) {
+    private suspend fun sendFrame(frame: Frame.Text) {
         try {
-            session.send(Frame.Text(text))
+            session.send(frame)
         } catch (e: ClosedSendChannelException) {
             Logger.w(TAG, "Relay socket closed before the frame could be sent", e)
         } catch (e: IOException) {
