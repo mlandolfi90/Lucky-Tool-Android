@@ -8,6 +8,7 @@ import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
@@ -30,6 +31,7 @@ internal data class RelaySessionEnd(
  * Pumps one open device socket: answers pings, replays request frames concurrently (bounded by [replaySlots])
  * and ends when the relay closes the socket or stays silent for [idleTimeoutMs]. In-flight replays are
  * cancelled when the socket goes away; the Close frame is sent even if the caller is being cancelled.
+ * Frame JSON is decoded and encoded on the Default dispatcher: bodies reach several MiB of base64.
  */
 internal class RelaySession(
     private val session: DefaultClientWebSocketSession,
@@ -81,11 +83,11 @@ internal class RelaySession(
         }
     }
 
-    private fun handleText(
+    private suspend fun handleText(
         replayScope: CoroutineScope,
         text: String,
     ) {
-        when (val inbound = RelayFrameCodec.decode(text)) {
+        when (val inbound = withContext(Dispatchers.Default) { RelayFrameCodec.decode(text) }) {
             is RelayInbound.Request -> replayScope.launch { answer(inbound.frame) }
             RelayInbound.Ping -> replayScope.launch { sendText(RelayFrameCodec.encodePong()) }
             RelayInbound.Pong -> Unit
@@ -106,7 +108,7 @@ internal class RelaySession(
                 Logger.w(TAG, "Relay request refused: all replay slots are busy")
                 replayer.errorFrame(frame.id, HttpStatusCode.ServiceUnavailable, "device busy")
             }
-        sendText(RelayFrameCodec.encode(response))
+        sendText(withContext(Dispatchers.Default) { RelayFrameCodec.encode(response) })
     }
 
     private suspend fun sendText(text: String) {

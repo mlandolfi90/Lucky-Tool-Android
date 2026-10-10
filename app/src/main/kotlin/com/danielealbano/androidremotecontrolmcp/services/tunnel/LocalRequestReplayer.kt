@@ -15,8 +15,10 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.utils.io.readRemaining
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.withContext
 import kotlinx.io.readByteArray
 import kotlinx.serialization.json.JsonPrimitive
 import java.io.IOException
@@ -26,6 +28,7 @@ import java.util.Base64
  * Replays a relay request frame against the local MCP server (`http://127.0.0.1:<port>`) and packs the
  * answer into a response frame. Failures never propagate: they become 4xx/5xx response frames (generic JSON
  * messages — loopback details stay in logcat) so the relay can still answer its HTTP client.
+ * Base64 work on bodies of up to [maxResponseBytes] runs on the Default dispatcher (CPU-bound).
  */
 internal class LocalRequestReplayer(
     private val client: HttpClient,
@@ -61,9 +64,10 @@ internal class LocalRequestReplayer(
         localPort: Int,
     ): RelayResponseFrame =
         try {
+            val body = withContext(Dispatchers.Default) { Base64.getDecoder().decode(frame.body) }
             val response =
                 client.request("http://127.0.0.1:$localPort${frame.path}") {
-                    applyFrame(frame)
+                    applyFrame(frame, body)
                     timeout {
                         requestTimeoutMillis = timeoutMs
                         socketTimeoutMillis = timeoutMs
@@ -105,24 +109,27 @@ internal class LocalRequestReplayer(
             Logger.w(TAG, "Local response dropped: body exceeds $maxResponseBytes bytes")
             return errorFrame(id, HttpStatusCode.BadGateway, "response too large (limit $maxResponseBytes bytes)")
         }
+        val encoded = withContext(Dispatchers.Default) { Base64.getEncoder().encodeToString(bytes) }
         return RelayResponseFrame(
             id = id,
             status = response.status.value,
             headers = forwardableResponseHeaders(response.headers),
-            body = Base64.getEncoder().encodeToString(bytes),
+            body = encoded,
         )
     }
 
-    private fun HttpRequestBuilder.applyFrame(frame: RelayRequestFrame) {
+    private fun HttpRequestBuilder.applyFrame(
+        frame: RelayRequestFrame,
+        body: ByteArray,
+    ) {
         method = HttpMethod.parse(frame.method.uppercase())
         frame.headers.forEach { (name, values) ->
             if (name.lowercase() !in SKIPPED_REQUEST_HEADERS) {
                 values.forEach { headers.append(name, it) }
             }
         }
-        val bytes = Base64.getDecoder().decode(frame.body)
-        if (bytes.isNotEmpty()) {
-            setBody(ByteArrayContent(bytes, contentType = frame.contentType()))
+        if (body.isNotEmpty()) {
+            setBody(ByteArrayContent(body, contentType = frame.contentType()))
         }
     }
 
