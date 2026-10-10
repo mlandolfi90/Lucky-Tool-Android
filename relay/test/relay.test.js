@@ -381,27 +381,44 @@ describe('relay', () => {
   });
 
   it('pending limit counts uploads in progress and frees aborted ones', async () => {
-    const ws = await device();
-    const dispatched = requestsDispatched(ctx.relay.server, 2);
-    const uploads = await Promise.all([openSocket(ctx.port, STALLED_UPLOAD), openSocket(ctx.port, STALLED_UPLOAD)]);
+    // Body and answer timeouts far beyond every deadline below: only the aborts free the upload slots, and the
+    // held request keeps its slot until the test answers it.
+    const patient = await extraRelay({ bodyTimeoutMs: 60_000, requestTimeoutMs: 60_000 });
+    const ws = await device(patient.wsUrl);
+    const dispatched = requestsDispatched(patient.relay.server, 2);
+    const uploads = await Promise.all([
+      openSocket(patient.port, STALLED_UPLOAD),
+      openSocket(patient.port, STALLED_UPLOAD),
+    ]);
     try {
       await withDeadline(dispatched, DEADLINE_MS, 'both uploads to be admitted');
-      const { res, text } = await fetchText(`${ctx.baseUrl}/three`);
+      const { res, text } = await withDeadline(
+        fetchText(`${patient.baseUrl}/three`),
+        DEADLINE_MS,
+        'the third request to be refused',
+      );
       assert.equal(res.status, 503);
       assert.equal(JSON.parse(text).error, 'too many pending requests');
     } finally {
       for (const socket of uploads) socket.destroy();
     }
 
-    ws.on('message', (data) => {
-      const frame = JSON.parse(data.toString('utf8'));
-      if (frame.type === 'request') respond(ws, frame.id, { body: 'freed' });
+    // The device keeps '/held' unanswered, so '/after' needs the other slot: both aborts must free theirs.
+    const held = new Promise((resolve) => {
+      ws.on('message', (data) => {
+        const frame = JSON.parse(data.toString('utf8'));
+        if (frame.type !== 'request') return;
+        if (frame.path === '/held') resolve(frame);
+        else respond(ws, frame.id, { body: 'freed' });
+      });
     });
-    await eventually(
-      async () => (await fetchText(`${ctx.baseUrl}/after`)).text === 'freed',
-      DEADLINE_MS,
-      'the aborted uploads to free their slots',
-    );
+    const answered = async (path) => (await fetchText(`${patient.baseUrl}${path}`)).text === 'freed';
+    await eventually(() => answered('/probe'), DEADLINE_MS, 'an aborted upload to free its slot');
+    const heldFetch = fetchText(`${patient.baseUrl}/held`);
+    const heldFrame = await withDeadline(held, DEADLINE_MS, 'the held request to reach the device');
+    await eventually(() => answered('/after'), DEADLINE_MS, 'the other aborted upload to free its slot');
+    respond(ws, heldFrame.id, { body: 'held' });
+    assert.equal((await heldFetch).text, 'held');
   });
 
   it('stalled upload gets 408 after the body timeout and frees its slot', async () => {

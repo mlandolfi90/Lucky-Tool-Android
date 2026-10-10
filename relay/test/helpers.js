@@ -6,7 +6,7 @@ export const TEST_TOKEN = 'test-device-token-0123456789';
 
 /**
  * Heartbeat is slow by default so pings never interleave with test traffic; heartbeat tests override it.
- * The body timeout is long for the same reason: only the stalled-upload test shortens it.
+ * The body timeout is far above every test deadline, so only the tests about it (which override it) reach it.
  */
 export const TEST_CONFIG = Object.freeze({
   port: 0,
