@@ -117,5 +117,5 @@ todo lo nuevo y, si se puede, se mejora.
   - las tareas grabadas registran inicio, cada paso con su duración, el camino de aprobación usado
     y su resultado, y el informe de fallo;
   - bajar el ruido de logcat: no escribir una línea por cada evento de accesibilidad;
-  - las reglas de lo que nunca se registra (tokens, contraseñas, texto que escribe la persona)
-    quedan como hoy y se aplican a todo lo nuevo.
+  - lo que `CLAUDE.md` prohíbe registrar (el token, el árbol de accesibilidad completo, datos
+    sensibles) rige igual para todo lo nuevo, incluidos los parámetros de las tareas.
