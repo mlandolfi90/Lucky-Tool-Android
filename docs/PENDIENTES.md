@@ -54,8 +54,9 @@ otros programas ya usan (entrada automática).
 - Son dos partes:
   - mantener la pantalla encendida mientras haya llamadas MCP en curso, y apagarla al terminar;
   - encender y desbloquear cuando llega una llamada con la pantalla apagada o bloqueada.
-- Decide el humano:
-  - el método de desbloqueo (el «truco»), que describe el humano;
-  - dónde vive la credencial si el método la necesita: un PIN o patrón guardado en el teléfono es
-    un secreto, y las reglas del repo piden no saltarse las protecciones de Android;
-  - si se activa siempre o solo con un ajuste encendido a propósito.
+- Decidido por el humano el 2026-10-11 (excepciones a `CLAUDE.md` en `REGLAS.md`, PR #2):
+  - la app puede mantener la pantalla encendida mientras haya llamadas MCP en curso;
+  - la app puede desbloquear con el PIN o patrón del dueño, guardado cifrado en el teléfono
+    (nunca en el repo, en un log ni fuera del teléfono), apagado por defecto y encendido con un
+    ajuste a propósito.
+- Falta que el humano describa el método de desbloqueo (el «truco»).
