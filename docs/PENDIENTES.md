@@ -116,6 +116,10 @@ todo lo nuevo y, si se puede, se mejora.
 - Propuestas, que decide el humano:
   - las tareas grabadas registran inicio, cada paso con su duración, el camino de aprobación usado
     y su resultado, y el informe de fallo;
-  - bajar el ruido de logcat: no escribir una línea por cada evento de accesibilidad;
+  - la línea por cada evento de accesibilidad se escribe solo cuando se depura a propósito; fuera
+    de eso no se escriben (decidido por el humano el 2026-10-11). Hoy el teléfono tiene instalado
+    el build debug, así que la propuesta es un ajuste de depuración, apagado por defecto, y no
+    depender del tipo de build. Queda abierto si, con la depuración apagada, se escribe un resumen
+    por minuto (cuántos eventos y de qué apps) o nada;
   - lo que `CLAUDE.md` prohíbe registrar (el token, el árbol de accesibilidad completo, datos
     sensibles) rige igual para todo lo nuevo, incluidos los parámetros de las tareas.
