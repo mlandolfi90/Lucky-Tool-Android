@@ -88,10 +88,34 @@ en cada pedido.
   2. **Pantalla de aprobación** de la app. Ya existe una, la de OAuth (`ApprovalScreen`), que puede
      servir de base.
   3. **Huella dactilar** del dueño antes de ejecutar el paso.
-- El nivel de cada paso lo marca el humano al guardar la tarea (decidido el 2026-10-11). Falta
-  definir en el plan cómo lo marca cuando la tarea la graba el agente.
-- Decide el humano:
-  - los niveles de criticidad y qué camino lleva cada uno;
-  - qué hace la tarea si un paso no encuentra su elemento (la app se actualizó): parar y avisar en
-    qué paso, como propuesta;
-  - dónde se ven y se borran las tareas guardadas: en la app, por tools, o en las dos.
+- El nivel de cada paso lo marca el humano al guardar la tarea y lo puede cambiar después en la
+  tarea guardada: no es rígido (decidido el 2026-10-11). Falta definir en el plan cómo lo marca
+  cuando la tarea la graba el agente.
+- Si un paso falla (por ejemplo, no encuentra su elemento porque la app se actualizó), la tarea se
+  detiene y avisa con un informe (decidido el 2026-10-11).
+- Las tareas guardadas se ven y se borran en las dos partes: en la app y por tools (decidido el
+  2026-10-11).
+- Cada ejecución deja su rastro en el log de la app, como las tools (ver punto 5).
+- Decide el humano: los niveles de criticidad y qué camino de aprobación lleva cada uno.
+
+## 5. Logs: mantener la disciplina y mejorarla
+
+Pedido del humano el 2026-10-11: el MCP registra lo que hace en logs; esa disciplina se mantiene en
+todo lo nuevo y, si se puede, se mejora.
+
+- Medido en `1e820e0`: el log de la app (pantalla Logs) guarda entradas `TOOL_CALL` (nombre de la
+  tool, duración en ms y marca de fallo), `TUNNEL`, `SERVER` y `OAUTH`
+  (`data/model/ServerLogEntry.kt`), en segmentos de hasta 1000 entradas, con 20 segmentos como
+  máximo (`ServerLogSegmentedStore.kt`). Cada llamada se registra en
+  `mcp/tools/LoggedToolRegistration.kt`.
+- Medido el 2026-10-11 en el build debug: el servicio de accesibilidad escribe en logcat una línea
+  por cada cambio de contenido de cualquier app (`McpAccessibilityService.kt:103`); había 2326 de
+  esas líneas en el buffer, y tapan las líneas útiles.
+- Ya planificado: el plan 67 (US4) agrega una línea de tiempos por pedido en el relay y en el
+  teléfono, con un id común para cruzarlas.
+- Propuestas, que decide el humano:
+  - las tareas grabadas registran inicio, cada paso con su duración, el camino de aprobación usado
+    y su resultado, y el informe de fallo;
+  - bajar el ruido de logcat: no escribir una línea por cada evento de accesibilidad;
+  - las reglas de lo que nunca se registra (tokens, contraseñas, texto que escribe la persona)
+    quedan como hoy y se aplican a todo lo nuevo.
