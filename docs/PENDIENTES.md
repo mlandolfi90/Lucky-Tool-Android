@@ -71,7 +71,7 @@ en cada pedido.
 - Medido ese día en esa app: el `node_id` de un mismo botón cambia al reabrir la app, porque sale
   de la posición del nodo y la de sus contenedores. El `resource_id` y la posición en pantalla se
   repiten. Una receta tiene que apoyarse en `resource_id` o texto, nunca en `node_id`.
-- Medido en `1e820e0`: ninguna de las 55 tools graba ni repite tareas, y no hay tool que ejecute
+- Medido en `1e820e0`: ninguna de las 57 tools graba ni repite tareas, y no hay tool que ejecute
   varios pasos en una llamada.
 - Decidido por el humano el 2026-10-11:
   - se graba de dos formas: el agente guarda con un nombre los pasos de una tarea que salió bien,
