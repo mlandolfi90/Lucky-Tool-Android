@@ -1,0 +1,211 @@
+// c4/conexion.c4 — Diagrama de conexión: quién habla con quién, y sobre todo quién ABRE cada conexión.
+// Regla que dibuja todo: el teléfono sólo abre conexiones salientes; el único punto
+// público es el proxy TLS del VPS. Dos variantes, una por opción en discusión (2026-10-09).
+
+specification {
+  element persona {
+    style {
+      shape person
+    }
+  }
+  element sistema
+  element contenedor
+
+  // Conexión que ALGUIEN abre (quién la inicia importa: define la superficie expuesta).
+  relationship abre {
+    color green
+    line solid
+  }
+  // Tráfico que viaja por una conexión YA abierta, en cualquier sentido.
+  relationship reenvia {
+    color slate
+    line dashed
+  }
+  // Acción MANUAL del humano con el teléfono en la mano. No es una conexión: es un
+  // candado. Ninguna app, hub ni agente puede hacerla por él.
+  relationship manual {
+    color amber
+    line dotted
+  }
+
+  tag opcionA
+  tag opcionB
+}
+
+model {
+  operador = persona "Operador" {
+    description "Pide la tarea en Claude Code. Con el teléfono en la mano: habilita la accesibilidad, configura la app, aprueba y desbloquea."
+  }
+
+  pc = sistema "PC Windows" {
+    description "Esta máquina. Sólo corre el cliente MCP; nada del runtime vive acá."
+    style {
+      color sky
+    }
+    claude = contenedor "Claude Code" {
+      technology "cliente MCP · HTTPS POST /mcp · Bearer de agente"
+      description "El agente: decide y llama tools."
+    }
+  }
+
+  telefono = sistema "Teléfono Android" {
+    description "Teléfono dedicado. No escucha en ningún puerto de red: todo sale de él."
+    style {
+      shape mobile
+      color green
+    }
+    a11y = contenedor "Servicio de accesibilidad" {
+      technology "AccessibilityService · árbol de UI · gestos · capturas"
+      description "Lo que ve y toca la pantalla. Lo da Android; lo habilita el operador a mano, en Ajustes."
+    }
+    mmcp = contenedor "MobileMCP app" {
+      #opcionA
+      technology "Kotlin · OkHttp WebSocket SALIENTE"
+      description "Opción A. Marca al hub y ejecuta lo que el hub le manda. 35 tools, sin Privacy Mode."
+    }
+    arc = contenedor "android-remote-control-mcp" {
+      #opcionB
+      technology "Kotlin · Ktor/Netty · MCP stateless en 127.0.0.1:8080"
+      description "Opción B. Servidor MCP completo pero SÓLO en loopback. 57 tools, OAuth, Privacy Mode."
+    }
+    chiselc = contenedor "chisel client" {
+      #opcionB
+      technology "Go · WSS SALIENTE · R:18080 → 127.0.0.1:8080"
+      description "Opción B. Tercer TunnelProvider de la app. Abre el túnel inverso y lo mantiene vivo."
+    }
+  }
+
+  vps = sistema "VPS (Coolify)" {
+    description "Linux remoto. Termina TLS y es el único punto alcanzable desde afuera."
+    style {
+      color indigo
+    }
+    proxy = contenedor "Proxy TLS (Traefik)" {
+      technology "HTTPS 443 · Let's Encrypt"
+      description "Único puerto abierto. Rate-limit y allowlist de IP se ponen acá, sin tocar las apps."
+    }
+    hub = contenedor "mobilemcp hub" {
+      #opcionA
+      technology "Node 22 · ws · WSS /device + HTTP /mcp"
+      description "Opción A. Recibe al teléfono por WSS y a Claude por HTTP. Token de dispositivo ≠ token de agente."
+    }
+    chisels = contenedor "chisel server" {
+      #opcionB
+      technology "Go · --reverse · --auth/--authfile · publica 127.0.0.1:18080"
+      description "Opción B. Convierte el loopback del teléfono en un puerto local del VPS."
+    }
+  }
+
+  // ── Común a las dos opciones ───────────────────────────────────────────────────
+  operador -[abre]-> claude "pide una tarea"
+  claude -[abre]-> proxy "HTTPS POST /mcp · Bearer de agente"
+
+  // ── Lo que sólo puede hacer un humano con el teléfono en la mano ───────────────
+  // No viaja por ningún cable: es el operador tocando la pantalla. Es el candado que
+  // ningún agente salta, y por eso va con tipo y color propios.
+  operador -[manual]-> mmcp "A MANO, con el teléfono en la mano: habilita accesibilidad en Ajustes · pega URL del hub y token de dispositivo · toca Connect · desbloquea" {
+    #opcionA
+    technology "manual · Ajustes de Android + pantalla de la app · no automatizable"
+    description "Nada de esto lo puede hacer el agente ni el hub. (1) Android exige que el servicio de accesibilidad lo active el usuario en Ajustes; en Android 13+, por ser una app instalada fuera de la tienda, antes hay que tocar 'Permitir ajustes restringidos'. (2) La URL del hub y el token de dispositivo se pegan en la pantalla de la app y se toca Connect; sin eso la app no marca a ningún lado. (3) Un bloqueo seguro (PIN, patrón, huella) no lo pasa ningún gesto sintético: el agente puede encender la pantalla, no desbloquearla. Si el humano no hizo estos pasos, el teléfono no acepta control de nadie."
+  }
+  operador -[manual]-> arc "A MANO, con el teléfono en la mano: habilita accesibilidad en Ajustes · configura el túnel · aprueba cada cliente OAuth con el código en pantalla · desbloquea" {
+    #opcionB
+    technology "manual · Ajustes de Android + pantalla de la app · no automatizable"
+    description "Nada de esto lo puede hacer el agente ni el túnel. (1) Android exige que el servicio de accesibilidad lo active el usuario en Ajustes; en Android 13+, por ser una app instalada fuera de la tienda, antes hay que tocar 'Permitir ajustes restringidos'. (2) El túnel se configura en la app: servidor, credencial (--auth) y huella del servidor (--fingerprint). (3) Cada cliente nuevo (Claude Code, Claude.ai, ChatGPT) pide OAuth y la app muestra un código de dos dígitos: el humano lo compara y aprueba, uno por uno; se revoca desde la misma pantalla. (4) Un bloqueo seguro no lo pasa ningún gesto sintético. Si el humano no hizo estos pasos, el teléfono no acepta control de nadie."
+  }
+
+  // ── Opción A: mobilemcp con hub propio ─────────────────────────────────────────
+  mmcp -[abre]-> proxy "WSS saliente a /device · token de dispositivo" {
+    #opcionA
+  }
+  proxy -[reenvia]-> hub "WSS /device y HTTP /mcp" {
+    #opcionA
+  }
+  hub -[reenvia]-> mmcp "acciones {id, action, params} por el WSS que abrió el teléfono" {
+    #opcionA
+  }
+  mmcp -[reenvia]-> a11y "ejecuta: tap, type, snapshot…" {
+    #opcionA
+  }
+
+  // ── Opción B: android-remote-control-mcp + chisel ──────────────────────────────
+  chiselc -[abre]-> proxy "WSS saliente · --auth + --fingerprint" {
+    #opcionB
+  }
+  proxy -[reenvia]-> chisels "canal chisel (WSS) · y /mcp → 127.0.0.1:18080" {
+    #opcionB
+  }
+  chisels -[reenvia]-> chiselc "cada request /mcp por el túnel ya abierto" {
+    #opcionB
+  }
+  chiselc -[reenvia]-> arc "entrega en 127.0.0.1:8080 (loopback)" {
+    #opcionB
+  }
+  arc -[reenvia]-> a11y "ejecuta: tap, type, screen_state…" {
+    #opcionB
+  }
+}
+
+views {
+  // Contexto por opción: al nivel de sistemas, A y B comparten los mismos cuatro actores;
+  // separarlas evita que LikeC4 colapse dos relaciones en una flecha "[...]".
+  view contextoA {
+    title "Contexto — opción A (mobilemcp, hub propio)"
+    description "Quién habla con quién. Verde continuo: quién ABRE la conexión. Gris punteado: tráfico por una conexión ya abierta. Ámbar punteado: acción MANUAL del humano con el teléfono en la mano. Del teléfono sólo salen verdes."
+    include operador, pc, telefono, vps
+    exclude * -> * where tag is #opcionB
+    autoLayout LeftRight
+  }
+
+  view contextoB {
+    title "Contexto — opción B (android-remote-control-mcp + chisel)"
+    description "Mismo contexto, con el túnel inverso de chisel. Ámbar punteado: acción MANUAL del humano con el teléfono en la mano. El teléfono sigue sin recibir ninguna conexión: el VPS sólo reenvía por la que el teléfono abrió."
+    include operador, pc, telefono, vps
+    exclude * -> * where tag is #opcionA
+    autoLayout LeftRight
+  }
+
+  view opcionA {
+    title "Opción A — mobilemcp: hub propio en el VPS"
+    description "El teléfono marca al hub por WSS. Claude habla HTTP con el hub. Dos tokens distintos. Ámbar punteado: lo que el humano hace A MANO en el teléfono antes de que nada funcione. Hub = código nuestro a mantener (4 días de vida upstream)."
+    include operador, claude, telefono, mmcp, a11y, vps, proxy, hub
+    exclude * -> * where tag is #opcionB
+    autoLayout LeftRight
+  }
+
+  view opcionB {
+    title "Opción B — android-remote-control-mcp + chisel (túnel inverso propio)"
+    description "La app escucha sólo en loopback. chisel abre el túnel hacia nuestro VPS; el proxy publica /mcp. Ámbar punteado: lo que el humano hace A MANO en el teléfono, incluida la aprobación de cada cliente OAuth."
+    include operador, claude, telefono, arc, chiselc, a11y, vps, proxy, chisels
+    exclude * -> * where tag is #opcionA
+    autoLayout LeftRight
+  }
+
+  dynamic view flujoA {
+    title "Opción A — una acción, paso a paso"
+    description "Qué pasa cuando el agente toca un botón. Nota el paso 4: el hub NO abre nada, usa el socket que abrió el teléfono."
+    operador -> claude "tocá Enviar en WhatsApp"
+    claude -> proxy "POST /mcp tools/call tap · Bearer"
+    proxy -> hub "reenvía"
+    hub -> mmcp "{id, action: interact.tap} por el WSS ya abierto"
+    mmcp -> a11y "dispatchGesture"
+    mmcp -> hub "{id, result: observación compacta}"
+    hub -> proxy "respuesta JSON-RPC"
+    proxy -> claude "200 · resultado"
+  }
+
+  dynamic view flujoB {
+    title "Opción B — una acción, paso a paso"
+    description "Mismo botón. Nota los pasos 3-5: el request viaja por el túnel que abrió el teléfono y aterriza en el loopback de la app."
+    operador -> claude "tocá Enviar en WhatsApp"
+    claude -> proxy "POST /mcp tools/call android_tap · Bearer u OAuth"
+    proxy -> chisels "→ 127.0.0.1:18080"
+    chisels -> chiselc "por el túnel ya abierto"
+    chiselc -> arc "→ 127.0.0.1:8080"
+    arc -> a11y "dispatchGesture"
+    arc -> chiselc "respuesta HTTP"
+    chiselc -> chisels "por el túnel"
+    chisels -> proxy "respuesta"
+    proxy -> claude "200 · resultado"
+  }
+}

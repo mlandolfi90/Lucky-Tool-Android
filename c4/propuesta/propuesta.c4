@@ -1,0 +1,198 @@
+// c4/propuesta/propuesta.c4 — la propuesta de implementación, dibujada paso a paso.
+// Proyecto LikeC4 propio (likec4.config.json): no comparte modelo con c4/conexion.c4.
+// Arranca con el Operador y crece con lo que el humano va diciendo (en chat o desde la página).
+
+specification {
+  element persona {
+    style {
+      shape person
+    }
+  }
+  element sistema
+  element contenedor
+
+  // Conexión que ALGUIEN abre (quién la inicia define la superficie expuesta).
+  relationship abre {
+    color green
+    line solid
+  }
+  // Tráfico por una conexión YA abierta.
+  relationship reenvia {
+    color slate
+    line dashed
+  }
+  // Acción manual del humano con el aparato en la mano. Un candado, no un cable.
+  relationship manual {
+    color amber
+    line dotted
+  }
+
+  // Dos formas de sacar la app del teléfono hacia el VPS. Misma app, mismo contorno.
+  tag chisel
+  tag ws
+}
+
+model {
+  operador = persona "Operador" {
+    description "El humano. Punto de partida: todo lo demás se dibuja desde acá."
+  }
+
+  // Feedback del humano (2026-10-09): "un nodo que coloque un agente AI, yo me conecto a él
+  // a través de cualquier plataforma".
+  agente = sistema "Agente AI" {
+    technology "Claude (u otro modelo) · MCP"
+    description "El agente al que el operador le habla. Se llega a él desde cualquier plataforma —Claude Code, Claude.ai, ChatGPT, el celular…—: la plataforma es la puerta, el agente es el mismo."
+  }
+
+  // Feedback del humano (2026-10-09): "el server litellm MCP para que todo agente se conecte a él".
+  litellm = sistema "Servidor litellm MCP" {
+    technology "litellm · pasarela MCP (/mcp) · claves virtuales por cliente"
+    description "El punto único al que se conecta todo agente, sea cual sea su plataforma. Detrás de él viven los servidores MCP: los agentes no los conocen directo, llegan por acá."
+  }
+
+  // Feedback del humano (2026-10-09): "lo que está detrás de litellm, que creo que son los
+  // servidores MCP, ¿correcto?" — Correcto. litellm es cliente de cada uno y le reparte las llamadas.
+  mcps = sistema "Servidores MCP" {
+    description "Cada uno expone sus tools por MCP (Streamable HTTP). litellm los conoce; los agentes, no."
+
+    // Pedido en chat (2026-10-09): "detrás de ese MCP, ¿cómo quedaría la arquitectura?" y después
+    // "mostrá la conexión como sería con el WebSocket". Dos variantes de la MISMA app
+    // (android-remote-control-mcp, en loopback): #chisel (túnel inverso) y #ws (relay propio).
+    android = contenedor "MCP Android — este proyecto" {
+      technology "android-remote-control-mcp · VPS (Coolify) · WebSocket propio (relay)"
+      description "Visto desde litellm es una URL HTTPS más. Por dentro: el proxy del VPS, una conexión SALIENTE que abre el teléfono, y un teléfono dedicado que nunca recibe conexiones. TRANSPORTE ELEGIDO por el humano el 2026-10-09: WebSocket propio (relay) — las dos puntas son código nuestro y la reconexión vive dentro de la app. chisel queda documentado como alternativa no elegida."
+
+      vps = contenedor "VPS (Coolify)" {
+        description "Único punto alcanzable desde afuera. Termina TLS."
+        proxy = contenedor "Proxy TLS (Traefik)" {
+          technology "HTTPS 443 · Let's Encrypt"
+          description "Único puerto abierto. Rate-limit y allowlist de IP se ponen acá, sin tocar las apps."
+        }
+        chisels = contenedor "chisel server" {
+          #chisel
+          technology "Go · --reverse · --authfile · publica 127.0.0.1:18080"
+          description "Variante chisel. Convierte el loopback del teléfono en un puerto local del VPS. Cero código nuestro."
+        }
+        relay = contenedor "Relay WebSocket (hub propio)" {
+          #ws
+          technology "Node (o Go) · WSS /device para el teléfono · HTTPS /mcp para litellm · ~250 líneas"
+          description "Variante WebSocket. Código nuestro. Acepta UN socket por teléfono (token de dispositivo) y, por cada POST /mcp que llega de litellm, manda {id, método, ruta, cabeceras, cuerpo} por ese socket y espera {id, status, cabeceras, cuerpo}. Como el servidor MCP de la app es stateless, un request = un mensaje. Es lo que hace el hub de mobilemcp, pero a nivel HTTP: la app no se entera."
+        }
+      }
+
+      telefono = contenedor "Teléfono Android (dedicado)" {
+        description "No escucha en ningún puerto de red: todo sale de él."
+        style {
+          shape mobile
+          color green
+        }
+        chiselc = contenedor "chisel client" {
+          #chisel
+          technology "Go · WSS SALIENTE · R:127.0.0.1:18080 → 127.0.0.1:8080"
+          description "Variante chisel. Tercer TunnelProvider de la app: binario vendoreado como cloudflared. Abre el túnel inverso y lo mantiene vivo (keepalive, reconexión)."
+        }
+        wsc = contenedor "Cliente WebSocket (TunnelProvider nuevo)" {
+          #ws
+          technology "Kotlin · OkHttp WebSocket SALIENTE · start/stop/status"
+          description "Variante WebSocket. Implementa la misma interfaz TunnelProvider (3 métodos) en Kotlin puro, sin binario externo. Abre el WSS al relay con el token de dispositivo; por cada mensaje reproduce el request HTTP contra 127.0.0.1:8080 y devuelve la respuesta por el mismo socket. Reconecta con backoff. DECISIÓN del humano (2026-10-09): es el TERCER TunnelProviderType junto a CLOUDFLARE y NGROK, que se quedan apagados por defecto; no se borran de upstream (ver REGLAS.md). Razón: código nuevo aparte, build y CI de upstream intactos, sincronización trivial."
+        }
+        arc = contenedor "android-remote-control-mcp" {
+          technology "Kotlin · Ktor/Netty · MCP stateless en 127.0.0.1:8080"
+          description "Servidor MCP completo, sólo en loopback. 57 tools, OAuth con aprobación en pantalla, Privacy Mode, per-tool on/off. Es el proyecto maduro (8 meses, 693★), NO mobilemcp —el de 4 días—, que sería la opción A. El bearer/OAuth lo sigue validando él: el túnel o el relay transportan, no autorizan."
+        }
+        a11y = contenedor "Servicio de accesibilidad" {
+          technology "AccessibilityService · árbol de UI · gestos · capturas"
+          description "Lo que ve y toca la pantalla. Lo da Android; lo habilita el operador a mano."
+        }
+      }
+    }
+
+    otros = contenedor "Otros MCP del taller" {
+      technology "los demás servidores MCP del taller"
+      description "Los que ya existen. Mismo lugar, mismo contrato."
+    }
+  }
+
+  // ── Arriba: operador → agente → litellm → MCPs ─────────────────────────────────
+  operador -[abre]-> agente "se conecta desde cualquier plataforma (Claude Code, Claude.ai, ChatGPT, celular…)"
+  agente -[abre]-> litellm "se conecta por MCP con su clave virtual — todo agente, cualquiera sea la plataforma"
+  litellm -[abre]-> proxy "HTTPS POST /mcp · Bearer u OAuth · llama a las tools del teléfono"
+  litellm -[abre]-> otros "llama a sus tools por MCP"
+
+  // ── Variante chisel: túnel inverso ───────────────────────────────────────────────
+  chiselc -[abre]-> proxy "WSS SALIENTE · --auth + --fingerprint (abre el túnel)" {
+    #chisel
+  }
+  proxy -[reenvia]-> chisels "canal chisel (WSS) · y /mcp → 127.0.0.1:18080" {
+    #chisel
+  }
+  chisels -[reenvia]-> chiselc "cada request /mcp por el túnel ya abierto" {
+    #chisel
+  }
+  chiselc -[reenvia]-> arc "entrega en 127.0.0.1:8080 (loopback)" {
+    #chisel
+  }
+
+  // ── Variante WebSocket: relay propio ─────────────────────────────────────────────
+  wsc -[abre]-> proxy "WSS SALIENTE a /device · token de dispositivo (abre el socket)" {
+    #ws
+  }
+  proxy -[reenvia]-> relay "WSS /device del teléfono · y HTTPS /mcp de litellm" {
+    #ws
+  }
+  relay -[reenvia]-> wsc "{id, método, ruta, cabeceras, cuerpo} por el socket que abrió el teléfono" {
+    #ws
+  }
+  wsc -[reenvia]-> arc "reproduce el request en 127.0.0.1:8080 y devuelve {id, status, cuerpo}" {
+    #ws
+  }
+
+  // ── Común ────────────────────────────────────────────────────────────────────────
+  arc -[reenvia]-> a11y "ejecuta: tap, type, screen_state…"
+
+  // ── Lo que sólo puede hacer un humano con el teléfono en la mano ───────────────
+  operador -[manual]-> arc "A MANO, con el teléfono en la mano: habilita accesibilidad en Ajustes · configura la conexión saliente (túnel chisel o relay) · aprueba cada cliente OAuth con el código en pantalla · desbloquea" {
+    technology "manual · Ajustes de Android + pantalla de la app · no automatizable"
+    description "Nada de esto lo puede hacer el agente ni el túnel ni el relay. Android exige que el servicio de accesibilidad lo active el usuario (Android 13+: antes 'Permitir ajustes restringidos'). La conexión saliente se configura en la app: servidor y credencial (chisel: --auth y huella; relay: URL y token de dispositivo). Cada cliente OAuth nuevo se aprueba uno por uno con el código en pantalla. Un bloqueo seguro no lo pasa ningún gesto sintético."
+  }
+}
+
+views {
+  view index {
+    title "Propuesta de implementación"
+    description "Se agrega lo que el humano va diciendo, en chat o desde la página. Clic en 'MCP Android' para abrirlo (dos vistas: WebSocket elegido y chisel como alternativa)."
+    include operador, agente, litellm, mcps, android, otros
+    autoLayout LeftRight
+  }
+
+  view mcpAndroidWs of android {
+    title "MCP Android — ELEGIDA: WebSocket propio (relay)"
+    description "Decisión del humano (2026-10-09). La app abre UN WebSocket saliente a un relay nuestro; el relay reenvía cada POST /mcp de litellm por ese socket y la app lo reproduce contra su loopback. Código nuestro en dos lugares (relay ~250 líneas, TunnelProvider Kotlin), sin binario externo; reconexión y backoff dentro del servicio en primer plano de la app. Verde continuo: quién ABRE la conexión. Gris punteado: tráfico por una conexión ya abierta. Ámbar punteado: el humano a mano."
+    include operador, agente, litellm, android, vps, proxy, relay, telefono, wsc, arc, a11y
+    exclude * -> * where tag is #chisel
+    autoLayout LeftRight
+  }
+
+  view mcpAndroid of android {
+    title "MCP Android — alternativa NO elegida: chisel (túnel inverso)"
+    description "Queda documentada para comparar. Misma app, mismo contorno, cero código de transporte, pero un binario Go ajeno dentro de la app (DNS en Android, supervisión de proceso). Descartada el 2026-10-09 a favor del WebSocket propio."
+    include operador, agente, litellm, android, vps, proxy, chisels, telefono, chiselc, arc, a11y
+    exclude * -> * where tag is #ws
+    autoLayout LeftRight
+  }
+
+  dynamic view flujoWs {
+    title "WebSocket propio — un tap, paso a paso"
+    description "Paso 0 (antes de todo): el teléfono abrió el socket y lo mantiene. Pasos 3 y 7: el relay no abre nada, usa ese socket. Pasos 4-6 pasan enteros dentro del teléfono."
+    wsc -> proxy "0 · abre WSS /device con token de dispositivo (y lo mantiene vivo)"
+    litellm -> proxy "1 · POST /mcp tools/call android_tap · Bearer u OAuth"
+    proxy -> relay "2 · reenvía el POST"
+    relay -> wsc "3 · {id, POST, /mcp, cabeceras, cuerpo} por el socket ya abierto"
+    wsc -> arc "4 · reproduce el POST en 127.0.0.1:8080 (cabeceras intactas: el OAuth lo valida la app)"
+    arc -> a11y "5 · dispatchGesture"
+    arc -> wsc "6 · 200 · resultado JSON-RPC"
+    wsc -> relay "7 · {id, 200, cuerpo} por el mismo socket"
+    relay -> proxy "8 · responde el POST"
+    proxy -> litellm "9 · 200 · resultado"
+  }
+}
