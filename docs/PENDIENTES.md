@@ -60,3 +60,30 @@ otros programas ya usan (entrada automática).
     (nunca en el repo, en un log ni fuera del teléfono), apagado por defecto y encendido con un
     ajuste a propósito.
 - Falta que el humano describa el método de desbloqueo (el «truco»).
+
+## 4. Grabar tareas comunes y repetirlas en una llamada
+
+Pedido del humano el 2026-10-11: «grabar una tarea común» en la app, para no rehacer la búsqueda
+en cada pedido.
+
+- Medido el 2026-10-11, consultando precios en una app de finanzas: 54 llamadas MCP la primera vez
+  y 12 cuando la ruta ya se conocía. Cada llamada cuesta unos 1,2 s de red.
+- Medido ese día en esa app: el `node_id` de un mismo botón cambia al reabrir la app, porque sale
+  de la posición del nodo y la de sus contenedores. El `resource_id` y la posición en pantalla se
+  repiten. Una receta tiene que apoyarse en `resource_id` o texto, nunca en `node_id`.
+- Medido en `1e820e0`: ninguna de las 55 tools graba ni repite tareas, y no hay tool que ejecute
+  varios pasos en una llamada.
+- Decidido por el humano el 2026-10-11:
+  - se graba de dos formas: el agente guarda con un nombre los pasos de una tarea que salió bien,
+    y la persona graba en el teléfono con un botón «Grabar» (los campos de contraseña nunca se
+    graban);
+  - se ejecuta en una sola llamada: una tool nueva corre todos los pasos en el teléfono, con
+    parámetros (por ejemplo el monto), y devuelve el resultado;
+  - en apps de dinero, los pasos que solo leen corren solos; si un paso toca un botón de acción
+    (vender, pagar, enviar), la tarea se detiene y pide aprobación en el teléfono. La app ya tiene
+    una pantalla de aprobación, la de OAuth (`ApprovalScreen`).
+- Decide el humano:
+  - quién marca qué pasos son de acción: al guardar la tarea, o por una lista de apps sensibles;
+  - qué hace la tarea si un paso no encuentra su elemento (la app se actualizó): parar y avisar en
+    qué paso, como propuesta;
+  - dónde se ven y se borran las tareas guardadas: en la app, por tools, o en las dos.
