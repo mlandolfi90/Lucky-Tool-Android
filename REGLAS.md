@@ -113,6 +113,34 @@ lo de la casa. Tres puntos chocan con hábitos del taller y por eso se nombran:
   con el formato de upstream; los diagramas en Markdown, sólo Mermaid validado
   con `mmdc`.
 
+## Excepciones a `CLAUDE.md`
+
+Decididas por el humano el 2026-10-11, al elegirlas entre las opciones que le
+propuso la sesión. Fuera de estos tres puntos, `CLAUDE.md` rige tal cual: la app
+sigue sin root y sin reflexión sobre APIs ocultas.
+
+- **Calidad leída en CI.** `CLAUDE.md` pide que quien implementa corra lint,
+  la suite completa y `./gradlew build`. En esta PC no hay SDK ni JDK 17 (ver
+  «Esta PC es Windows, y eso pesa»), así que el lint corre local con ktlint y
+  detekt sueltos, sin Gradle, y los tests y el build se **leen** en CI con
+  `gh`. Los avisos de compilación de Kotlin se buscan en el log del job
+  (`gh run view <id> --log`), porque un check verde no los prueba. Rige hasta
+  que la PC tenga SDK y JDK 17.
+- **Pantalla encendida mientras se trabaja.** La app puede mantener la
+  pantalla encendida mientras haya una llamada MCP en curso, y la suelta al
+  terminar. Motivo medido el 2026-10-11: el teléfono se bloqueó dos veces a
+  los pocos segundos de empezar un trabajo, y ahí el trabajo se corta.
+- **Desbloqueo solo.** Excepción a «nunca saltarse las protecciones de
+  Android»: la app puede encender la pantalla y desbloquearla con el PIN o
+  patrón del dueño, cuando llega una llamada con el teléfono bloqueado.
+  Condiciones:
+  - la credencial se guarda cifrada en el teléfono; nunca en el repo, en un
+    log ni fuera del teléfono;
+  - está apagada por defecto y se enciende con un ajuste, a propósito.
+
+  El método de desbloqueo lo describe el humano. El pedido está en
+  `docs/PENDIENTES.md`, punto 3.
+
 ## Repo y upstream
 
 - `origin` → `mlandolfi90/Lucky-Tool-Android` (fork **público**: GitHub no
