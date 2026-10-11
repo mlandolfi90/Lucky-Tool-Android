@@ -88,9 +88,10 @@ en cada pedido.
   2. **Pantalla de aprobación** de la app. Ya existe una, la de OAuth (`ApprovalScreen`), que puede
      servir de base.
   3. **Huella dactilar** del dueño antes de ejecutar el paso.
+- El nivel de cada paso lo marca el humano al guardar la tarea (decidido el 2026-10-11). Falta
+  definir en el plan cómo lo marca cuando la tarea la graba el agente.
 - Decide el humano:
   - los niveles de criticidad y qué camino lleva cada uno;
-  - quién marca el nivel de cada paso: al guardar la tarea, o por una lista de apps sensibles;
   - qué hace la tarea si un paso no encuentra su elemento (la app se actualizó): parar y avisar en
     qué paso, como propuesta;
   - dónde se ven y se borran las tareas guardadas: en la app, por tools, o en las dos.
