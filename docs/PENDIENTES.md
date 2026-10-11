@@ -36,3 +36,26 @@ Pedido del humano el 2026-10-11: «icono visual entendible».
   `app/src/main/res/drawable/ic_notification.xml`, y el nombre bajo el ícono (`app_name`) es
   «Android Remote Control MCP», de 26 caracteres.
 - Decide el humano: qué muestra el ícono y si la app cambia de nombre.
+
+## 3. Encender y desbloquear la pantalla para trabajar solo
+
+Pedido del humano el 2026-10-11: si el teléfono queda trabajando y la pantalla se apaga o se
+bloquea, la app tiene que poder encenderla y desbloquearla sola, «con el truco de desbloqueo» que
+otros programas ya usan (entrada automática).
+
+- Medido el 2026-10-11: el teléfono se bloqueó dos veces a los pocos segundos de que un agente abriera
+  una app y tocara un botón. Desde ahí las tools solo ven la pantalla de bloqueo y el trabajo se corta
+  hasta que una persona desbloquea.
+- Medido en `1e820e0` (rama del PR #3): en `app/src` no hay `WakeLock`, `FLAG_KEEP_SCREEN_ON`,
+  `setTurnScreenOn` ni `requestDismissKeyguard`. La app no enciende la pantalla ni la mantiene
+  encendida mientras recibe llamadas.
+- Sin verificar: que los gestos que manda el servicio de accesibilidad no reinician el contador de
+  apagado de Android, como sí lo hace un toque real.
+- Son dos partes:
+  - mantener la pantalla encendida mientras haya llamadas MCP en curso, y apagarla al terminar;
+  - encender y desbloquear cuando llega una llamada con la pantalla apagada o bloqueada.
+- Decide el humano:
+  - el método de desbloqueo (el «truco»), que describe el humano;
+  - dónde vive la credencial si el método la necesita: un PIN o patrón guardado en el teléfono es
+    un secreto, y las reglas del repo piden no saltarse las protecciones de Android;
+  - si se activa siempre o solo con un ajuste encendido a propósito.
