@@ -80,10 +80,17 @@ en cada pedido.
   - se ejecuta en una sola llamada: una tool nueva corre todos los pasos en el teléfono, con
     parámetros (por ejemplo el monto), y devuelve el resultado;
   - en apps de dinero, los pasos que solo leen corren solos; si un paso toca un botón de acción
-    (vender, pagar, enviar), la tarea se detiene y pide aprobación en el teléfono. La app ya tiene
-    una pantalla de aprobación, la de OAuth (`ApprovalScreen`).
+    (vender, pagar, enviar), la tarea se detiene y pide aprobación en el teléfono.
+- Aprobación, decidido por el humano el 2026-10-11: tres caminos, que pueden asignarse por nivel de
+  criticidad del paso:
+  1. **Lo presiona el humano.** La tarea corre hasta justo antes del paso de acción, deja la app en
+     esa pantalla y se detiene; el humano presiona el botón real (por ejemplo «Vender»).
+  2. **Pantalla de aprobación** de la app. Ya existe una, la de OAuth (`ApprovalScreen`), que puede
+     servir de base.
+  3. **Huella dactilar** del dueño antes de ejecutar el paso.
 - Decide el humano:
-  - quién marca qué pasos son de acción: al guardar la tarea, o por una lista de apps sensibles;
+  - los niveles de criticidad y qué camino lleva cada uno;
+  - quién marca el nivel de cada paso: al guardar la tarea, o por una lista de apps sensibles;
   - qué hace la tarea si un paso no encuentra su elemento (la app se actualizó): parar y avisar en
     qué paso, como propuesta;
   - dónde se ven y se borran las tareas guardadas: en la app, por tools, o en las dos.
