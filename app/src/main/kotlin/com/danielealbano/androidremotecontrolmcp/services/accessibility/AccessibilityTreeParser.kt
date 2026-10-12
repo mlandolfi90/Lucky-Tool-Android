@@ -21,9 +21,9 @@ import javax.inject.Inject
  *
  * Freshness contract: callers MUST clear the framework node cache
  * ([AccessibilityServiceProvider.clearFrameworkNodeCache]) inside the same [AccessibilityTreeLock]
- * critical section immediately before [parseTree]. Every node returned by `getChild` is then
- * fetched live (or prefetched) by this read, so the parser performs no per-node `refresh()`
- * (one would add a blocking IPC to the target app's UI thread per node).
+ * critical section, before the window/root reads that feed [parseTree]. Every node returned by
+ * `getChild` is then fetched live (or prefetched) by this read, so the parser performs no per-node
+ * `refresh()` (one would add a blocking IPC to the target app's UI thread per node).
  *
  * This class is Hilt-injectable and stateless (no injected cache, no internal mutable state).
  */
