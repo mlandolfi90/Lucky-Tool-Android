@@ -1338,7 +1338,8 @@ class CompactTreeFormatterTest {
             val snap = snapshotOf(result, options = CompactFormatOptions(includeOffscreen = false))
             for (page in 1..2) {
                 assertTrue(
-                    formatter.formatMultiWindowPage(snap, page)
+                    formatter
+                        .formatMultiWindowPage(snap, page)
                         .contains(CompactTreeFormatter.NOTE_LINE_OFFSCREEN_OMITTED),
                 )
             }

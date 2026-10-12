@@ -852,7 +852,12 @@ class ScreenIntrospectionToolsTest {
 
                 coVerify(exactly = 1) {
                     gate.tree(
-                        match { r -> r.windows.single().tree.children.any { it.id == "node_off_parent" } },
+                        match { r ->
+                            r.windows
+                                .single()
+                                .tree.children
+                                .any { it.id == "node_off_parent" }
+                        },
                     )
                 }
                 assertFalse(text.contains("node_off_parent"))

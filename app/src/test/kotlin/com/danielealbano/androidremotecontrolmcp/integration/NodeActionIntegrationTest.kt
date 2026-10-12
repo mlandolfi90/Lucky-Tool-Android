@@ -160,7 +160,10 @@ class NodeActionIntegrationTest {
                 assertTrue(visibleOnly != null, "visible_only should be exposed in the schema")
                 assertEquals(
                     false,
-                    visibleOnly!!.jsonObject["default"]!!.jsonPrimitive.content.toBoolean(),
+                    visibleOnly!!
+                        .jsonObject["default"]!!
+                        .jsonPrimitive.content
+                        .toBoolean(),
                 )
             }
         }

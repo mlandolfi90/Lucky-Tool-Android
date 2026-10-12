@@ -565,12 +565,16 @@ class ScreenIntrospectionIntegrationTest {
                     )
                     assertEquals(
                         true,
-                        properties["include_offscreen"]!!.jsonObject["default"]!!.jsonPrimitive.content
+                        properties["include_offscreen"]!!
+                            .jsonObject["default"]!!
+                            .jsonPrimitive.content
                             .toBoolean(),
                     )
                     assertEquals(
                         true,
-                        properties["include_hierarchy"]!!.jsonObject["default"]!!.jsonPrimitive.content
+                        properties["include_hierarchy"]!!
+                            .jsonObject["default"]!!
+                            .jsonPrimitive.content
                             .toBoolean(),
                     )
                 }
