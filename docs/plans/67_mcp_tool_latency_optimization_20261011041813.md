@@ -1308,24 +1308,24 @@ line, after "...for on-screen nodes."):
 form resolves and acts from one `getFreshWindows` read; more than one on-screen match is never guessed.
 
 **Acceptance criteria:**
-- [ ] `click_node` and `tap_node` accept exactly one of `node_id` or a selector (`by` + `value` [+ `exact_match`]).
+- [x] `click_node` and `tap_node` accept exactly one of `node_id` or a selector (`by` + `value` [+ `exact_match`]).
       Both, neither, or an incomplete selector → `InvalidParams` before any tree read.
-- [ ] A selector call does exactly one `getFreshWindows`; `tap_node` does not call `findNodeById` on that path.
+- [x] A selector call does exactly one `getFreshWindows`; `tap_node` does not call `findNodeById` on that path.
       (`ActionExecutorImpl.performNodeAction` may still re-walk on a node-cache miss, as for `node_id`.)
-- [ ] A selector matches only on-screen nodes (`ElementInfo.visible`) across all windows (D3.7).
-- [ ] 1 on-screen match: the action runs; the success text is byte-identical to the `node_id` path, with the
+- [x] A selector matches only on-screen nodes (`ElementInfo.visible`) across all windows (D3.7).
+- [x] 1 on-screen match: the action runs; the success text is byte-identical to the `node_id` path, with the
       resolved `node_id`.
-- [ ] >1 on-screen matches: no action; `CallToolResult(isError=true)`, first line `UNTRUSTED_CONTENT_WARNING`, then
+- [x] >1 on-screen matches: no action; `CallToolResult(isError=true)`, first line `UNTRUSTED_CONTENT_WARNING`, then
       JSON `{error:"ambiguous_selector", match_count, candidates[≤5], hint}` (D3.1, D3.2). Candidate texts are
       redacted by one `PrivacyToolGate.texts` pass over the FULL match list (same input as `find_nodes`).
-- [ ] 0 on-screen matches: `NodeNotFound`; with off-screen matches the message lists up to 5 of their `node_id`s and
+- [x] 0 on-screen matches: `NodeNotFound`; with off-screen matches the message lists up to 5 of their `node_id`s and
       suggests `scroll_to_node` (D3.3).
-- [ ] The selector `value` passes through `PlaceholderSubstitutor` and is used only for matching. Neither the agent
+- [x] The selector `value` passes through `PlaceholderSubstitutor` and is used only for matching. Neither the agent
       value nor its substituted form appears in any error message or app log line. Thrown tool errors must not carry
       it: MCP Kotlin SDK 0.15.0 `Server.handleCallTool` logs every thrown exception with
       `logger.error(e) { "Error executing tool <name>" }`, and SLF4J-Android routes the throwable (message included)
       to logcat.
-- [ ] `node_id`-only calls behave as before (pins at `NodeActionToolsTest.kt:456` and `:534` hold), except these
+- [x] `node_id`-only calls behave as before (pins at `NodeActionToolsTest.kt:456` and `:534` hold), except these
       intentional changes: `node_id` with `by`, `value` or `exact_match` → `InvalidParams` (D3.4, D3.12); the
       missing-target message gains "(or a selector: 'by' + 'value')"; both schemas declare `"required": []`.
 
@@ -1351,7 +1351,7 @@ inner class UntrustedErrorResultTests` right after `UntrustedTextResultTests`.
 | `prepends warning as first line` | Single `TextContent`; starts with `UNTRUSTED_CONTENT_WARNING + "\n"`, ends with the payload |
 
 **Definition of Done:**
-- [ ] Helper with KDoc next to `untrustedTextResult`; both tests added.
+- [x] Helper with KDoc next to `untrustedTextResult`; both tests added.
 
 ### Task 3.2 — NodeSelectorResolver
 
@@ -1630,8 +1630,8 @@ import each; no wildcard).
 | `ambiguityResult redacts the full match list` | `mockk<PrivacyToolGate>` with `coEvery { texts(any()) } answers { firstArg<List<Pair<String?, String>>>().map { "REDACTED" } }`: candidate `text`/`contentDescription` are `"REDACTED"`; `coVerify { texts(match { it.size == 6 }) }` for 3 matches (off-screen included) |
 
 **Definition of Done:**
-- [ ] `NodeSelectorResolver.kt` exists as above; the substituted `value` never appears in messages or logs.
-- [ ] All rows added.
+- [x] `NodeSelectorResolver.kt` exists as above; the substituted `value` never appears in messages or logs.
+- [x] All rows added.
 
 ### Task 3.3 — Wire the selector into click_node and tap_node
 
@@ -1924,11 +1924,11 @@ exact args). New imports (on top of `io.mockk.verify` from Task 1.2 and `io.mock
 | `node_id plus selector rejected` | `InvalidParams` containing `"not both"` |
 
 **Definition of Done:**
-- [ ] `ClickNodeTool` has 5 constructor params, `TapNodeTool` 6; `TapNodeTool.execute` no longer carries
+- [x] `ClickNodeTool` has 5 constructor params, `TapNodeTool` 6; `TapNodeTool.execute` no longer carries
       `@Suppress("ThrowsCount")`.
-- [ ] Both schemas use `putNodeTargetProperties` with `required = emptyList()`; `node_id` paths keep their messages
+- [x] Both schemas use `putNodeTargetProperties` with `required = emptyList()`; `node_id` paths keep their messages
       and success texts.
-- [ ] `registerNodeActionTools` builds one resolver; both tables added.
+- [x] `registerNodeActionTools` builds one resolver; both tables added.
 
 ### Task 3.4 — JVM integration coverage
 
@@ -1964,7 +1964,7 @@ New imports: `com.danielealbano.androidremotecontrolmcp.services.accessibility.E
 | `click_node selector not found echoes no selector value` | No match → `isError == true`; the error text contains neither the placeholder nor the real email |
 
 **Definition of Done:**
-- [ ] All rows added; `ErrorHandlingIntegrationTest`, `ToolPermissionsIntegrationTest` and
+- [x] All rows added; `ErrorHandlingIntegrationTest`, `ToolPermissionsIntegrationTest` and
       `McpProtocolIntegrationTest` are not modified.
 
 ### Task 3.5 — E2E selector flow (CI only)
@@ -2005,7 +2005,7 @@ ambiguous); the clear button is selected by `resource_id`, which is unique.
 | `calculate 8 plus 5 via click_node selector` | Chosen approach: clear the display first (`btn_clear` by `resource_id` selector, confirmed `""`/`"0"`), then exact equality of the `id/result` node text with `"13"` (a wrong or appended result such as `"113"` fails). Every selector click succeeds within the retry deadline (otherwise `fail` prints the last result text, so ambiguity candidates show) |
 
 **Definition of Done:**
-- [ ] Test and helpers added; it runs only through `make test-e2e` in CI (redroid + rootful podman).
+- [x] Test and helpers added; it runs only through `make test-e2e` in CI (redroid + rootful podman).
 
 ### Task 3.6 — Documentation for US3
 
@@ -2153,7 +2153,7 @@ The one error result that carries it is the ambiguous-selector error of `android
 ```
 
 **Definition of Done:**
-- [ ] Both docs updated as listed; the documented schemas match `putNodeTargetProperties` and the `inset_percentage`
+- [x] Both docs updated as listed; the documented schemas match `putNodeTargetProperties` and the `inset_percentage`
       block (the docs keep their existing unprefixed `find_nodes` wording).
 
 ---
@@ -2164,7 +2164,7 @@ The one error result that carries it is the ambiguous-selector error of `android
 line per request, joined by `rid`, attribute that time; no other behaviour changes.
 
 **Acceptance criteria:**
-- [ ] Every relay HTTP request that reaches the relay's request handler, except `/relay/health`, logs exactly one
+- [x] Every relay HTTP request that reaches the relay's request handler, except `/relay/health`, logs exactly one
       `relay: request …` line when its response closes: answered, refused (400 malformed target, 408 body timeout,
       413, 503), failed (502, 504, and the `createServer` 500 fallback) or client-aborted (`aborted=1`). Not logged:
       the `/device` WebSocket upgrade, and requests that Node's HTTP parser rejects before any handler runs
@@ -2172,18 +2172,18 @@ line per request, joined by `rid`, attribute that time; no other behaviour chang
       fault-injection seam; adding one would change relay code beyond measurement): it is verified by reading the
       diff in Q.1 Action 6. A failure while formatting or writing the timing line never escapes the `close`
       listener: it logs the constant warning `relay: timing log failed` instead.
-- [ ] The relay line holds `rid`, `method`, sanitized `path`, `rpc`, optional `tool`, `status`, `reqBytes`,
+- [x] The relay line holds `rid`, `method`, sanitized `path`, `rpc`, optional `tool`, `status`, `reqBytes`,
       `resBytes`, `inflight`, `idleMs`, `sentAt`, `bodyMs`, `deviceMs`, `totalMs`; a phase that never ran prints `-`.
-- [ ] Every relayed request frame whose replay completes and whose response frame is encoded logs exactly one
+- [x] Every relayed request frame whose replay completes and whose response frame is encoded logs exactly one
       `MCP:RelaySession` info line `Relay request rid=<8> <METHOD> <sanitized path> status=… recvAt=… queueMs=…
       replayMs=… totalMs=…`, with ` sent=false` when the frame could not be sent; the busy 503 path included.
       Not logged: frames whose replay is cancelled because the socket went away (`replayScope.cancel()`), and frames
       whose replay or encoding throws. Logcat only, never the in-app server log. Id, `method` and path go through
       `RelayTiming.logSafe` (Unicode control, line/paragraph-separator and bidi characters → `?`); the path is cut at
       128 characters, as on the relay.
-- [ ] Neither line ever contains header names or values (Authorization included), query strings, bodies, JSON-RPC
+- [x] Neither line ever contains header names or values (Authorization included), query strings, bodies, JSON-RPC
       params or arguments, client IP or exception messages; `/s/` paths print as `/s/<redacted>`.
-- [ ] Status codes, response headers, bodies, limits and the frame format are unchanged. The only edits to existing
+- [x] Status codes, response headers, bodies, limits and the frame format are unchanged. The only edits to existing
       relay and app tests are the `startRelay` / `extraRelay` logger parameter (Task 4.3 Actions 1-2) and the
       extension of `RelayTunnelProviderTest` `ninth concurrent request gets 503 while eight are in flight` with a
       `Log.i` capture and one assertion (Task 4.5 Action 2).
@@ -2277,7 +2277,7 @@ export function formatRequestLog({
 ```
 
 **Definition of Done:**
-- [ ] `requestLog.js` has no I/O and no imports; it is in the `lint` script.
+- [x] `requestLog.js` has no I/O and no imports; it is in the `lint` script.
 
 ### Task 4.2 — Relay per-request timing
 
@@ -2431,10 +2431,10 @@ export function formatRequestLog({
 ```
 
 **Definition of Done:**
-- [ ] The frame `id` is still a full `randomUUID()`, generated once per forwarded request.
-- [ ] `formatRequestLog` receives only scalars (never `req`, `req.headers`, the frame or an error message).
-- [ ] The `close` listener reads `totalMs`, `status` and `aborted` before calling `rpcSummary`.
-- [ ] `/relay/health` and every status code, header and body are unchanged.
+- [x] The frame `id` is still a full `randomUUID()`, generated once per forwarded request.
+- [x] `formatRequestLog` receives only scalars (never `req`, `req.headers`, the frame or an error message).
+- [x] The `close` listener reads `totalMs`, `status` and `aborted` before calling `rpcSummary`.
+- [x] `/relay/health` and every status code, header and body are unchanged.
 
 ### Task 4.3 — Relay tests
 
@@ -2510,7 +2510,7 @@ can close after `fetch` resolves, so never assert synchronously.
 | `timing log failure is contained` | Logger `{ lines, info(m) { if (m.startsWith('relay: request ')) throw new Error('boom'); lines.push(m); }, warn: push, error: push }`; two requests without a device → both get 503 (the relay process is still serving) and `lines` holds `relay: timing log failed` twice |
 
 **Definition of Done:**
-- [ ] All rows written; no existing relay test changes behaviour.
+- [x] All rows written; no existing relay test changes behaviour.
 
 ### Task 4.4 — Phone timing line
 
@@ -2650,7 +2650,7 @@ internal data class RelayTiming(
 ```
 
 **Definition of Done:**
-- [ ] The line uses only id prefix, method, sanitized path, status and timings, with frame-supplied text passed
+- [x] The line uses only id prefix, method, sanitized path, status and timings, with frame-supplied text passed
       through `logSafe`; `Logger.i`, no `String.format`.
 
 ### Task 4.5 — Phone tests
@@ -2687,8 +2687,8 @@ threads). Wait with `awaitCondition { infos.any { … } }`: the line is written 
 | `replay cancelled by a closed socket logs no timing line` (new) | First connection only (an `AtomicInteger` counts connections; later ones `awaitClientClose()`): send `requestJson("c1", "GET", "/hang")`, await `routeHit`, then `close(CloseReason(CloseReason.Codes.NORMAL, "bye"))`. Local `get("/hang")` completes `routeHit` and awaits `release`. After `awaitError(provider)` and `delay(200)`: no captured entry contains `Relay request`; `release` is completed afterwards. No new import |
 
 **Definition of Done:**
-- [ ] No assertion depends on `Logger.d` or `BuildConfig.DEBUG`; `Log` is unmocked after every test that mocks it.
-- [ ] Not covered by an automated row (no seam makes `session.send` fail or encoding throw without also cancelling
+- [x] No assertion depends on `Logger.d` or `BuildConfig.DEBUG`; `Log` is unmocked after every test that mocks it.
+- [x] Not covered by an automated row (no seam makes `session.send` fail or encoding throw without also cancelling
       the replay): the ` sent=false` line after a failed send and the silent encode-failure path. Both are verified
       by reading the diff in Q.1 Action 6; the ` sent=false` text itself is pinned by `logLine flags an unsent frame`.
 
@@ -2747,7 +2747,7 @@ Each relayed request is logged on both ends with the same `rid` (first 8 charact
 `` `RelaySession.kt`, ``.
 
 **Definition of Done:**
-- [ ] The README field table matches `formatRequestLog` (same fields, same order).
+- [x] The README field table matches `formatRequestLog` (same fields, same order).
 
 ---
 
