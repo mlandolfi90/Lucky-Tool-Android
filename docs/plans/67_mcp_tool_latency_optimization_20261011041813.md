@@ -149,9 +149,9 @@ passes. The untracked `.lifecycle/` is never staged.
 back live; the per-node `refresh()` after it adds one blocking IPC per node.
 
 **Acceptance criteria:**
-- [ ] `git grep -nE '^[[:space:]]*[^/[:space:]*].*\.refresh\(\)' app/src/main` returns exactly one hit:
+- [x] `git grep -nE '^[[:space:]]*[^/[:space:]*].*\.refresh\(\)' app/src/main` returns exactly one hit:
       `ActionExecutorImpl.kt` (`if (cached.node.refresh()) {`).
-- [ ] `getFreshWindows`, `rawNodeExists`, `generateCurrentFingerprint` and `findFocusedEditableNode` still call
+- [x] `getFreshWindows`, `rawNodeExists`, `generateCurrentFingerprint` and `findFocusedEditableNode` still call
       `clearFrameworkNodeCache()` first; the existing `verifyOrder` tests and `ActionExecutorImplTest` (S1 refresh
       tests) are not modified.
 
@@ -218,9 +218,9 @@ New import: `org.junit.jupiter.api.Assertions.assertSame` (`verify` is already i
 | `ParseTreeWithNodeMap` | `does not refresh children and caches the getChild instance` | Non-null `nodeMap`: no child `refresh()`; the child's `CachedNode.node` is `assertSame` to the `getChild(0)` instance |
 
 **Definition of Done:**
-- [ ] `parseNode` has no `refresh()` call.
-- [ ] The class KDoc states the freshness contract; the S1 comment names `ActionExecutorImpl.performNodeAction`.
-- [ ] The 3 parser guard tests are added (no root-refresh row: `parseTree` never refreshed the root, so such a row
+- [x] `parseNode` has no `refresh()` call.
+- [x] The class KDoc states the freshness contract; the S1 comment names `ActionExecutorImpl.performNodeAction`.
+- [x] The 3 parser guard tests are added (no root-refresh row: `parseTree` never refreshed the root, so such a row
       would pass before and after the change).
 
 ### Task 1.2 — Remove root refresh from `getFreshWindows`
@@ -287,8 +287,8 @@ fallback test also stubs `getAccessibilityWindows()` → `emptyList()`, `getRoot
 | `getFreshWindows fallback does not refresh the active root node` | `verify(exactly = 0) { mockRootNode.refresh() }`; `verifyOrder { clearFrameworkNodeCache(); getRootNode(); mockTreeParser.parseTree(mockRootNode, "root_w0", any()) }` |
 
 **Definition of Done:**
-- [ ] `getFreshWindowsLocked` has no `refresh()` call and the clear comment states why.
-- [ ] The 2 guard tests are added. Existing `every { mockRootNode.refresh() }` stubs stay untouched (D1.3).
+- [x] `getFreshWindowsLocked` has no `refresh()` call and the clear comment states why.
+- [x] The 2 guard tests are added. Existing `every { mockRootNode.refresh() }` stubs stay untouched (D1.3).
 
 ### Task 1.3 — Remove refresh from the `wait_for_node` raw walk; KDoc and docs
 
@@ -398,12 +398,12 @@ still uses it.
 ```
 
 **Definition of Done:**
-- [ ] `rawNodeExistsLocked` and `rawNodeMatchesRecursive` have no `refresh()` call.
-- [ ] `git grep -n COMPOSE_SEMANTICS_ID_KEY app/src` returns no hits.
-- [ ] KDoc of `rawNodeExists`, `rawNodeMatchesRecursive` and `AccessibilityTreeLock` no longer mention refresh in
+- [x] `rawNodeExistsLocked` and `rawNodeMatchesRecursive` have no `refresh()` call.
+- [x] `git grep -n COMPOSE_SEMANTICS_ID_KEY app/src` returns no hits.
+- [x] KDoc of `rawNodeExists`, `rawNodeMatchesRecursive` and `AccessibilityTreeLock` no longer mention refresh in
       traversals; the `rawNodeExistsLocked` comment no longer claims `refresh()` cannot re-fetch; the
       `docs/PROJECT.md` bullet is added.
-- [ ] `UtilityToolsTest` has 1 rewritten, 1 extended and 1 new test; no new import (`verify`, `verifyOrder` exist;
+- [x] `UtilityToolsTest` has 1 rewritten, 1 extended and 1 new test; no new import (`verify`, `verifyOrder` exist;
       the `AccessibilityTreeParser` import stays for `mockTreeParser`).
 
 ---

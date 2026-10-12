@@ -390,6 +390,7 @@ The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas,
 - Keep `onAccessibilityEvent()` fast, offload heavy work to coroutines
 - Cache accessibility tree when possible; call `node.recycle()` after use
 - Check `node.refresh()` before using cached nodes (stale detection)
+- Fresh tree reads (`getFreshWindows`, `rawNodeExists`, the wait_for_idle fingerprint, `findFocusedEditableNode`) clear the framework node cache via `AccessibilityServiceProvider.clearFrameworkNodeCache()` inside `AccessibilityTreeLock` before traversing; traversals MUST NOT call per-node `refresh()` (one blocking IPC per node on the target app's UI thread). `refresh()` is used only to validate nodes taken from `AccessibilityNodeCache` (ActionExecutorImpl S1 check)
 - All node operations MUST happen on main thread
 - Use `performAction()` for element actions, `performGlobalAction()` for system actions, `dispatchGesture()` for complex touch sequences (API 24+)
 
