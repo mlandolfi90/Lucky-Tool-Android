@@ -123,3 +123,36 @@ todo lo nuevo y, si se puede, se mejora.
     por minuto (cuántos eventos y de qué apps) o nada;
   - lo que `CLAUDE.md` prohíbe registrar (el token, el árbol de accesibilidad completo, datos
     sensibles) rige igual para todo lo nuevo, incluidos los parámetros de las tareas.
+
+## 6. Las advertencias del compilador Kotlin
+
+Surgido el 2026-10-12 al cerrar el plan 67: su portón de calidad pide que ningún archivo que el plan
+toca tenga una línea `w: file:///...`, y dos de los suyos la tienen. Decidido por el humano ese día:
+el plan 67 cierra declarando que no introduce ninguna, y las heredadas se atacan acá, con su propio
+plan.
+
+- Medido el 2026-10-12 en la ejecución verde de CI 38207816721 (rama del plan 67): **272 líneas
+  `w:` en 29 archivos**. Ninguna rompe el build; `CLAUDE.md` sí pide que no haya advertencias.
+- Las 4 que bloquearon el portón del plan 67, todas `'val labeledBy: AccessibilityNodeInfo!' is
+  deprecated. Deprecated in Java.`:
+  - `services/accessibility/AccessibilityTreeParser.kt:226`, dentro de `readLabeledByText`;
+  - su test, `AccessibilityTreeParserTest.kt:738`, `:745` y `:753`.
+  - Son anteriores al plan 67: la rama base trae las mismas cuatro, y el plan no modifica esas
+    líneas. Queda por averiguar con qué se reemplaza esa lectura sin perder la etiqueta.
+- Las otras 268 se reparten por tipo así:
+  - 159: `androidx.hilt.lifecycle.viewmodel.compose` movió un símbolo de paquete;
+  - 28: llamada segura (`?.`) innecesaria sobre un receptor que no es nulo;
+  - 27: una API de Java obsoleta (incluidas las 4 de `labeledBy`);
+  - 21: `!!` innecesario sobre un receptor que no es nulo;
+  - 21: el portapapeles viejo; la advertencia pide `LocalClipboard`;
+  - 14: condición que siempre da el mismo resultado;
+  - 2: llamada a un receptor que puede ser nulo sin `?.` ni `!!`.
+- Dónde se concentran: `ui/screens/ServerScreen.kt` (35), `mcp/oauth/OAuthRoutes.kt` (21), y 14 cada
+  uno en `ui/screens/settings/TunnelSettingsScreen.kt`, `ui/screens/SettingsScreen.kt`,
+  `ui/screens/MainScreen.kt`, `ui/screens/LogsScreen.kt` y `mcp/oauth/OAuthTokenGrants.kt`.
+- Propuesta: atacarlas por tipo y no por archivo, empezando por las 159 del paquete de Hilt, que son
+  un cambio de import mecánico; las de condición siempre igual se revisan una por una, porque cada
+  una puede esconder un error de lógica. `CLAUDE.md` prohíbe silenciarlas con `@Suppress`, así que
+  cada grupo se arregla en la raíz.
+- Decide el humano: si el objetivo es llegar a cero advertencias y si el portón de CI pasa a fallar
+  cuando aparezca una nueva.
