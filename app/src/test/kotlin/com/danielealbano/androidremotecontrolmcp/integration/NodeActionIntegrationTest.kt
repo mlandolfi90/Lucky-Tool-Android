@@ -4,6 +4,7 @@ package com.danielealbano.androidremotecontrolmcp.integration
 
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import com.danielealbano.androidremotecontrolmcp.mcp.tools.McpToolUtils
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.stripUntrustedWarning
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityNodeData
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.BoundsData
@@ -12,8 +13,10 @@ import com.danielealbano.androidremotecontrolmcp.services.accessibility.FindBy
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.ScreenInfo
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.WindowData
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.slot
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -370,6 +373,185 @@ class NodeActionIntegrationTest {
                         )
                     assertNotEquals(true, result.isError)
                     assertTrue(result.content.isNotEmpty())
+                }
+            }
+
+        @Test
+        fun `click_node by selector passes the two-window tree and the stubbed id to clickNode`() =
+            runTest {
+                // The finder is stubbed here, so this checks only that the resolved id and the
+                // two-window list reach clickNode; real multi-window matching is covered by
+                // NodeSelectorResolverTest `resolves a unique match in a second window`.
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.setupTwoWindowMock()
+                every {
+                    deps.elementFinder.findElements(any<List<WindowData>>(), FindBy.TEXT, "Allow", false)
+                } returns
+                    listOf(
+                        ElementInfo(
+                            id = "node_allow_w99",
+                            text = "Allow",
+                            className = "android.widget.Button",
+                            bounds = BoundsData(200, 1200, 500, 1300),
+                            clickable = true,
+                            enabled = true,
+                            visible = true,
+                        ),
+                    )
+                val windows = slot<List<WindowData>>()
+                coEvery {
+                    deps.actionExecutor.clickNode("node_allow_w99", capture(windows))
+                } returns Result.success(Unit)
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_click_node",
+                            arguments = mapOf("by" to "text", "value" to "Allow"),
+                        )
+                    assertNotEquals(true, result.isError)
+                    assertEquals(listOf(42, 99), windows.captured.map { it.windowId })
+                }
+            }
+    }
+
+    @Nested
+    @DisplayName("Selector Targets")
+    inner class SelectorTargets {
+        private val visibleMatch =
+            ElementInfo(
+                id = "node_btn",
+                text = "OK",
+                className = "android.widget.Button",
+                bounds = BoundsData(50, 800, 250, 1000),
+                clickable = true,
+                enabled = true,
+                visible = true,
+            )
+
+        private fun MockDependencies.stubMatches(matches: List<ElementInfo>) {
+            McpIntegrationTestHelper.setupMultiWindowMock(this, sampleTree, sampleScreenInfo)
+            every {
+                elementFinder.findElements(any<List<WindowData>>(), FindBy.TEXT, "OK", false)
+            } returns matches
+        }
+
+        @Test
+        fun `click_node by selector clicks the unique on-screen match`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.stubMatches(listOf(visibleMatch))
+                coEvery {
+                    deps.actionExecutor.clickNode("node_btn", any<List<WindowData>>())
+                } returns Result.success(Unit)
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_click_node",
+                            arguments = mapOf("by" to "text", "value" to "OK"),
+                        )
+                    assertNotEquals(true, result.isError)
+                    coVerify { deps.actionExecutor.clickNode("node_btn", any<List<WindowData>>()) }
+                }
+            }
+
+        @Test
+        fun `click_node by selector with two on-screen matches returns untrusted error with candidates`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.stubMatches(listOf(visibleMatch, visibleMatch.copy(id = "node_btn2")))
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_click_node",
+                            arguments = mapOf("by" to "text", "value" to "OK"),
+                        )
+                    assertEquals(true, result.isError)
+                    val text = (result.content[0] as TextContent).text
+                    assertTrue(text.startsWith(McpToolUtils.UNTRUSTED_CONTENT_WARNING))
+                    val parsed = Json.parseToJsonElement(stripUntrustedWarning(text)).jsonObject
+                    assertEquals(2, parsed["match_count"]!!.jsonPrimitive.content.toInt())
+                    assertEquals(2, parsed["candidates"]!!.jsonArray.size)
+                }
+            }
+
+        @Test
+        fun `click_node by selector ignores off-screen matches`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.stubMatches(listOf(visibleMatch.copy(visible = false)))
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_click_node",
+                            arguments = mapOf("by" to "text", "value" to "OK"),
+                        )
+                    assertEquals(true, result.isError)
+                    assertTrue((result.content[0] as TextContent).text.contains("scroll_to_node"))
+                }
+            }
+
+        @Test
+        fun `tap_node by selector taps inside resolved bounds`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.stubMatches(listOf(visibleMatch))
+                val tapX = slot<Float>()
+                val tapY = slot<Float>()
+                coEvery { deps.actionExecutor.tap(capture(tapX), capture(tapY)) } returns Result.success(Unit)
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_tap_node",
+                            arguments = mapOf("by" to "text", "value" to "OK"),
+                        )
+                    assertNotEquals(true, result.isError)
+                    assertTrue(tapX.captured in 50f..250f, "x=${tapX.captured}")
+                    assertTrue(tapY.captured in 800f..1000f, "y=${tapY.captured}")
+                }
+            }
+
+        @Test
+        fun `tap_node with node_id and selector returns invalid params error`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.stubMatches(listOf(visibleMatch))
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_tap_node",
+                            arguments = mapOf("node_id" to "node_btn", "by" to "text", "value" to "OK"),
+                        )
+                    assertEquals(true, result.isError)
+                    assertTrue((result.content[0] as TextContent).text.contains("not both"))
+                }
+            }
+
+        @Test
+        fun `tools list exposes selector params for click_node and tap_node`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.stubMatches(listOf(visibleMatch))
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val tools = client.listTools().tools
+                    listOf("android_click_node", "android_tap_node").forEach { name ->
+                        val tool = tools.find { it.name == name }
+                        assertTrue(tool != null, "$name should be registered")
+                        val keys = tool!!.inputSchema.properties?.keys ?: emptySet<String>()
+                        listOf("node_id", "by", "value", "exact_match").forEach { param ->
+                            assertTrue(keys.contains(param), "$name should expose $param")
+                        }
+                        assertTrue(
+                            tool.inputSchema.required.isNullOrEmpty(),
+                            "$name should declare no required params",
+                        )
+                    }
                 }
             }
     }

@@ -14,6 +14,7 @@ import com.danielealbano.androidremotecontrolmcp.services.accessibility.Accessib
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityTreeLock
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityTreeParser
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.ActionExecutor
+import com.danielealbano.androidremotecontrolmcp.services.accessibility.BoundsData
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.CachedNode
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.ElementFinder
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.FindBy
@@ -178,7 +179,7 @@ class FindNodesTool
 /**
  * MCP tool: click_node
  *
- * Clicks the accessibility node identified by node_id.
+ * Clicks the accessibility node identified by node_id, or by a selector resolved among on-screen nodes.
  */
 class ClickNodeTool
     @Inject
@@ -187,22 +188,31 @@ class ClickNodeTool
         private val actionExecutor: ActionExecutor,
         private val accessibilityServiceProvider: AccessibilityServiceProvider,
         private val nodeCache: AccessibilityNodeCache,
+        private val selectorResolver: NodeSelectorResolver,
     ) {
         suspend fun execute(arguments: JsonObject?): CallToolResult {
+            val target = selectorResolver.parseTarget(arguments)
+
+            val windows = getFreshWindows(treeParser, accessibilityServiceProvider, nodeCache).windows
+
             val nodeId =
-                arguments?.get("node_id")?.jsonPrimitive?.contentOrNull
-                    ?: throw McpToolException.InvalidParams("Missing required parameter 'node_id'")
+                when (target) {
+                    is NodeTarget.ById -> {
+                        target.nodeId
+                    }
 
-            if (nodeId.isEmpty()) {
-                throw McpToolException.InvalidParams("Parameter 'node_id' must be non-empty")
-            }
+                    is NodeTarget.BySelector -> {
+                        when (val resolution = selectorResolver.resolve(windows, target.selector)) {
+                            is SelectorResolution.Resolved -> resolution.element.id
+                            is SelectorResolution.Ambiguous -> return selectorResolver.ambiguityResult(resolution)
+                        }
+                    }
+                }
 
-            val multiWindowResult = getFreshWindows(treeParser, accessibilityServiceProvider, nodeCache)
-
-            val result = actionExecutor.clickNode(nodeId, multiWindowResult.windows)
+            val result = actionExecutor.clickNode(nodeId, windows)
             result.onFailure { e -> mapNodeActionException(e, nodeId) }
 
-            Log.d(TAG, "click_node: nodeId=$nodeId succeeded")
+            Log.d(TAG, "click_node: nodeId=$nodeId succeeded (selector=${target is NodeTarget.BySelector})")
             return McpToolUtils.textResult("Click performed on node '$nodeId'")
         }
 
@@ -214,18 +224,14 @@ class ClickNodeTool
                 toolName = TOOL_NAME,
                 name = "$toolNamePrefix$TOOL_NAME",
                 description =
-                    "Click the specified accessibility node by node ID. " +
+                    "Click an accessibility node by node_id, or by selector (by + value [+ exact_match]) " +
+                        "resolved among on-screen nodes only; provide exactly one form. A selector matching " +
+                        "several on-screen nodes returns an error listing the candidates. " +
                         "Returns after the click is performed.",
                 inputSchema =
                     ToolSchema(
-                        properties =
-                            buildJsonObject {
-                                putJsonObject("node_id") {
-                                    put("type", "string")
-                                    put("description", "Node ID from ${toolNamePrefix}find_nodes")
-                                }
-                            },
-                        required = listOf("node_id"),
+                        properties = buildJsonObject { putNodeTargetProperties(toolNamePrefix) },
+                        required = emptyList(),
                     ),
             ) { request -> execute(request.arguments) }
         }
@@ -300,9 +306,9 @@ class LongClickNodeTool
 /**
  * MCP tool: tap_node
  *
- * Performs a gesture-based tap at a random point within the bounds of the
- * node identified by node_id. Unlike click_node (which uses the
- * accessibility ACTION_CLICK), this performs a coordinate-based touch gesture.
+ * Performs a gesture-based tap at a random point within the bounds of the node identified by node_id, or by a
+ * selector resolved among on-screen nodes. Unlike click_node (which uses the accessibility ACTION_CLICK), this
+ * performs a coordinate-based touch gesture.
  */
 class TapNodeTool
     @Inject
@@ -312,16 +318,10 @@ class TapNodeTool
         private val actionExecutor: ActionExecutor,
         private val accessibilityServiceProvider: AccessibilityServiceProvider,
         private val nodeCache: AccessibilityNodeCache,
+        private val selectorResolver: NodeSelectorResolver,
     ) {
-        @Suppress("ThrowsCount")
         suspend fun execute(arguments: JsonObject?): CallToolResult {
-            val nodeId =
-                arguments?.get("node_id")?.jsonPrimitive?.contentOrNull
-                    ?: throw McpToolException.InvalidParams("Missing required parameter 'node_id'")
-
-            if (nodeId.isEmpty()) {
-                throw McpToolException.InvalidParams("Parameter 'node_id' must be non-empty")
-            }
+            val target = selectorResolver.parseTarget(arguments)
 
             val insetPercentage =
                 McpToolUtils.optionalFloat(arguments, "inset_percentage", DEFAULT_INSET_PERCENTAGE)
@@ -332,30 +332,26 @@ class TapNodeTool
                 )
             }
 
-            val multiWindowResult = getFreshWindows(treeParser, accessibilityServiceProvider, nodeCache)
+            val windows = getFreshWindows(treeParser, accessibilityServiceProvider, nodeCache).windows
 
-            val node =
-                elementFinder.findNodeById(multiWindowResult.windows, nodeId)
-                    ?: throw McpToolException.NodeNotFound("Node '$nodeId' not found")
+            val (nodeId, bounds) =
+                when (target) {
+                    is NodeTarget.ById -> {
+                        val node =
+                            elementFinder.findNodeById(windows, target.nodeId)
+                                ?: throw McpToolException.NodeNotFound("Node '${target.nodeId}' not found")
+                        target.nodeId to node.bounds
+                    }
 
-            val bounds = node.bounds
-            val width = bounds.right - bounds.left
-            val height = bounds.bottom - bounds.top
-
-            val (tapX, tapY) =
-                if (width < SMALL_ELEMENT_THRESHOLD && height < SMALL_ELEMENT_THRESHOLD) {
-                    Pair(bounds.left.toFloat(), bounds.top.toFloat())
-                } else {
-                    val insetFraction = insetPercentage / PERCENTAGE_DIVISOR
-                    val insetLeft = bounds.left + width * insetFraction
-                    val insetRight = bounds.right - width * insetFraction
-                    val insetTop = bounds.top + height * insetFraction
-                    val insetBottom = bounds.bottom - height * insetFraction
-                    Pair(
-                        randomFloatInRange(insetLeft, insetRight),
-                        randomFloatInRange(insetTop, insetBottom),
-                    )
+                    is NodeTarget.BySelector -> {
+                        when (val resolution = selectorResolver.resolve(windows, target.selector)) {
+                            is SelectorResolution.Resolved -> resolution.element.id to resolution.element.bounds
+                            is SelectorResolution.Ambiguous -> return selectorResolver.ambiguityResult(resolution)
+                        }
+                    }
                 }
+
+            val (tapX, tapY) = computeTapPoint(bounds, insetPercentage)
 
             Log.d(TAG, "tap_node: nodeId=$nodeId, tapAt=($tapX, $tapY)")
 
@@ -364,6 +360,27 @@ class TapNodeTool
                 result,
                 "Tap executed at (${tapX.toInt()}, ${tapY.toInt()}) within node '$nodeId'",
             )
+        }
+
+        private fun computeTapPoint(
+            bounds: BoundsData,
+            insetPercentage: Float,
+        ): Pair<Float, Float> {
+            val width = bounds.right - bounds.left
+            val height = bounds.bottom - bounds.top
+            return if (width < SMALL_ELEMENT_THRESHOLD && height < SMALL_ELEMENT_THRESHOLD) {
+                Pair(bounds.left.toFloat(), bounds.top.toFloat())
+            } else {
+                val insetFraction = insetPercentage / PERCENTAGE_DIVISOR
+                val insetLeft = bounds.left + width * insetFraction
+                val insetRight = bounds.right - width * insetFraction
+                val insetTop = bounds.top + height * insetFraction
+                val insetBottom = bounds.bottom - height * insetFraction
+                Pair(
+                    randomFloatInRange(insetLeft, insetRight),
+                    randomFloatInRange(insetTop, insetBottom),
+                )
+            }
         }
 
         internal fun randomFloatInRange(
@@ -382,20 +399,18 @@ class TapNodeTool
                 toolName = TOOL_NAME,
                 name = "$toolNamePrefix$TOOL_NAME",
                 description =
-                    "Performs a gesture-based tap at a random point within the bounds of the " +
-                        "node identified by node_id. Unlike click_node (which uses the " +
-                        "accessibility ACTION_CLICK), this performs a coordinate-based touch gesture. " +
-                        "The tap point is randomized within the node bounds, inset by a configurable " +
-                        "percentage (default 5%) from each edge to avoid hitting borders. " +
-                        "Returns after the gesture completes.",
+                    "Performs a gesture-based tap at a random point within the bounds of a node, identified " +
+                        "by node_id or by selector (by + value [+ exact_match]) resolved among on-screen nodes " +
+                        "only; provide exactly one form. A selector matching several on-screen nodes returns an " +
+                        "error listing the candidates. Unlike click_node (which uses the accessibility " +
+                        "ACTION_CLICK), this performs a coordinate-based touch gesture. The tap point is " +
+                        "randomized within the node bounds, inset by a configurable percentage (default 5%) " +
+                        "from each edge to avoid hitting borders. Returns after the gesture completes.",
                 inputSchema =
                     ToolSchema(
                         properties =
                             buildJsonObject {
-                                putJsonObject("node_id") {
-                                    put("type", "string")
-                                    put("description", "Node ID from ${toolNamePrefix}find_nodes")
-                                }
+                                putNodeTargetProperties(toolNamePrefix)
                                 putJsonObject("inset_percentage") {
                                     put("type", "number")
                                     put("default", DEFAULT_INSET_PERCENTAGE.toDouble())
@@ -406,7 +421,7 @@ class TapNodeTool
                                     )
                                 }
                             },
-                        required = listOf("node_id"),
+                        required = emptyList(),
                     ),
             ) { request -> execute(request.arguments) }
         }
@@ -833,12 +848,13 @@ fun registerNodeActionTools(
     toolNamePrefix: String,
     perms: ToolPermissionsConfig,
 ) {
+    val selectorResolver = NodeSelectorResolver(elementFinder, privacyToolGate, substitutor)
     if (perms.isToolEnabled(FindNodesTool.TOOL_NAME)) {
         FindNodesTool(treeParser, elementFinder, accessibilityServiceProvider, nodeCache, privacyToolGate, substitutor)
             .register(registrar, toolNamePrefix)
     }
     if (perms.isToolEnabled(ClickNodeTool.TOOL_NAME)) {
-        ClickNodeTool(treeParser, actionExecutor, accessibilityServiceProvider, nodeCache)
+        ClickNodeTool(treeParser, actionExecutor, accessibilityServiceProvider, nodeCache, selectorResolver)
             .register(registrar, toolNamePrefix)
     }
     if (perms.isToolEnabled(LongClickNodeTool.TOOL_NAME)) {
@@ -846,8 +862,14 @@ fun registerNodeActionTools(
             .register(registrar, toolNamePrefix)
     }
     if (perms.isToolEnabled(TapNodeTool.TOOL_NAME)) {
-        TapNodeTool(treeParser, elementFinder, actionExecutor, accessibilityServiceProvider, nodeCache)
-            .register(registrar, toolNamePrefix)
+        TapNodeTool(
+            treeParser,
+            elementFinder,
+            actionExecutor,
+            accessibilityServiceProvider,
+            nodeCache,
+            selectorResolver,
+        ).register(registrar, toolNamePrefix)
     }
     if (perms.isToolEnabled(ScrollToNodeTool.TOOL_NAME)) {
         ScrollToNodeTool(treeParser, elementFinder, actionExecutor, accessibilityServiceProvider, nodeCache)

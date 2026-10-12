@@ -2,6 +2,7 @@
 
 package com.danielealbano.androidremotecontrolmcp.mcp.tools
 
+import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
@@ -21,7 +22,10 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.mockkStatic
+import io.mockk.slot
 import io.mockk.unmockkAll
+import io.mockk.unmockkStatic
 import io.mockk.verify
 import io.mockk.verifyOrder
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
@@ -103,6 +107,13 @@ class NodeActionToolsTest {
             clickable = true,
             enabled = true,
             visible = true,
+        )
+
+    private val selectorResolver =
+        NodeSelectorResolver(
+            mockElementFinder,
+            PrivacyToolTestDoubles.passthroughGate(),
+            PrivacyToolTestDoubles.identitySubstitutor(),
         )
 
     private fun extractTextContent(result: CallToolResult): String {
@@ -467,7 +478,13 @@ class NodeActionToolsTest {
     @DisplayName("ClickNodeTool")
     inner class ClickNodeToolTests {
         private val tool =
-            ClickNodeTool(mockTreeParser, mockActionExecutor, mockAccessibilityServiceProvider, mockNodeCache)
+            ClickNodeTool(
+                mockTreeParser,
+                mockActionExecutor,
+                mockAccessibilityServiceProvider,
+                mockNodeCache,
+                selectorResolver,
+            )
 
         @Test
         fun `clicks node successfully`() =
@@ -507,6 +524,129 @@ class NodeActionToolsTest {
 
                 assertThrows<McpToolException.InvalidParams> { tool.execute(params) }
             }
+
+        private fun textSelectorParams(value: String = "7") =
+            buildJsonObject {
+                put("by", "text")
+                put("value", value)
+            }
+
+        @Test
+        fun `clicks node resolved by selector`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo)
+                coEvery { mockActionExecutor.clickNode("node_abc", sampleWindows) } returns Result.success(Unit)
+
+                val text = extractTextContent(tool.execute(textSelectorParams()))
+
+                coVerify { mockActionExecutor.clickNode("node_abc", sampleWindows) }
+                assertEquals("Click performed on node 'node_abc'", text)
+            }
+
+        @Test
+        fun `selector reads the tree exactly once`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo)
+                coEvery { mockActionExecutor.clickNode("node_abc", sampleWindows) } returns Result.success(Unit)
+
+                tool.execute(textSelectorParams())
+
+                verify(exactly = 1) { mockAccessibilityServiceProvider.getAccessibilityWindows() }
+                verify(exactly = 1) { mockTreeParser.parseTree(any(), any(), any()) }
+            }
+
+        @Test
+        fun `ambiguous selector returns untrusted error and does not click`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo, sampleElementInfo.copy(id = "node_def"))
+
+                val result = tool.execute(textSelectorParams())
+
+                assertEquals(true, result.isError)
+                assertTrue(
+                    extractTextContent(result).startsWith("${McpToolUtils.UNTRUSTED_CONTENT_WARNING}\n"),
+                )
+                coVerify(exactly = 0) { mockActionExecutor.clickNode(any(), any()) }
+            }
+
+        @Test
+        fun `selector with only off-screen match throws NodeNotFound`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo.copy(visible = false))
+
+                val message =
+                    assertThrows<McpToolException.NodeNotFound> {
+                        tool.execute(textSelectorParams())
+                    }.message!!
+
+                assertTrue(message.contains("scroll_to_node"), message)
+            }
+
+        @Test
+        fun `invalid selector params rejected before tree read`() =
+            runTest {
+                val params = buildJsonObject { put("by", "text") }
+
+                assertThrows<McpToolException.InvalidParams> { tool.execute(params) }
+                verify(exactly = 0) { mockAccessibilityServiceProvider.getAccessibilityWindows() }
+            }
+
+        @Test
+        fun `node_id plus selector rejected`() =
+            runTest {
+                val params =
+                    buildJsonObject {
+                        put("node_id", "node_abc")
+                        put("by", "text")
+                        put("value", "7")
+                    }
+
+                val message =
+                    assertThrows<McpToolException.InvalidParams> { tool.execute(params) }.message!!
+
+                assertTrue(message.contains("not both"), message)
+            }
+
+        @Test
+        fun `not clickable selector target maps to ActionFailed`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo)
+                coEvery { mockActionExecutor.clickNode("node_abc", sampleWindows) } returns
+                    Result.failure(IllegalStateException("Node 'node_abc' is not clickable"))
+
+                assertThrows<McpToolException.ActionFailed> { tool.execute(textSelectorParams()) }
+            }
+
+        @Test
+        fun `selector success log omits selector value`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "Seven-Label", false)
+                } returns listOf(sampleElementInfo)
+                coEvery { mockActionExecutor.clickNode("node_abc", sampleWindows) } returns Result.success(Unit)
+                val debugLines = mutableListOf<String>()
+                mockkStatic(Log::class)
+                try {
+                    every { Log.d(any<String>(), capture(debugLines)) } returns 0
+
+                    tool.execute(textSelectorParams("Seven-Label"))
+
+                    assertTrue(debugLines.isNotEmpty(), "click_node should log a debug line")
+                    assertTrue(debugLines.none { it.contains("Seven-Label") }, debugLines.toString())
+                } finally {
+                    unmockkStatic(Log::class)
+                }
+            }
     }
 
     @Nested
@@ -537,6 +677,7 @@ class NodeActionToolsTest {
                 mockActionExecutor,
                 mockAccessibilityServiceProvider,
                 mockNodeCache,
+                selectorResolver,
             )
 
         @Test
@@ -773,6 +914,102 @@ class NodeActionToolsTest {
                 // Assert — no exception, graceful handling
                 assertTrue(extractTextContent(result).contains("Tap executed"))
                 assertTrue(extractTextContent(result).contains("node_smallish"))
+            }
+
+        private fun textSelectorParams(value: String = "7") =
+            buildJsonObject {
+                put("by", "text")
+                put("value", value)
+            }
+
+        @Test
+        fun `taps within bounds of node resolved by selector`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo)
+                val tapX = slot<Float>()
+                val tapY = slot<Float>()
+                coEvery { mockActionExecutor.tap(capture(tapX), capture(tapY)) } returns Result.success(Unit)
+
+                val text = extractTextContent(tool.execute(textSelectorParams()))
+
+                // sampleBounds (50,800,250,1000) inset by 5% → x in [60,240], y in [810,990]
+                assertTrue(tapX.captured in 60f..240f, "x=${tapX.captured}")
+                assertTrue(tapY.captured in 810f..990f, "y=${tapY.captured}")
+                assertTrue(text.endsWith("within node 'node_abc'"), text)
+            }
+
+        @Test
+        fun `selector path does not call findNodeById`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo)
+                coEvery { mockActionExecutor.tap(any(), any()) } returns Result.success(Unit)
+
+                tool.execute(textSelectorParams())
+
+                verify(exactly = 0) { mockElementFinder.findNodeById(any<List<WindowData>>(), any()) }
+            }
+
+        @Test
+        fun `selector reads the tree exactly once`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo)
+                coEvery { mockActionExecutor.tap(any(), any()) } returns Result.success(Unit)
+
+                tool.execute(textSelectorParams())
+
+                verify(exactly = 1) { mockAccessibilityServiceProvider.getAccessibilityWindows() }
+            }
+
+        @Test
+        fun `ambiguous selector returns untrusted error and does not tap`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+                } returns listOf(sampleElementInfo, sampleElementInfo.copy(id = "node_def"))
+
+                val result = tool.execute(textSelectorParams())
+
+                assertEquals(true, result.isError)
+                assertTrue(
+                    extractTextContent(result).startsWith("${McpToolUtils.UNTRUSTED_CONTENT_WARNING}\n"),
+                )
+                coVerify(exactly = 0) { mockActionExecutor.tap(any(), any()) }
+            }
+
+        @Test
+        fun `invalid inset with selector rejected before tree read`() =
+            runTest {
+                val params =
+                    buildJsonObject {
+                        put("by", "text")
+                        put("value", "7")
+                        put("inset_percentage", 50.0)
+                    }
+
+                assertThrows<McpToolException.InvalidParams> { tool.execute(params) }
+                verify(exactly = 0) { mockAccessibilityServiceProvider.getAccessibilityWindows() }
+            }
+
+        @Test
+        fun `node_id plus selector rejected`() =
+            runTest {
+                val params =
+                    buildJsonObject {
+                        put("node_id", "node_abc")
+                        put("by", "text")
+                        put("value", "7")
+                    }
+
+                val message =
+                    assertThrows<McpToolException.InvalidParams> { tool.execute(params) }.message!!
+
+                assertTrue(message.contains("not both"), message)
             }
     }
 
