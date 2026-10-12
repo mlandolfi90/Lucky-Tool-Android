@@ -443,6 +443,13 @@ internal object McpToolUtils {
         CallToolResult(content = listOf(TextContent(text = "$UNTRUSTED_CONTENT_WARNING\n$text")))
 
     /**
+     * Creates an error [CallToolResult] (`isError = true`) with [UNTRUSTED_CONTENT_WARNING] prepended to the text.
+     * Use ONLY for error results that carry device-derived content (e.g. ambiguous-selector candidates).
+     */
+    fun untrustedErrorResult(text: String): CallToolResult =
+        CallToolResult(content = listOf(TextContent(text = "$UNTRUSTED_CONTENT_WARNING\n$text")), isError = true)
+
+    /**
      * Creates a [CallToolResult] with [UNTRUSTED_CONTENT_WARNING] as text + image content.
      */
     fun untrustedTextAndImageResult(

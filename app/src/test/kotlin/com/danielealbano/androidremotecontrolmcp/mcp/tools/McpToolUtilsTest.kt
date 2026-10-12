@@ -658,6 +658,31 @@ class McpToolUtilsTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // untrustedErrorResult
+    // ─────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("untrustedErrorResult")
+    inner class UntrustedErrorResultTests {
+        @Test
+        @DisplayName("sets isError true")
+        fun setsIsErrorTrue() {
+            val result = McpToolUtils.untrustedErrorResult("boom")
+            assertEquals(true, result.isError)
+        }
+
+        @Test
+        @DisplayName("prepends warning as first line")
+        fun prependsWarningAsFirstLine() {
+            val result = McpToolUtils.untrustedErrorResult("payload")
+            assertEquals(1, result.content.size)
+            val text = (result.content[0] as TextContent).text
+            assertTrue(text.startsWith("${McpToolUtils.UNTRUSTED_CONTENT_WARNING}\n"))
+            assertTrue(text.endsWith("payload"))
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // untrustedTextAndImageResult
     // ─────────────────────────────────────────────────────────────────────
 
