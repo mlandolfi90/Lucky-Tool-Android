@@ -23,9 +23,18 @@ export const TEST_CONFIG = Object.freeze({
 
 const silentLogger = { info() {}, warn() {}, error() {} };
 
+/** Logger that keeps every line (all levels) in `lines`. */
+export function recordingLogger() {
+  const lines = [];
+  const record = (message) => {
+    lines.push(message);
+  };
+  return { lines, info: record, warn: record, error: record };
+}
+
 /** Starts a relay on an ephemeral loopback port. */
-export async function startRelay(overrides = {}) {
-  const relay = createRelay({ ...TEST_CONFIG, ...overrides }, silentLogger);
+export async function startRelay(overrides = {}, logger = silentLogger) {
+  const relay = createRelay({ ...TEST_CONFIG, ...overrides }, logger);
   relay.server.listen(0, '127.0.0.1');
   await once(relay.server, 'listening');
   const { port } = relay.server.address();

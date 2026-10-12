@@ -47,6 +47,45 @@ connected.
 - One phone at a time: a new authenticated `/device` connection replaces the previous one (closed with code `4000`).
 - Responses above 8 MiB (e.g. large `/s/` capability downloads) are not served through the relay.
 
+## Request timing log
+
+Every request except `/relay/health` writes one line when its response closes (answered, refused, failed or
+abandoned by the client). Requests that Node's HTTP parser rejects before the relay sees them (malformed requests,
+Node's own request timeout) are not logged. The phone does not log frames whose replay is cancelled because the
+socket went away, or whose response cannot be encoded.
+
+```text
+relay: request rid=3f2a9c1e method=POST path=/mcp rpc=tools/call tool=tap_node status=200 reqBytes=231 resBytes=1840 inflight=0 idleMs=4210 sentAt=1791700000123 bodyMs=0.4 deviceMs=1184.2 totalMs=1185.3
+```
+
+| Field | Meaning |
+|---|---|
+| `rid` | First 8 characters of the frame id; the phone logs the same `rid` (`MCP:RelaySession`, `Relay request rid=…`) |
+| `method` | HTTP method |
+| `path` | Path without query; `/s/…` capability links as `/s/<redacted>`; cut at 128 characters |
+| `rpc` / `tool` | JSON-RPC method (and tool name for `tools/call`), read only from `POST /mcp` JSON bodies up to 64 KiB; `-` = not inspected, `?` = unreadable, `batch` = JSON-RPC batch |
+| `status` | Status sent; `-` when the client left before any response |
+| `reqBytes` / `resBytes` | Request body read / response body sent; `resBytes` is 0 on the internal-error 500 fallback |
+| `inflight` | Requests already in flight when this one arrived |
+| `idleMs` | Time since the phone's socket last spoke (message or pong) when the frame was sent |
+| `sentAt` | Wall clock (epoch ms) when the relay tried to send the frame to the phone; if the phone disconnected while the body was read, no frame is sent (`idleMs=-`, `status=503`) |
+| `bodyMs` / `deviceMs` / `totalMs` | Reading the body / waiting for the phone's answer / whole request inside the relay |
+| `aborted=1` | The client closed the connection before the response finished |
+
+`-` means the phase was never reached. Never logged: headers or their values (`Authorization` included), query
+strings, bodies, JSON-RPC params or arguments, client IP or `X-Forwarded-For`. Console lines carry no timestamp:
+use `docker logs -t`. With Traefik `buffering`, `bodyMs` is near 0 (Traefik already read the body).
+
+Reading a slow call, from the outside in:
+
+- Client-observed time − `totalMs`: client ↔ proxy ↔ relay network and TLS (invisible to the relay).
+- `totalMs` − (`bodyMs` + `deviceMs`): relay overhead.
+- `deviceMs` − phone `totalMs` (same `rid`): WebSocket round trip both ways. It does not depend on the clocks.
+- Phone `replayMs` − the in-app tool duration: the phone's HTTP stack, auth and MCP SDK.
+- Phone `recvAt` − `sentAt`: relay → phone leg, only as accurate as the two clocks agree.
+- `rpc=initialize` before every `tools/call` means the client repeats the handshake on each call.
+- A `deviceMs` that grows with `idleMs` points at the phone's radio waking up.
+
 ## Limits
 
 - `MAX_PENDING` is shared by every client, and the relay does not authenticate clients (the phone checks their

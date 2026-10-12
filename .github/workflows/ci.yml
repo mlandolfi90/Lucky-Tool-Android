@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # feat/** so stacked PRs (one plan on top of another open PR) also get the full gate set.
   pull_request:
-    branches: [main]
+    branches: [main, "feat/**"]
 
 permissions:
   contents: read

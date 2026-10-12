@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertSame
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -262,6 +263,43 @@ class AccessibilityTreeParserTest {
         }
 
         @Test
+        @DisplayName("does not refresh child nodes without a resource id")
+        fun doesNotRefreshChildNodesWithoutResourceId() {
+            // Arrange
+            val child = createMockNode(text = "Child", resourceId = null)
+            val parent =
+                createMockNode(
+                    childCount = 1,
+                    children = listOf(child),
+                )
+
+            // Act
+            parser.parseTree(parent)
+
+            // Assert
+            verify(exactly = 0) { child.refresh() }
+        }
+
+        @Test
+        @DisplayName("does not refresh Compose virtual child nodes")
+        fun doesNotRefreshComposeVirtualChildNodes() {
+            // Arrange
+            val child = createMockNode(text = "Child", resourceId = "com.example:id/compose_child")
+            every { child.availableExtraData } returns listOf("androidx.compose.ui.semantics.id")
+            val parent =
+                createMockNode(
+                    childCount = 1,
+                    children = listOf(child),
+                )
+
+            // Act
+            parser.parseTree(parent)
+
+            // Assert
+            verify(exactly = 0) { child.refresh() }
+        }
+
+        @Test
         @DisplayName("truncates subtree when MAX_TREE_DEPTH is exceeded")
         fun truncatesSubtreeAtMaxDepth() {
             // Arrange - mock Log since truncation logs a warning
@@ -409,6 +447,27 @@ class AccessibilityTreeParserTest {
             @Suppress("DEPRECATION")
             verify(exactly = 0) { child2.recycle() }
             assertEquals(3, nodeMap.size)
+        }
+
+        @Test
+        @DisplayName("does not refresh children and caches the getChild instance")
+        fun parseTreeWithNodeMapDoesNotRefreshChildren() {
+            // Arrange
+            val child = createMockNode(text = "Child", resourceId = null)
+            val root =
+                createMockNode(
+                    className = "android.widget.LinearLayout",
+                    childCount = 1,
+                    children = listOf(child),
+                )
+            val nodeMap = mutableMapOf<String, CachedNode>()
+
+            // Act
+            val result = parser.parseTree(root, nodeMap = nodeMap)
+
+            // Assert
+            verify(exactly = 0) { child.refresh() }
+            assertSame(child, nodeMap[result.children[0].id]!!.node)
         }
 
         @Test

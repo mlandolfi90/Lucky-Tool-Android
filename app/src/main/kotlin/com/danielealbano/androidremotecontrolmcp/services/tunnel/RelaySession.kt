@@ -33,6 +33,7 @@ internal data class RelaySessionEnd(
  * cancelled when the socket goes away; the Close frame is sent even if the caller is being cancelled.
  * Frame text (UTF-8 and JSON) is decoded and encoded on the Default dispatcher: bodies reach several MiB of
  * base64.
+ * Each request frame whose replay completes logs one info line built by [RelayTiming] (none when cancelled).
  */
 internal class RelaySession(
     private val session: DefaultClientWebSocketSession,
@@ -88,8 +89,10 @@ internal class RelaySession(
         replayScope: CoroutineScope,
         frame: Frame.Text,
     ) {
+        val receivedNs = System.nanoTime()
+        val receivedAtMs = System.currentTimeMillis()
         when (val inbound = withContext(Dispatchers.Default) { RelayFrameCodec.decode(frame.readText()) }) {
-            is RelayInbound.Request -> replayScope.launch { answer(inbound.frame) }
+            is RelayInbound.Request -> replayScope.launch { answer(inbound.frame, receivedNs, receivedAtMs) }
             RelayInbound.Ping -> replayScope.launch { sendFrame(Frame.Text(RelayFrameCodec.encodePong())) }
             RelayInbound.Pong -> Unit
             is RelayInbound.Unknown -> Logger.w(TAG, "Ignoring relay frame of unknown type '${inbound.type}'")
@@ -97,7 +100,12 @@ internal class RelaySession(
         }
     }
 
-    private suspend fun answer(frame: RelayRequestFrame) {
+    private suspend fun answer(
+        frame: RelayRequestFrame,
+        receivedNs: Long,
+        receivedAtMs: Long,
+    ) {
+        val replayStartNs = System.nanoTime()
         val response =
             if (replaySlots.tryAcquire()) {
                 try {
@@ -109,22 +117,40 @@ internal class RelaySession(
                 Logger.w(TAG, "Relay request refused: all replay slots are busy")
                 replayer.errorFrame(frame.id, HttpStatusCode.ServiceUnavailable, "device busy")
             }
-        sendFrame(withContext(Dispatchers.Default) { Frame.Text(RelayFrameCodec.encode(response)) })
+        val replayEndNs = System.nanoTime()
+        val sent = sendFrame(withContext(Dispatchers.Default) { Frame.Text(RelayFrameCodec.encode(response)) })
+        val timing =
+            RelayTiming(
+                id = frame.id,
+                method = frame.method,
+                path = frame.path,
+                status = response.status,
+                receivedAtMs = receivedAtMs,
+                queueMs = (replayStartNs - receivedNs) / NANOS_PER_MILLI,
+                replayMs = (replayEndNs - replayStartNs) / NANOS_PER_MILLI,
+                totalMs = (System.nanoTime() - receivedNs) / NANOS_PER_MILLI,
+                sent = sent,
+            )
+        Logger.i(TAG, timing.logLine())
     }
 
-    private suspend fun sendFrame(frame: Frame.Text) {
+    /** `false` when the socket was already closed or the write failed (logged here). */
+    private suspend fun sendFrame(frame: Frame.Text): Boolean =
         try {
             session.send(frame)
+            true
         } catch (e: ClosedSendChannelException) {
             Logger.w(TAG, "Relay socket closed before the frame could be sent", e)
+            false
         } catch (e: IOException) {
             Logger.w(TAG, "Failed to send frame to relay", e)
+            false
         }
-    }
 
     companion object {
         private const val TAG = "MCP:RelaySession"
         private const val CLOSE_TIMEOUT_MS = 2_000L
+        private const val NANOS_PER_MILLI = 1_000_000L
         private const val REPLACED_MESSAGE = "Relay replaced this device with another connection"
 
         /** Relay close code: another authenticated device connection took this device's slot. */

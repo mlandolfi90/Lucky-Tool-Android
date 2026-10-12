@@ -128,16 +128,16 @@ The typical startup flow: User opens app → enables Accessibility Service in An
 
 - `app/src/main/kotlin/com/danielealbano/androidremotecontrolmcp/`
   - `McpApplication.kt` — Application class (Hilt setup)
-  - `services/accessibility/` — `McpAccessibilityService.kt`, `AccessibilityTreeParser.kt`, `ElementFinder.kt`, `ActionExecutor.kt`, `ActionExecutorImpl.kt`, `AccessibilityServiceProvider.kt`, `AccessibilityServiceProviderImpl.kt`, `TypeInputController.kt`, `TypeInputControllerImpl.kt`, `ScreenInfo.kt`, `CompactTreeFormatter.kt`, `AccessibilityNodeCache.kt`, `AccessibilityNodeCacheImpl.kt`
+  - `services/accessibility/` — `McpAccessibilityService.kt`, `AccessibilityTreeParser.kt`, `ElementFinder.kt`, `ActionExecutor.kt`, `ActionExecutorImpl.kt`, `AccessibilityServiceProvider.kt`, `AccessibilityServiceProviderImpl.kt`, `TypeInputController.kt`, `TypeInputControllerImpl.kt`, `ScreenInfo.kt`, `CompactTreeFormatter.kt`, `CompactFormatOptions.kt`, `AccessibilityNodeCache.kt`, `AccessibilityNodeCacheImpl.kt`
   - `services/screencapture/` — `ScreenCaptureProvider.kt`, `ScreenCaptureProviderImpl.kt`, `ScreenshotEncoder.kt`, `ScreenshotAnnotator.kt`, `ApiLevelProvider.kt`
   - `services/storage/` — `StorageLocationProvider.kt`, `StorageLocationProviderImpl.kt`, `FileOperationProvider.kt`, `FileOperationProviderImpl.kt`
   - `services/apps/` — `AppManager.kt`, `AppManagerImpl.kt`
   - `services/camera/` — `CameraProvider.kt`, `CameraProviderImpl.kt`, `ServiceLifecycleOwner.kt`
   - `services/location/` — `LocationProvider.kt`, `LocationProviderImpl.kt`
   - `services/mcp/` — `McpServerService.kt`, `BootCompletedReceiver.kt`, `AdbConfigHandler.kt`, `AdbConfigReceiver.kt`, `AdbServiceTrampolineActivity.kt`
-  - `services/tunnel/` — `TunnelProvider.kt`, `TunnelManager.kt`, `CloudflareTunnelProvider.kt`, `CloudflaredBinaryResolver.kt`, `AndroidCloudflareBinaryResolver.kt`, `NgrokTunnelProvider.kt`, `RelayTunnelProvider.kt`, `RelaySession.kt`, `RelayTarget.kt`, `RelayFrames.kt`, `LocalRequestReplayer.kt`
+  - `services/tunnel/` — `TunnelProvider.kt`, `TunnelManager.kt`, `CloudflareTunnelProvider.kt`, `CloudflaredBinaryResolver.kt`, `AndroidCloudflareBinaryResolver.kt`, `NgrokTunnelProvider.kt`, `RelayTunnelProvider.kt`, `RelaySession.kt`, `RelayTiming.kt`, `RelayTarget.kt`, `RelayFrames.kt`, `LocalRequestReplayer.kt`
   - `mcp/` — `McpServer.kt`, `McpStatelessTransport.kt`, `McpToolException.kt`, `CertificateManager.kt`
-  - `mcp/tools/` — `McpToolUtils.kt`, `TreeFingerprint.kt`, `ScreenIntrospectionTools.kt`, `TouchActionTools.kt`, `NodeActionTools.kt`, `TextInputTools.kt`, `SystemActionTools.kt`, `GestureTools.kt`, `UtilityTools.kt`, `FileTools.kt`, `AppManagementTools.kt`, `CameraTools.kt`, `LocationTools.kt`
+  - `mcp/tools/` — `McpToolUtils.kt`, `TreeFingerprint.kt`, `ScreenIntrospectionTools.kt`, `TouchActionTools.kt`, `NodeActionTools.kt`, `NodeSelectorResolver.kt`, `TextInputTools.kt`, `SystemActionTools.kt`, `GestureTools.kt`, `UtilityTools.kt`, `FileTools.kt`, `AppManagementTools.kt`, `CameraTools.kt`, `LocationTools.kt`
   - `mcp/auth/` — `BearerTokenAuth.kt`
   - `ui/` — `MainActivity.kt`
   - `ui/theme/` — `Theme.kt`, `Color.kt`, `Type.kt`
@@ -209,11 +209,11 @@ The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas,
 
 | Tool | Description | Parameters | Output |
 |------|-------------|------------|--------|
-| `android_get_screen_state` | Returns consolidated screen state: app info, screen dimensions, and a compact filtered flat TSV list of UI nodes | `include_screenshot` (boolean, optional, default false) | `TextContent` with compact TSV (text/desc truncated to 100 chars, comma-separated abbreviated flags with on/off visibility). Optionally includes `ImageContent` with annotated low-resolution JPEG screenshot (700px max, red bounding boxes with node ID labels). |
+| `android_get_screen_state` | Returns consolidated screen state: app info, screen dimensions, and a compact filtered flat TSV list of UI nodes | `include_screenshot` (boolean, optional, default false), `cursor` (string, optional), `include_offscreen` (boolean, optional, default true), `include_hierarchy` (boolean, optional, default true) | `TextContent` with compact TSV (text/desc truncated to 100 chars, comma-separated abbreviated flags with on/off visibility). Optionally includes `ImageContent` with annotated low-resolution JPEG screenshot (700px max, red bounding boxes with node ID labels). |
 
 **Error**: Returns `CallToolResult(isError = true)` if accessibility permission not granted or screen capture not available.
 
-**Note**: `android_get_screen_state` returns a filtered flat TSV list — structural-only nodes (no text, no contentDescription, no resourceId, not interactive) are omitted. Text and contentDescription are truncated to 100 characters; use `android_get_node_details` to retrieve full values. Flags use comma-separated abbreviations with a legend in the TSV notes. When screenshot is included, it is annotated with red bounding boxes and node ID labels for on-screen nodes.
+**Note**: `android_get_screen_state` returns a filtered flat TSV list — structural-only nodes (no text, no contentDescription, no resourceId, not interactive) are omitted. Text and contentDescription are truncated to 100 characters; use `android_get_node_details` to retrieve full values. Flags use comma-separated abbreviations with a legend in the TSV notes. When screenshot is included, it is annotated with red bounding boxes and node ID labels for on-screen nodes. `include_offscreen=false` omits nodes not visible to the user and `include_hierarchy=false` omits the `hierarchy:` section; both apply to fresh captures only (cursor pages reuse the capture's values).
 
 ### 2. Touch Action Tools (5 tools)
 
@@ -231,13 +231,13 @@ The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas,
 
 | Tool | Description | Required Params | Optional Params |
 |------|-------------|-----------------|-----------------|
-| `android_find_nodes` | Find UI nodes by criteria | `by` (string: text/content_desc/resource_id/class_name), `value` (string) | `exact_match` (boolean, default false) |
-| `android_click_node` | Click an accessibility node | `node_id` (string) | — |
+| `android_find_nodes` | Find UI nodes by criteria | `by` (string: text/content_desc/resource_id/class_name), `value` (string) | `exact_match` (boolean, default false), `visible_only` (boolean, default false) |
+| `android_click_node` | Click an accessibility node | `node_id` (string) OR selector `by` (string: text/content_desc/resource_id/class_name) + `value` (string) | `exact_match` (boolean, default false; selector only) |
 | `android_long_click_node` | Long-click an accessibility node | `node_id` (string) | — |
-| `android_tap_node` | Gesture-based tap at a random point within node bounds (unlike `android_click_node`, which uses ACTION_CLICK) | `node_id` (string) | `inset_percentage` (number: 0.0-45.0, default 5.0) |
+| `android_tap_node` | Gesture-based tap at a random point within node bounds (unlike `android_click_node`, which uses ACTION_CLICK) | `node_id` (string) OR selector `by` (string: text/content_desc/resource_id/class_name) + `value` (string) | `exact_match` (boolean, default false; selector only), `inset_percentage` (number: 0.0-45.0, default 5.0) |
 | `android_scroll_to_node` | Scroll to make node visible | `node_id` (string) | — |
 
-**Errors**: Returns `CallToolResult(isError = true)` if node not found (ID invalid or stale) or node not clickable. `android_find_nodes` returns empty array (not error) when no matches found.
+**Errors**: Returns `CallToolResult(isError = true)` if node not found (ID invalid or stale) or node not clickable. `android_find_nodes` returns empty array (not error) when no matches found. `android_click_node`/`android_tap_node` with a selector return an error when no on-screen node matches, or an untrusted-warning error listing candidates when more than one on-screen node matches.
 
 ### 4. Text Input Tools (5 tools)
 
@@ -390,6 +390,7 @@ The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas,
 - Keep `onAccessibilityEvent()` fast, offload heavy work to coroutines
 - Cache accessibility tree when possible; call `node.recycle()` after use
 - Check `node.refresh()` before using cached nodes (stale detection)
+- Fresh tree reads (`getFreshWindows`, `rawNodeExists`, the wait_for_idle fingerprint, `findFocusedEditableNode`) clear the framework node cache via `AccessibilityServiceProvider.clearFrameworkNodeCache()` inside `AccessibilityTreeLock` before traversing; traversals MUST NOT call per-node `refresh()` (one blocking IPC per node on the target app's UI thread). `refresh()` is used only to validate nodes taken from `AccessibilityNodeCache` (ActionExecutorImpl S1 check)
 - All node operations MUST happen on main thread
 - Use `performAction()` for element actions, `performGlobalAction()` for system actions, `dispatchGesture()` for complex touch sequences (API 24+)
 
@@ -643,7 +644,7 @@ The app supports exposing the local MCP server to the internet via tunnel provid
 
 - **Cloudflare Quick Tunnels** (default): Runs the `cloudflared` binary as a child process. Creates a temporary tunnel with a random `*.trycloudflare.com` HTTPS URL. No account or configuration needed. The cloudflared binary is bundled as a native library (`libcloudflared.so`) via a git submodule in `vendor/cloudflared/`.
 - **ngrok**: Uses the `ngrok-java` library (JNI-based, in-process). Requires an ngrok authtoken (free tier available). Supports optional custom domains. Available on arm64-v8a and x86_64 devices.
-- **WebSocket relay**: The device opens an outbound WebSocket (`<relayUrl>/device`, bearer-authenticated with the relay device token, ≥ 16 characters) to a relay you host — the Node service in `relay/` (container image from `relay/Dockerfile`). The relay forwards each HTTP request it receives as a JSON frame (`{"type":"request",id,method,path,headers,body(base64)}`); the app replays it against `http://127.0.0.1:<port>` (at most 8 concurrently, 100 s each, responses up to 8 MiB) and answers with a `response` frame. The relay URL is `ws[s]://host[:port]` only (no path); the public URL is the same authority with `wss`→`https` (`ws`→`http`). The provider reconnects with exponential backoff (1 s … 30 s, reset after a session ≥ 10 s) and redials a socket silent for 90 s. No inbound port on the device, no third-party account. The relay answers `GET /relay/health` itself; everything else reaches the app. Cleartext `ws://` is allowed only with a warning (loopback/private hosts excepted).
+- **WebSocket relay**: The device opens an outbound WebSocket (`<relayUrl>/device`, bearer-authenticated with the relay device token, ≥ 16 characters) to a relay you host — the Node service in `relay/` (container image from `relay/Dockerfile`). The relay forwards each HTTP request it receives as a JSON frame (`{"type":"request",id,method,path,headers,body(base64)}`); the app replays it against `http://127.0.0.1:<port>` (at most 8 concurrently, 100 s each, responses up to 8 MiB) and answers with a `response` frame. The relay URL is `ws[s]://host[:port]` only (no path); the public URL is the same authority with `wss`→`https` (`ws`→`http`). The provider reconnects with exponential backoff (1 s … 30 s, reset after a session ≥ 10 s) and redials a socket silent for 90 s. No inbound port on the device, no third-party account. The relay answers `GET /relay/health` itself; everything else reaches the app. Cleartext `ws://` is allowed only with a warning (loopback/private hosts excepted). Each relayed request is logged on both ends with the same `rid` (first 8 characters of the frame id): the relay writes `relay: request rid=… bodyMs=… deviceMs=… totalMs=…` and the app writes `Relay request rid=… queueMs=… replayMs=… totalMs=…` at info level under `MCP:RelaySession`. Only method, sanitized path, status, sizes and timings are logged, plus the JSON-RPC method and tool name of `POST /mcp` JSON bodies on the relay. Headers, query strings and bodies never are (see `relay/README.md`, "Request timing log").
 
 Tunnel architecture:
 - `TunnelProvider` interface defines `start(localPort, config)` / `stop()` with `status: StateFlow<TunnelStatus>`

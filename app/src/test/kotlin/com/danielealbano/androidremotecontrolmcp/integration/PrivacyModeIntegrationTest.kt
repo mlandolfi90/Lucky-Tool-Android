@@ -21,6 +21,7 @@ import com.danielealbano.androidremotecontrolmcp.privacy.ner.NerResult
 import com.danielealbano.androidremotecontrolmcp.privacy.ner.NerSegment
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityNodeData
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.BoundsData
+import com.danielealbano.androidremotecontrolmcp.services.accessibility.ElementInfo
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.ScreenInfo
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.WindowData
 import com.danielealbano.androidremotecontrolmcp.services.notifications.NotificationData
@@ -293,6 +294,103 @@ class PrivacyModeIntegrationTest {
                     )
                 assertNotEquals(true, result.isError)
                 assertEquals("john@example.com", valueSlot.captured)
+            }
+        }
+
+    @Test
+    fun `tap_node selector substitutes placeholder argument`() =
+        runTest {
+            val deps = McpIntegrationTestHelper.createMockDependencies()
+            McpIntegrationTestHelper.setPrivacy(deps, deterministicEnabled, PrivacyModeStatus.ReadyDeterministicOnly)
+            deps.setupTree(treeWith("placeholder-search-anchor"))
+
+            val placeholder = deps.privacyToolGate.text("john@example.com", "seed")
+            assertTrue(placeholder!!.startsWith("EMAIL#"))
+
+            val valueSlot = slot<String>()
+            every {
+                deps.elementFinder.findElements(any<List<WindowData>>(), any(), capture(valueSlot), any())
+            } returns
+                listOf(
+                    ElementInfo(
+                        id = "node_field",
+                        text = "john@example.com",
+                        className = "android.widget.TextView",
+                        bounds = BoundsData(100, 200, 900, 260),
+                        enabled = true,
+                        visible = true,
+                    ),
+                )
+            coEvery { deps.actionExecutor.tap(any(), any()) } returns Result.success(Unit)
+
+            McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                val result =
+                    client.callTool(
+                        name = "android_tap_node",
+                        arguments = mapOf("by" to "text", "value" to placeholder),
+                    )
+                assertNotEquals(true, result.isError)
+                assertEquals("john@example.com", valueSlot.captured)
+            }
+        }
+
+    @Test
+    fun `click_node ambiguous selector candidates are redacted`() =
+        runTest {
+            val deps = McpIntegrationTestHelper.createMockDependencies()
+            McpIntegrationTestHelper.setPrivacy(deps, deterministicEnabled, PrivacyModeStatus.ReadyDeterministicOnly)
+            deps.setupTree(treeWith("placeholder-search-anchor"))
+
+            val match =
+                ElementInfo(
+                    id = "node_one",
+                    text = "john@example.com",
+                    className = "android.widget.TextView",
+                    bounds = BoundsData(100, 200, 900, 260),
+                    clickable = true,
+                    enabled = true,
+                    visible = true,
+                )
+            every {
+                deps.elementFinder.findElements(any<List<WindowData>>(), any(), any(), any())
+            } returns listOf(match, match.copy(id = "node_two"))
+
+            McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                val result =
+                    client.callTool(
+                        name = "android_click_node",
+                        arguments = mapOf("by" to "text", "value" to "example"),
+                    )
+                assertEquals(true, result.isError)
+                val text = (result.content[0] as TextContent).text
+                assertTrue(text.contains("EMAIL#"))
+                assertFalse(text.contains("john@example.com"))
+            }
+        }
+
+    @Test
+    fun `click_node selector not found echoes no selector value`() =
+        runTest {
+            val deps = McpIntegrationTestHelper.createMockDependencies()
+            McpIntegrationTestHelper.setPrivacy(deps, deterministicEnabled, PrivacyModeStatus.ReadyDeterministicOnly)
+            deps.setupTree(treeWith("placeholder-search-anchor"))
+
+            val placeholder = deps.privacyToolGate.text("john@example.com", "seed")
+            assertTrue(placeholder!!.startsWith("EMAIL#"))
+            every {
+                deps.elementFinder.findElements(any<List<WindowData>>(), any(), any(), any())
+            } returns emptyList()
+
+            McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                val result =
+                    client.callTool(
+                        name = "android_click_node",
+                        arguments = mapOf("by" to "text", "value" to placeholder),
+                    )
+                assertEquals(true, result.isError)
+                val text = (result.content[0] as TextContent).text
+                assertFalse(text.contains(placeholder))
+                assertFalse(text.contains("john@example.com"))
             }
         }
 

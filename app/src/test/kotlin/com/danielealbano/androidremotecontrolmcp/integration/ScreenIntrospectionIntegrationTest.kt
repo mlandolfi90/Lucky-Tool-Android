@@ -8,6 +8,7 @@ import android.view.accessibility.AccessibilityWindowInfo
 import com.danielealbano.androidremotecontrolmcp.data.model.ScreenshotData
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityNodeData
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.BoundsData
+import com.danielealbano.androidremotecontrolmcp.services.accessibility.CompactTreeFormatter
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.PaginationTestTrees
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.ScreenInfo
 import com.danielealbano.androidremotecontrolmcp.services.screencapture.ScreenCaptureProvider
@@ -19,6 +20,8 @@ import io.mockk.verify
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -460,6 +463,136 @@ class ScreenIntrospectionIntegrationTest {
                     val result = client.callTool(name = "android_get_screen_state", arguments = emptyMap())
                     val text = (result.content[0] as TextContent).text
                     assertFalse(text.contains("page:"))
+                }
+            }
+    }
+
+    @Nested
+    @DisplayName("Output Options")
+    inner class OutputOptions {
+        private val mixedVisibilityTree =
+            AccessibilityNodeData(
+                id = "node_root",
+                className = "android.widget.FrameLayout",
+                resourceId = "com.example.app:id/root",
+                bounds = BoundsData(0, 0, 1080, 2400),
+                enabled = true,
+                visible = true,
+                children =
+                    listOf(
+                        AccessibilityNodeData(
+                            id = "node_on",
+                            className = "android.widget.Button",
+                            text = "OK",
+                            bounds = BoundsData(0, 0, 100, 48),
+                            clickable = true,
+                            enabled = true,
+                            visible = true,
+                        ),
+                        AccessibilityNodeData(
+                            id = "node_off",
+                            className = "android.widget.TextView",
+                            text = "Later",
+                            bounds = BoundsData(0, 2500, 100, 2548),
+                        ),
+                    ),
+            )
+
+        private fun MockDependencies.setupMixedTree() {
+            McpIntegrationTestHelper.setupMultiWindowMock(
+                deps = this,
+                tree = mixedVisibilityTree,
+                screenInfo = sampleScreenInfo,
+                packageName = "com.example.app",
+                activityName = ".MainActivity",
+            )
+        }
+
+        @Test
+        fun `get_screen_state include_offscreen false omits off rows over http`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.setupMixedTree()
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_get_screen_state",
+                            arguments = mapOf("include_offscreen" to false),
+                        )
+                    assertNotEquals(true, result.isError)
+                    val text = (result.content[0] as TextContent).text
+                    assertFalse(text.contains("\toff"), "off-screen row must be omitted")
+                    assertFalse(text.contains("node_off"))
+                    assertTrue(text.contains("node_on"))
+                    assertTrue(text.contains(CompactTreeFormatter.NOTE_LINE_OFFSCREEN_OMITTED))
+                }
+            }
+
+        @Test
+        fun `get_screen_state include_hierarchy false omits hierarchy over http`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.setupMixedTree()
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_get_screen_state",
+                            arguments = mapOf("include_hierarchy" to false),
+                        )
+                    assertNotEquals(true, result.isError)
+                    val text = (result.content[0] as TextContent).text
+                    assertFalse(text.contains("hierarchy:"))
+                    assertTrue(text.contains("node_on"))
+                }
+            }
+
+        @Test
+        fun `get_screen_state schema exposes new params with defaults`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.setupMixedTree()
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val tool = client.listTools().tools.find { it.name == "android_get_screen_state" }
+                    assertTrue(tool != null, "android_get_screen_state should be registered")
+                    val properties = tool!!.inputSchema.properties
+                    assertTrue(properties != null, "input schema should expose properties")
+                    assertEquals(
+                        listOf("include_screenshot", "cursor", "include_offscreen", "include_hierarchy"),
+                        properties!!.keys.toList(),
+                    )
+                    assertEquals(
+                        true,
+                        properties["include_offscreen"]!!
+                            .jsonObject["default"]!!
+                            .jsonPrimitive.content
+                            .toBoolean(),
+                    )
+                    assertEquals(
+                        true,
+                        properties["include_hierarchy"]!!
+                            .jsonObject["default"]!!
+                            .jsonPrimitive.content
+                            .toBoolean(),
+                    )
+                }
+            }
+
+        @Test
+        fun `get_screen_state invalid include_offscreen returns isError`() =
+            runTest {
+                val deps = McpIntegrationTestHelper.createMockDependencies()
+                deps.setupMixedTree()
+
+                McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                    val result =
+                        client.callTool(
+                            name = "android_get_screen_state",
+                            arguments = mapOf("include_offscreen" to "yes"),
+                        )
+                    assertEquals(true, result.isError)
                 }
             }
     }

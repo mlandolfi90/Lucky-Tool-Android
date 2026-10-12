@@ -5,11 +5,13 @@ import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.danielealbano.androidremotecontrolmcp.data.model.ScreenshotData
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
+import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyToolGate
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityNodeCache
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityNodeData
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityServiceProvider
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityTreeParser
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.BoundsData
+import com.danielealbano.androidremotecontrolmcp.services.accessibility.CompactFormatOptions
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.CompactTreeFormatter
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.PaginationTestTrees
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.ScreenInfo
@@ -29,12 +31,14 @@ import io.mockk.verifyOrder
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -141,7 +145,7 @@ class ScreenIntrospectionToolsTest {
         every { mockAccessibilityServiceProvider.getScreenInfo() } returns sampleScreenInfo
         every { mockTreeParser.parseTree(mockRootNode, "root_w0", any()) } returns sampleTree
         every {
-            mockCompactTreeFormatter.formatMultiWindow(any(), eq(sampleScreenInfo))
+            mockCompactTreeFormatter.formatMultiWindow(any(), eq(sampleScreenInfo), any())
         } returns sampleCompactOutput
         every { mockCompactTreeFormatter.shouldKeepNode(any()) } returns true
     }
@@ -403,6 +407,7 @@ class ScreenIntrospectionToolsTest {
                     mockCompactTreeFormatter.formatMultiWindow(
                         match { it.degraded },
                         eq(sampleScreenInfo),
+                        any(),
                     )
                 } returns degradedOutput
 
@@ -454,6 +459,105 @@ class ScreenIntrospectionToolsTest {
                     }
                 assertTrue(exception.message!!.contains("No windows available"))
             }
+
+        @Test
+        @DisplayName("passes default options when params absent")
+        fun passesDefaultOptionsWhenParamsAbsent() =
+            runTest {
+                setupReadyService()
+
+                handler.execute(null)
+
+                verify {
+                    mockCompactTreeFormatter.formatMultiWindow(
+                        any(),
+                        eq(sampleScreenInfo),
+                        eq(CompactFormatOptions()),
+                    )
+                }
+            }
+
+        @Test
+        @DisplayName("passes parsed options to formatter")
+        fun passesParsedOptionsToFormatter() =
+            runTest {
+                setupReadyService()
+
+                handler.execute(
+                    buildJsonObject {
+                        put("include_offscreen", false)
+                        put("include_hierarchy", false)
+                    },
+                )
+
+                verify {
+                    mockCompactTreeFormatter.formatMultiWindow(
+                        any(),
+                        eq(sampleScreenInfo),
+                        eq(CompactFormatOptions(includeOffscreen = false, includeHierarchy = false)),
+                    )
+                }
+            }
+
+        @Test
+        @DisplayName("rejects string include_offscreen")
+        fun rejectsStringIncludeOffscreen() =
+            runTest {
+                setupReadyService()
+
+                assertThrows<McpToolException.InvalidParams> {
+                    handler.execute(buildJsonObject { put("include_offscreen", "false") })
+                }
+            }
+
+        @Test
+        @DisplayName("rejects non-boolean include_hierarchy")
+        fun rejectsNonBooleanIncludeHierarchy() =
+            runTest {
+                setupReadyService()
+
+                assertThrows<McpToolException.InvalidParams> {
+                    handler.execute(buildJsonObject { put("include_hierarchy", 1) })
+                }
+            }
+
+        @Test
+        @DisplayName("rejects null include_offscreen")
+        fun rejectsNullIncludeOffscreen() =
+            runTest {
+                setupReadyService()
+
+                assertThrows<McpToolException.InvalidParams> {
+                    handler.execute(buildJsonObject { put("include_offscreen", JsonNull) })
+                }
+            }
+
+        @Test
+        @DisplayName("rejects object include_hierarchy")
+        fun rejectsObjectIncludeHierarchy() =
+            runTest {
+                setupReadyService()
+
+                assertThrows<McpToolException.InvalidParams> {
+                    handler.execute(buildJsonObject { putJsonObject("include_hierarchy") {} })
+                }
+            }
+
+        @Test
+        @DisplayName("rejects include_offscreen on cursor call when not boolean")
+        fun rejectsIncludeOffscreenOnCursorCall() =
+            runTest {
+                setupReadyService()
+
+                assertThrows<McpToolException.InvalidParams> {
+                    handler.execute(
+                        buildJsonObject {
+                            put("cursor", "x.2")
+                            put("include_offscreen", "no")
+                        },
+                    )
+                }
+            }
     }
 
     @Nested
@@ -463,9 +567,13 @@ class ScreenIntrospectionToolsTest {
         private lateinit var realCache: ScreenStateSnapshotCacheImpl
         private lateinit var handler: GetScreenStateHandler
 
+        // Held so the privacy rows can verify what the gate received (it must stay the full tree).
+        private lateinit var gate: PrivacyToolGate
+
         @BeforeEach
         fun setUp() {
             realCache = ScreenStateSnapshotCacheImpl()
+            gate = PrivacyToolTestDoubles.passthroughGate()
             handler =
                 GetScreenStateHandler(
                     mockTreeParser,
@@ -477,10 +585,42 @@ class ScreenIntrospectionToolsTest {
                     mockNodeCache,
                     realCache,
                     WebViewNodeMerger(),
-                    PrivacyToolTestDoubles.passthroughGate(),
+                    gate,
                     PrivacyToolTestDoubles.screenshotRedactor(),
                 )
         }
+
+        private fun offscreenParentTree(): AccessibilityNodeData =
+            AccessibilityNodeData(
+                id = "node_root",
+                className = "android.widget.FrameLayout",
+                resourceId = "com.example.app:id/root",
+                bounds = BoundsData(0, 0, 1080, 2400),
+                enabled = true,
+                visible = true,
+                children =
+                    listOf(
+                        AccessibilityNodeData(
+                            id = "node_off_parent",
+                            className = "android.widget.FrameLayout",
+                            resourceId = "com.example.app:id/off_parent",
+                            bounds = BoundsData(0, 0, 100, 100),
+                            enabled = true,
+                            visible = false,
+                            children =
+                                listOf(
+                                    AccessibilityNodeData(
+                                        id = "node_on_child",
+                                        className = "android.widget.TextView",
+                                        text = "Child",
+                                        bounds = BoundsData(0, 0, 100, 50),
+                                        enabled = true,
+                                        visible = true,
+                                    ),
+                                ),
+                        ),
+                    ),
+            )
 
         // 252 kept (anc 2 + 250 leaves) -> 2 pages; 12 kept -> single page.
         private fun largeTree() = PaginationTestTrees.keptNodeWindow(250).tree
@@ -653,6 +793,135 @@ class ScreenIntrospectionToolsTest {
                 val text = (result.content[0] as TextContent).text
                 assertTrue(text.contains("invalid cursor"))
                 assertTrue(text.contains("screenshot can only be requested on page 1"))
+            }
+
+        @Test
+        @DisplayName("include_offscreen false shrinks page count")
+        fun includeOffscreenFalseShrinksPageCount() =
+            runTest {
+                stubCaptureWithTree(PaginationTestTrees.mixedVisibilityWindow(250, 2).tree)
+                val firstId = snapshotId(freshText())
+
+                val params = buildJsonObject { put("include_offscreen", false) }
+                val text = (handler.execute(params).content[0] as TextContent).text
+                assertFalse(text.contains("page:"))
+                assertNull(realCache.get(firstId))
+            }
+
+        @Test
+        @DisplayName("cursor page reuses snapshot options")
+        fun cursorPageReusesSnapshotOptions() =
+            runTest {
+                stubCaptureWithTree(largeTree())
+                val params = buildJsonObject { put("include_hierarchy", false) }
+                val fresh = (handler.execute(params).content[0] as TextContent).text
+                assertTrue(fresh.contains("page:1/2"))
+                val id = snapshotId(fresh)
+
+                val cursorParams =
+                    buildJsonObject {
+                        put("cursor", "$id.2")
+                        put("include_hierarchy", true)
+                    }
+                val page2 = (handler.execute(cursorParams).content[0] as TextContent).text
+                assertFalse(page2.lines().contains(CompactTreeFormatter.HIERARCHY_HEADER))
+            }
+
+        @Test
+        @DisplayName("snapshot stores options")
+        fun snapshotStoresOptions() =
+            runTest {
+                stubCaptureWithTree(largeTree())
+                val params = buildJsonObject { put("include_hierarchy", false) }
+                val id = snapshotId((handler.execute(params).content[0] as TextContent).text)
+
+                assertEquals(
+                    CompactFormatOptions(includeOffscreen = true, includeHierarchy = false),
+                    realCache.get(id)!!.options,
+                )
+            }
+
+        @Test
+        @DisplayName("include_offscreen false still redacts the full tree")
+        fun includeOffscreenFalseStillRedactsFullTree() =
+            runTest {
+                stubCaptureWithTree(offscreenParentTree())
+
+                val params = buildJsonObject { put("include_offscreen", false) }
+                val text = (handler.execute(params).content[0] as TextContent).text
+
+                coVerify(exactly = 1) {
+                    gate.tree(
+                        match { r ->
+                            r.windows
+                                .single()
+                                .tree.children
+                                .any { it.id == "node_off_parent" }
+                        },
+                    )
+                }
+                assertFalse(text.contains("node_off_parent"))
+                assertTrue(text.contains("node_on_child"))
+            }
+
+        @Test
+        @DisplayName("include_offscreen false keeps screenshot annotation unchanged")
+        fun includeOffscreenFalseKeepsScreenshotAnnotationUnchanged() =
+            runTest {
+                stubCaptureWithTree(offscreenParentTree())
+                every { mockScreenCaptureProvider.isScreenCaptureAvailable() } returns true
+                val mockBitmap = mockk<Bitmap>(relaxed = true)
+                coEvery {
+                    mockScreenCaptureProvider.captureScreenshotBitmap(any(), any())
+                } returns Result.success(mockBitmap)
+                val annotated = mutableListOf<List<AccessibilityNodeData>>()
+                every {
+                    mockScreenshotAnnotator.annotate(any(), capture(annotated), any(), any())
+                } returns mockBitmap
+                every {
+                    mockScreenshotEncoder.bitmapToScreenshotData(any(), any())
+                } returns ScreenshotData(data = "imgdata", width = 700, height = 500)
+
+                handler.execute(buildJsonObject { put("include_screenshot", true) })
+                handler.execute(
+                    buildJsonObject {
+                        put("include_screenshot", true)
+                        put("include_offscreen", false)
+                    },
+                )
+
+                assertEquals(2, annotated.size)
+                assertEquals(annotated[0], annotated[1])
+                assertTrue(annotated[0].any { it.id == "node_on_child" })
+            }
+
+        @Test
+        @DisplayName("include_offscreen false with all nodes off-screen returns an empty page and clears the cache")
+        fun includeOffscreenFalseWithAllNodesOffScreenReturnsEmptyPage() =
+            runTest {
+                stubCaptureWithTree(largeTree())
+                val firstId = snapshotId(freshText())
+
+                stubCaptureWithTree(PaginationTestTrees.allOffscreen(largeTree()))
+                val result = handler.execute(buildJsonObject { put("include_offscreen", false) })
+                assertNotEquals(true, result.isError)
+                val text = (result.content[0] as TextContent).text
+                assertFalse(text.contains("page:"))
+                assertTrue(
+                    text.lines().none { it.startsWith("node_") && it != CompactTreeFormatter.HEADER },
+                )
+                assertNull(realCache.get(firstId))
+            }
+
+        @Test
+        @DisplayName("include_offscreen false still populates the node cache")
+        fun includeOffscreenFalseStillPopulatesNodeCache() =
+            runTest {
+                stubCaptureWithTree(offscreenParentTree())
+
+                handler.execute(buildJsonObject { put("include_offscreen", false) })
+
+                verify(exactly = 1) { mockNodeCache.populate(any()) }
             }
     }
 }

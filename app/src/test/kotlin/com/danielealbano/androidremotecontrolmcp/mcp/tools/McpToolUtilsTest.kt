@@ -3,9 +3,12 @@ package com.danielealbano.androidremotecontrolmcp.mcp.tools
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
 import io.modelcontextprotocol.kotlin.sdk.types.ImageContent
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Nested
@@ -365,6 +368,75 @@ class McpToolUtilsTest {
     }
 
     // ─────────────────────────────────────────────────────────────────────
+    // optionalBoolean
+    // ─────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("optionalBoolean")
+    inner class OptionalBooleanTests {
+        @Test
+        @DisplayName("returns default when parameter is absent")
+        fun returnsDefaultWhenAbsent() {
+            val params = buildJsonObject {}
+            assertTrue(McpToolUtils.optionalBoolean(params, "flag", true))
+            assertFalse(McpToolUtils.optionalBoolean(params, "flag", false))
+            assertTrue(McpToolUtils.optionalBoolean(null, "flag", true))
+            assertFalse(McpToolUtils.optionalBoolean(null, "flag", false))
+        }
+
+        @Test
+        @DisplayName("returns true and false")
+        fun returnsParsedValue() {
+            assertTrue(McpToolUtils.optionalBoolean(buildJsonObject { put("flag", true) }, "flag", false))
+            assertFalse(McpToolUtils.optionalBoolean(buildJsonObject { put("flag", false) }, "flag", true))
+        }
+
+        @Test
+        @DisplayName("rejects string-encoded boolean")
+        fun rejectsStringEncodedBoolean() {
+            val params = buildJsonObject { put("flag", "true") }
+
+            val exception =
+                assertThrows<McpToolException.InvalidParams> {
+                    McpToolUtils.optionalBoolean(params, "flag", false)
+                }
+            assertTrue(exception.message!!.contains("got string"))
+        }
+
+        @Test
+        @DisplayName("rejects number")
+        fun rejectsNumber() {
+            val params = buildJsonObject { put("flag", 1) }
+
+            assertThrows<McpToolException.InvalidParams> {
+                McpToolUtils.optionalBoolean(params, "flag", false)
+            }
+        }
+
+        @Test
+        @DisplayName("rejects JSON null")
+        fun rejectsJsonNull() {
+            val params = buildJsonObject { put("flag", JsonNull) }
+
+            assertThrows<McpToolException.InvalidParams> {
+                McpToolUtils.optionalBoolean(params, "flag", false)
+            }
+        }
+
+        @Test
+        @DisplayName("rejects object")
+        fun rejectsObject() {
+            val params = buildJsonObject { putJsonObject("flag") {} }
+
+            val exception =
+                assertThrows<McpToolException.InvalidParams> {
+                    McpToolUtils.optionalBoolean(params, "flag", false)
+                }
+            assertTrue(exception.message!!.contains("must be a boolean"))
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
     // validateNonNegative
     // ─────────────────────────────────────────────────────────────────────
 
@@ -582,6 +654,31 @@ class McpToolUtilsTest {
             val result = McpToolUtils.untrustedTextResult("data")
             val text = (result.content[0] as TextContent).text
             assertEquals("${McpToolUtils.UNTRUSTED_CONTENT_WARNING}\ndata", text)
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────
+    // untrustedErrorResult
+    // ─────────────────────────────────────────────────────────────────────
+
+    @Nested
+    @DisplayName("untrustedErrorResult")
+    inner class UntrustedErrorResultTests {
+        @Test
+        @DisplayName("sets isError true")
+        fun setsIsErrorTrue() {
+            val result = McpToolUtils.untrustedErrorResult("boom")
+            assertEquals(true, result.isError)
+        }
+
+        @Test
+        @DisplayName("prepends warning as first line")
+        fun prependsWarningAsFirstLine() {
+            val result = McpToolUtils.untrustedErrorResult("payload")
+            assertEquals(1, result.content.size)
+            val text = (result.content[0] as TextContent).text
+            assertTrue(text.startsWith("${McpToolUtils.UNTRUSTED_CONTENT_WARNING}\n"))
+            assertTrue(text.endsWith("payload"))
         }
     }
 
