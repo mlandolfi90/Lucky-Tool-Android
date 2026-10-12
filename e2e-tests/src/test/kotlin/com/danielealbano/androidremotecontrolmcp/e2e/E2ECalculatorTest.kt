@@ -8,6 +8,7 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.api.TestMethodOrder
+import org.junit.jupiter.api.fail
 
 /**
  * E2E test: Calculator App (7 + 3 = 10)
@@ -76,6 +78,21 @@ class E2ECalculatorTest {
          * Delay between retry attempts in milliseconds.
          */
         private const val RETRY_DELAY_MS = 3_000L
+
+        /**
+         * Resource ID of the Simple Calculator result display.
+         */
+        private const val RESULT_ID = "$CALCULATOR_PACKAGE:id/result"
+
+        /**
+         * Resource ID of the visible clear button (`C`); `btn_reset` (`AC`) is `visibility=gone`.
+         */
+        private const val CLEAR_ID = "$CALCULATOR_PACKAGE:id/btn_clear"
+
+        /**
+         * Maximum number of clear presses before giving up on emptying the display.
+         */
+        private const val MAX_CLEAR_PRESSES = 6
     }
 
     @BeforeEach
@@ -216,6 +233,80 @@ class E2ECalculatorTest {
         assertNotNull(data, "Screenshot data should not be null")
         assertFalse(data.isEmpty(), "Screenshot data should not be empty")
         assertTrue(data.length > 100, "Screenshot data should be substantial (got ${data.length} chars)")
+    }
+
+    @Test
+    @Order(4)
+    fun `calculate 8 plus 5 via click_node selector`() = runBlocking {
+        mcpClient.callTool("${TOOL_PREFIX}press_home")
+        Thread.sleep(1_000)
+
+        AndroidContainerSetup.launchCalculator()
+        val treeStrOrNull = waitForAppVisible(CALCULATOR_PACKAGE, "Calculator", APP_LAUNCH_TIMEOUT_MS)
+        assertNotNull(
+            treeStrOrNull,
+            "Calculator should be visible in screen state within ${APP_LAUNCH_TIMEOUT_MS}ms",
+        )
+
+        // launchCalculator does not force-stop, so the display may still hold the previous result.
+        for (attempt in 1..MAX_CLEAR_PRESSES) {
+            if (resultText() in setOf("", "0")) break
+            clickBySelectorWithRetry("resource_id", CLEAR_ID)
+            Thread.sleep(500)
+        }
+        assertTrue(resultText() in setOf("", "0"), "display not cleared: '${resultText()}'")
+
+        clickBySelectorWithRetry("text", "8")
+        Thread.sleep(500)
+        clickBySelectorWithRetry("text", "+")
+        Thread.sleep(500)
+        clickBySelectorWithRetry("text", "5")
+        Thread.sleep(500)
+        clickBySelectorWithRetry("text", "=")
+        Thread.sleep(1_000)
+
+        mcpClient.callTool("${TOOL_PREFIX}wait_for_idle", mapOf("timeout" to 3000))
+
+        assertEquals("13", resultText(), "8 + 5 should display exactly 13")
+    }
+
+    /**
+     * Calls click_node with a selector, retrying only on an `isError` result (every `isError` path of
+     * click_node performs no click, so a retry cannot press twice). Exceptions are NOT caught: a
+     * transport error may follow a click the server already performed.
+     */
+    private suspend fun clickBySelectorWithRetry(by: String, value: String) {
+        val startTime = System.currentTimeMillis()
+        var lastText: String? = null
+
+        while (System.currentTimeMillis() - startTime < NODE_WAIT_TIMEOUT_MS) {
+            val result = mcpClient.callTool(
+                "${TOOL_PREFIX}click_node",
+                mapOf("by" to by, "value" to value, "exact_match" to true),
+            )
+            if (result.isError != true) return
+            lastText = (result.content.firstOrNull() as? TextContent)?.text
+            Thread.sleep(500)
+        }
+
+        fail("click_node $by='$value' did not succeed within $NODE_WAIT_TIMEOUT_MS ms; last: $lastText")
+    }
+
+    /**
+     * Returns the text of the calculator result node, failing the test when the node cannot be read.
+     */
+    private suspend fun resultText(): String {
+        val result = mcpClient.callTool(
+            "${TOOL_PREFIX}find_nodes",
+            mapOf("by" to "resource_id", "value" to RESULT_ID, "exact_match" to true),
+        )
+        val text = (result.content.firstOrNull() as? TextContent)?.text
+        if (result.isError == true) {
+            fail("find_nodes for the result failed: $text")
+        }
+        val nodes = Json.parseToJsonElement(stripUntrustedWarning(text ?: "")).jsonObject["nodes"]!!.jsonArray
+        assertEquals(1, nodes.size, "Expected exactly one $RESULT_ID node, got ${nodes.size}")
+        return nodes[0].jsonObject["text"]?.jsonPrimitive?.contentOrNull ?: ""
     }
 
     /**
