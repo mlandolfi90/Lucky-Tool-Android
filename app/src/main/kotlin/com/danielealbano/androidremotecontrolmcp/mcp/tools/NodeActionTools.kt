@@ -72,6 +72,7 @@ class FindNodesTool
             val value = substitutor.substitute(rawValue)
 
             val exactMatch = arguments["exact_match"]?.jsonPrimitive?.booleanOrNull ?: false
+            val visibleOnly = McpToolUtils.optionalBoolean(arguments, PARAM_VISIBLE_ONLY, false)
 
             val findBy =
                 mapFindBy(byStr)
@@ -85,7 +86,7 @@ class FindNodesTool
             // Search across all windows
             val elements = elementFinder.findElements(result.windows, findBy, value, exactMatch)
 
-            Log.d(TAG, "find_nodes: by=$byStr, found=${elements.size}")
+            Log.d(TAG, "find_nodes: by=$byStr, visibleOnly=$visibleOnly, found=${elements.size}")
 
             val redactedFields =
                 privacyToolGate.texts(
@@ -95,13 +96,15 @@ class FindNodesTool
                 elements.mapIndexed { index, element ->
                     element.copy(text = redactedFields[index * 2], contentDescription = redactedFields[index * 2 + 1])
                 }
+            // Filter AFTER redaction: the privacy pass keeps today's input (WindowPacker batches all segments).
+            val returnedElements = if (visibleOnly) redactedElements.filter { it.visible } else redactedElements
 
             val resultJson =
                 buildJsonObject {
                     put(
                         "nodes",
                         buildJsonArray {
-                            redactedElements.forEach { element ->
+                            returnedElements.forEach { element ->
                                 add(McpToolUtils.buildNodeJson(element))
                             }
                         },
@@ -150,6 +153,15 @@ class FindNodesTool
                                         "If true, match exactly. If false, match contains (case-insensitive)",
                                     )
                                 }
+                                putJsonObject(PARAM_VISIBLE_ONLY) {
+                                    put("type", "boolean")
+                                    put("default", false)
+                                    put(
+                                        "description",
+                                        "If true, return only nodes visible to the user (visible=true); " +
+                                            "off-screen matches are omitted",
+                                    )
+                                }
                             },
                         required = listOf("by", "value"),
                     ),
@@ -159,6 +171,7 @@ class FindNodesTool
         companion object {
             private const val TAG = "MCP:FindNodesTool"
             const val TOOL_NAME = "find_nodes"
+            internal const val PARAM_VISIBLE_ONLY = "visible_only"
         }
     }
 

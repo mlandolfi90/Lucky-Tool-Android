@@ -110,6 +110,59 @@ class NodeActionIntegrationTest {
         }
 
     @Test
+    fun `find_nodes visible_only filters over http`() =
+        runTest {
+            val deps = McpIntegrationTestHelper.createMockDependencies()
+            McpIntegrationTestHelper.setupMultiWindowMock(deps, sampleTree, sampleScreenInfo)
+            val visible =
+                ElementInfo(
+                    id = "node_btn",
+                    text = "OK",
+                    className = "android.widget.Button",
+                    bounds = BoundsData(50, 800, 250, 1000),
+                    clickable = true,
+                    enabled = true,
+                    visible = true,
+                )
+            every {
+                deps.elementFinder.findElements(any<List<WindowData>>(), FindBy.TEXT, "OK", false)
+            } returns listOf(visible, visible.copy(id = "node_hidden", visible = false))
+
+            McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                val result =
+                    client.callTool(
+                        name = "android_find_nodes",
+                        arguments = mapOf("by" to "text", "value" to "OK", "visible_only" to true),
+                    )
+                assertNotEquals(true, result.isError)
+
+                val textContent = (result.content[0] as TextContent).text
+                val parsed = Json.parseToJsonElement(stripUntrustedWarning(textContent)).jsonObject
+                val elements = parsed["nodes"]!!.jsonArray
+                assertEquals(1, elements.size)
+                assertEquals("node_btn", elements[0].jsonObject["node_id"]?.jsonPrimitive?.content)
+            }
+        }
+
+    @Test
+    fun `find_nodes schema exposes visible_only default false`() =
+        runTest {
+            val deps = McpIntegrationTestHelper.createMockDependencies()
+            McpIntegrationTestHelper.setupMultiWindowMock(deps, sampleTree, sampleScreenInfo)
+
+            McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                val tool = client.listTools().tools.find { it.name == "android_find_nodes" }
+                assertTrue(tool != null, "android_find_nodes should be registered")
+                val visibleOnly = tool!!.inputSchema.properties?.get("visible_only")
+                assertTrue(visibleOnly != null, "visible_only should be exposed in the schema")
+                assertEquals(
+                    false,
+                    visibleOnly!!.jsonObject["default"]!!.jsonPrimitive.content.toBoolean(),
+                )
+            }
+        }
+
+    @Test
     fun `click_node with valid node_id calls actionExecutor and returns success`() =
         runTest {
             val deps = McpIntegrationTestHelper.createMockDependencies()

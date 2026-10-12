@@ -18,6 +18,7 @@ import com.danielealbano.androidremotecontrolmcp.services.accessibility.ScreenIn
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.WindowData
 import com.danielealbano.androidremotecontrolmcp.testutil.PrivacyToolTestDoubles
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
@@ -27,6 +28,8 @@ import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -34,6 +37,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertNotEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
@@ -221,15 +225,32 @@ class NodeActionToolsTest {
     @Nested
     @DisplayName("FindNodesTool")
     inner class FindNodesToolTests {
+        // Held so the visible_only rows can verify what the privacy gate received.
+        private val gate = PrivacyToolTestDoubles.passthroughGate()
+
         private val tool =
             FindNodesTool(
                 mockTreeParser,
                 mockElementFinder,
                 mockAccessibilityServiceProvider,
                 mockNodeCache,
-                PrivacyToolTestDoubles.passthroughGate(),
+                gate,
                 PrivacyToolTestDoubles.identitySubstitutor(),
             )
+
+        private val offScreenElementInfo = sampleElementInfo.copy(id = "node_off", visible = false)
+
+        private fun stubTwoMatches() {
+            every {
+                mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "7", false)
+            } returns listOf(sampleElementInfo, offScreenElementInfo)
+        }
+
+        private suspend fun nodeIds(params: JsonObject): List<String> {
+            val text = extractTextContent(tool.execute(params))
+            val parsed = Json.parseToJsonElement(stripUntrustedWarning(text)).jsonObject
+            return parsed["nodes"]!!.jsonArray.map { it.jsonObject["node_id"]!!.jsonPrimitive.content }
+        }
 
         @Test
         fun `returns matching nodes`() =
@@ -333,6 +354,112 @@ class NodeActionToolsTest {
                 val params = buildJsonObject { put("value", "test") }
 
                 assertThrows<McpToolException.InvalidParams> { tool.execute(params) }
+            }
+
+        @Test
+        fun `visible_only true omits off-screen matches`() =
+            runTest {
+                stubTwoMatches()
+                val params =
+                    buildJsonObject {
+                        put("by", "text")
+                        put("value", "7")
+                        put("visible_only", true)
+                    }
+
+                assertEquals(listOf("node_abc"), nodeIds(params))
+            }
+
+        @Test
+        fun `visible_only absent returns all matches`() =
+            runTest {
+                stubTwoMatches()
+                val params =
+                    buildJsonObject {
+                        put("by", "text")
+                        put("value", "7")
+                    }
+
+                assertEquals(listOf("node_abc", "node_off"), nodeIds(params))
+            }
+
+        @Test
+        fun `rejects string visible_only`() =
+            runTest {
+                stubTwoMatches()
+                val params =
+                    buildJsonObject {
+                        put("by", "text")
+                        put("value", "7")
+                        put("visible_only", "true")
+                    }
+
+                assertThrows<McpToolException.InvalidParams> { tool.execute(params) }
+            }
+
+        @Test
+        fun `rejects number visible_only`() =
+            runTest {
+                stubTwoMatches()
+                val params =
+                    buildJsonObject {
+                        put("by", "text")
+                        put("value", "7")
+                        put("visible_only", 1)
+                    }
+
+                assertThrows<McpToolException.InvalidParams> { tool.execute(params) }
+            }
+
+        @Test
+        fun `rejects null visible_only`() =
+            runTest {
+                stubTwoMatches()
+                val params =
+                    buildJsonObject {
+                        put("by", "text")
+                        put("value", "7")
+                        put("visible_only", JsonNull)
+                    }
+
+                assertThrows<McpToolException.InvalidParams> { tool.execute(params) }
+            }
+
+        @Test
+        fun `visible_only filters after privacy gate`() =
+            runTest {
+                stubTwoMatches()
+                val params =
+                    buildJsonObject {
+                        put("by", "text")
+                        put("value", "7")
+                        put("visible_only", true)
+                    }
+
+                tool.execute(params)
+
+                // 2 matches x 2 fields: the gate still sees every match, visible or not.
+                coVerify { gate.texts(match { it.size == 4 }) }
+            }
+
+        @Test
+        fun `visible_only true with only off-screen matches returns empty nodes`() =
+            runTest {
+                every {
+                    mockElementFinder.findElements(sampleWindows, FindBy.TEXT, "9", false)
+                } returns listOf(offScreenElementInfo)
+                val params =
+                    buildJsonObject {
+                        put("by", "text")
+                        put("value", "9")
+                        put("visible_only", true)
+                    }
+
+                val result = tool.execute(params)
+                assertNotEquals(true, result.isError)
+                val parsed =
+                    Json.parseToJsonElement(stripUntrustedWarning(extractTextContent(result))).jsonObject
+                assertEquals(0, parsed["nodes"]!!.jsonArray.size)
             }
     }
 
