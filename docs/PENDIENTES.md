@@ -156,3 +156,46 @@ plan.
   cada grupo se arregla en la raíz.
 - Decide el humano: si el objetivo es llegar a cero advertencias y si el portón de CI pasa a fallar
   cuando aparezca una nueva.
+
+## 7. Despertar al agente con el canal de eventos
+
+Pedido del humano el 2026-10-12: «guarda como pendiente lo de despertar al agente. con el event
+chanel». Surgió al preguntar qué es el canal y cómo se hace que un agente se entere o se dispare.
+
+- Medido el 2026-10-12 en `1e3ef93`, leyendo el código del canal:
+  - el teléfono hace `POST <endpointUrl>/event` con JSON `{type, timestamp, data}` y
+    `Authorization: Bearer <token>` si hay (`services/channel/EventDispatcherImpl.kt:109`);
+  - además le pega `GET <endpointUrl>/health` cada 30 s, y si no contesta la app se pone en estado
+    Error (`EventChannelService.kt:208`). El receptor tiene que contestar las dos rutas;
+  - timeouts: 5 s de pedido, 3 s de conexión (`EventDispatcherImpl.kt:163`);
+  - eventos hoy: `notification` (paquete, título, texto, categoría y las acciones del aviso) y
+    `wifi` (ssid, `discovered` / `lost`); en el sabor gms hay además geocercas
+    (`GeofenceChannelController.kt`);
+  - apagado por defecto, endpoint por defecto `http://localhost:9090`
+    (`data/model/EventChannelConfig.kt`);
+  - **sin cola y sin reintento**: cada evento se despacha una sola vez y, si el receptor no está,
+    se pierde y sólo queda una línea en el log.
+- El problema de fondo: el canal le habla a un servidor HTTP, y un agente no es un servidor. Hace
+  falta algo en el medio que conteste `/event` y `/health`.
+- Los tres caminos, de más simple a más inmediato:
+  1. **El agente pregunta.** Un receptor chico en VPS-A, al lado del relay, que guarda los eventos;
+     la sesión los lee cada tanto. Robusto: si el agente está dormido, los eventos no se pierden.
+     La demora es el intervalo de consulta.
+  2. **El receptor despierta al agente.** Claude Code tiene rutinas con disparadores por webhook,
+     pero las fuentes que se ven son del tipo GitHub. Sin verificar: si un receptor propio puede
+     dispararlas directo, o si hay que encadenar receptor → evento de GitHub → rutina. Es el único
+     camino con reacción en segundos.
+  3. **Por Slack.** El receptor publica en el canal que ya usan las sesiones; un agente lo lee
+     cuando está, o avisa al humano.
+- Propuesta: el camino 1, y agregarle el push del camino 2 sólo si la demora molesta de verdad.
+- **Dos cosas a resolver antes de construir, no después:**
+  - **Inyección.** El texto de una notificación es contenido no confiable. Si un agente lee
+    `data.text` y actúa, cualquiera que mande una notificación al teléfono le está escribiendo
+    instrucciones al agente. El lado MCP ya pone la advertencia de contenido no confiable en cada
+    respuesta (regla de `CLAUDE.md`), pero **el canal manda JSON crudo sin ninguna advertencia** y
+    eso no está escrito en ningún lado. Quien lo consuma tiene que tratarlo como dato, nunca como
+    instrucción.
+  - **Privacidad.** Esto saca del teléfono los títulos y textos de todas las notificaciones, las de
+    apps de dinero incluidas, hacia el VPS. Pide filtro por app y pasar por Privacy Mode.
+- Decide el humano: qué eventos salen del teléfono, con qué filtro, y si la reacción tiene que ser
+  en segundos o alcanza con que el agente pregunte cada tanto.
