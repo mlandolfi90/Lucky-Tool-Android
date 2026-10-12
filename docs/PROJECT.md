@@ -137,7 +137,7 @@ The typical startup flow: User opens app → enables Accessibility Service in An
   - `services/mcp/` — `McpServerService.kt`, `BootCompletedReceiver.kt`, `AdbConfigHandler.kt`, `AdbConfigReceiver.kt`, `AdbServiceTrampolineActivity.kt`
   - `services/tunnel/` — `TunnelProvider.kt`, `TunnelManager.kt`, `CloudflareTunnelProvider.kt`, `CloudflaredBinaryResolver.kt`, `AndroidCloudflareBinaryResolver.kt`, `NgrokTunnelProvider.kt`, `RelayTunnelProvider.kt`, `RelaySession.kt`, `RelayTarget.kt`, `RelayFrames.kt`, `LocalRequestReplayer.kt`
   - `mcp/` — `McpServer.kt`, `McpStatelessTransport.kt`, `McpToolException.kt`, `CertificateManager.kt`
-  - `mcp/tools/` — `McpToolUtils.kt`, `TreeFingerprint.kt`, `ScreenIntrospectionTools.kt`, `TouchActionTools.kt`, `NodeActionTools.kt`, `TextInputTools.kt`, `SystemActionTools.kt`, `GestureTools.kt`, `UtilityTools.kt`, `FileTools.kt`, `AppManagementTools.kt`, `CameraTools.kt`, `LocationTools.kt`
+  - `mcp/tools/` — `McpToolUtils.kt`, `TreeFingerprint.kt`, `ScreenIntrospectionTools.kt`, `TouchActionTools.kt`, `NodeActionTools.kt`, `NodeSelectorResolver.kt`, `TextInputTools.kt`, `SystemActionTools.kt`, `GestureTools.kt`, `UtilityTools.kt`, `FileTools.kt`, `AppManagementTools.kt`, `CameraTools.kt`, `LocationTools.kt`
   - `mcp/auth/` — `BearerTokenAuth.kt`
   - `ui/` — `MainActivity.kt`
   - `ui/theme/` — `Theme.kt`, `Color.kt`, `Type.kt`
@@ -232,12 +232,12 @@ The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas,
 | Tool | Description | Required Params | Optional Params |
 |------|-------------|-----------------|-----------------|
 | `android_find_nodes` | Find UI nodes by criteria | `by` (string: text/content_desc/resource_id/class_name), `value` (string) | `exact_match` (boolean, default false), `visible_only` (boolean, default false) |
-| `android_click_node` | Click an accessibility node | `node_id` (string) | — |
+| `android_click_node` | Click an accessibility node | `node_id` (string) OR selector `by` (string: text/content_desc/resource_id/class_name) + `value` (string) | `exact_match` (boolean, default false; selector only) |
 | `android_long_click_node` | Long-click an accessibility node | `node_id` (string) | — |
-| `android_tap_node` | Gesture-based tap at a random point within node bounds (unlike `android_click_node`, which uses ACTION_CLICK) | `node_id` (string) | `inset_percentage` (number: 0.0-45.0, default 5.0) |
+| `android_tap_node` | Gesture-based tap at a random point within node bounds (unlike `android_click_node`, which uses ACTION_CLICK) | `node_id` (string) OR selector `by` (string: text/content_desc/resource_id/class_name) + `value` (string) | `exact_match` (boolean, default false; selector only), `inset_percentage` (number: 0.0-45.0, default 5.0) |
 | `android_scroll_to_node` | Scroll to make node visible | `node_id` (string) | — |
 
-**Errors**: Returns `CallToolResult(isError = true)` if node not found (ID invalid or stale) or node not clickable. `android_find_nodes` returns empty array (not error) when no matches found.
+**Errors**: Returns `CallToolResult(isError = true)` if node not found (ID invalid or stale) or node not clickable. `android_find_nodes` returns empty array (not error) when no matches found. `android_click_node`/`android_tap_node` with a selector return an error when no on-screen node matches, or an untrusted-warning error listing candidates when more than one on-screen node matches.
 
 ### 4. Text Input Tools (5 tools)
 
