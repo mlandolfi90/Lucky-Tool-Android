@@ -3195,3 +3195,18 @@ Round 2 verified every round-1 row (C1, C2, W1-W5, I1-I9) as fixed, and reported
 | I2-3 | INFO: two relay test helpers beyond the plan's Setup (`recorded(overrides)`, `oneLine(logger)`), and `deviceMs covers the device's answer time` passes `requestTimeoutMs: 2_000`, an override the plan's row does not mention | Kept and declared. The helpers keep the 15 timing rows readable; the timeout override only removes flakiness (the 300 ms default would already cover the row's `sleep(60)`). Row behaviour is unaffected |
 | I2-4 | INFO: `RelayTunnelProviderTest` extracts `withCapturedInfo { }` instead of the plan's inline `mockkStatic` / `try`-`finally` per test, and additionally stubs `Log.d`, `Log.w(2)`, `Log.w(3)`, `Log.e(2)`, `Log.e(3)` | Kept and declared. The extra stubs are required — a static mock rejects unstubbed calls — and the helper preserves the Task 4.5 DoD contract that every test unmocks in a `finally` |
 | I2-5 | INFO: within US4 the device commit (`737310f`) precedes the relay commit (`b290f90`), the reverse of the plan's suggested-commit table | Declared. The two sides are independent languages and each commit compiles and tests on its own, so no item depends on one after it |
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 3, 2026-10-12
+
+**Clean: no critical, warning or info finding.** Round 3 verified the four items round 2 left open and
+checked the two docs-only commits since the last code change for regressions.
+
+| ID | Checked | Result |
+|----|---------|--------|
+| W2-1 | The warning gate after the user's decision | Decision recorded in the round-2 row, Q.1 DoD item 1 closed, the four `labeledBy` lines named in the PR body with the zero-introduced claim, and `readLabeledByText` byte-identical to the base. The parser's four hunks sit at lines 19-30, 159, 197 and 262 — none near line 226 — and the parser test is additions-only |
+| I2-1 | The moved `get_screen_state` error bullet | Now the last bullet of Error Cases, its text byte-identical to the plan's block, the commit a pure one-line move with nothing else in the section changed |
+| I2-3, I2-4, I2-5 | The three declarations | Each has its row in the round-2 section and its line in the PR body's declared deviations |
+| I2-2 | The four Q.1 DoD checkboxes | All `[x]`, the reversion item keeping the plan's own "(Kotlin rows only under G5)" wording |
+| — | Regression over the two newest commits | `116ea41..c6d7622` touches exactly two files, both documentation. No plan text modified or deleted, the sacred header intact, no other file in `docs/plans/` touched anywhere on the branch, and no AI attribution in either message |
