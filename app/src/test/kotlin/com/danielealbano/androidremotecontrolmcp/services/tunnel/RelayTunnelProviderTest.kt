@@ -1,5 +1,6 @@
 package com.danielealbano.androidremotecontrolmcp.services.tunnel
 
+import android.util.Log
 import com.danielealbano.androidremotecontrolmcp.data.model.ServerConfig
 import com.danielealbano.androidremotecontrolmcp.data.model.TunnelEndpoint
 import com.danielealbano.androidremotecontrolmcp.data.model.TunnelProviderType
@@ -22,6 +23,9 @@ import io.ktor.websocket.CloseReason
 import io.ktor.websocket.Frame
 import io.ktor.websocket.close
 import io.ktor.websocket.readText
+import io.mockk.every
+import io.mockk.mockkStatic
+import io.mockk.unmockkStatic
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.cancelAndJoin
@@ -41,6 +45,7 @@ import org.junit.jupiter.api.Timeout
 import java.io.IOException
 import java.net.ServerSocket
 import java.util.Base64
+import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -135,6 +140,30 @@ class RelayTunnelProviderTest {
     }
 
     private fun closedPort(): Int = ServerSocket(0).use { it.localPort }
+
+    /**
+     * Runs [block] with `Log.i` captured as `"<tag>|<message>"` entries. The list is thread-safe: the timing line
+     * is written from the IO threads that replay relayed requests.
+     */
+    private fun <T> withCapturedInfo(block: (CopyOnWriteArrayList<String>) -> T): T {
+        val infos = CopyOnWriteArrayList<String>()
+        mockkStatic(Log::class)
+        return try {
+            every { Log.i(any<String>(), any<String>()) } answers {
+                infos.add("${firstArg<String>()}|${secondArg<String>()}")
+                0
+            }
+            // Every other level must be stubbed too: a static mock rejects unstubbed calls.
+            every { Log.d(any<String>(), any<String>()) } returns 0
+            every { Log.w(any<String>(), any<String>()) } returns 0
+            every { Log.w(any<String>(), any<String>(), any<Throwable>()) } returns 0
+            every { Log.e(any<String>(), any<String>()) } returns 0
+            every { Log.e(any<String>(), any<String>(), any<Throwable>()) } returns 0
+            block(infos)
+        } finally {
+            unmockkStatic(Log::class)
+        }
+    }
 
     @Test
     fun `initial status is Disconnected`() {
@@ -297,44 +326,128 @@ class RelayTunnelProviderTest {
     }
 
     @Test
-    fun `ninth concurrent request gets 503 while eight are in flight`() {
-        val replies = Channel<RelayResponseFrame>(Channel.UNLIMITED)
-        val sendNinth = CompletableDeferred<Unit>()
-        val release = CompletableDeferred<Unit>()
-        val routeHits = AtomicInteger(0)
-        withRelay(
-            deviceHandler = {
-                repeat(SLOTS) { send(Frame.Text(requestJson("r$it", "GET", "/slow"))) }
-                val reader =
-                    launch {
-                        for (frame in incoming) {
-                            replies.send(decodeResponse((frame as Frame.Text).readText()))
+    fun `ninth concurrent request gets 503 while eight are in flight`() =
+        withCapturedInfo { infos ->
+            val replies = Channel<RelayResponseFrame>(Channel.UNLIMITED)
+            val sendNinth = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val routeHits = AtomicInteger(0)
+            withRelay(
+                deviceHandler = {
+                    repeat(SLOTS) { send(Frame.Text(requestJson("r$it", "GET", "/slow"))) }
+                    val reader =
+                        launch {
+                            for (frame in incoming) {
+                                replies.send(decodeResponse((frame as Frame.Text).readText()))
+                            }
                         }
+                    sendNinth.await()
+                    send(Frame.Text(requestJson("r$SLOTS", "GET", "/slow")))
+                    reader.join()
+                },
+                localRoutes = {
+                    get("/slow") {
+                        routeHits.incrementAndGet()
+                        release.await()
+                        call.respondText("done")
                     }
-                sendNinth.await()
-                send(Frame.Text(requestJson("r$SLOTS", "GET", "/slow")))
-                reader.join()
-            },
-            localRoutes = {
-                get("/slow") {
-                    routeHits.incrementAndGet()
-                    release.await()
-                    call.respondText("done")
+                },
+            ) { server, provider ->
+                provider.start(server.port, server.config())
+                awaitCondition { routeHits.get() == SLOTS }
+                sendNinth.complete(Unit)
+
+                val refused = withTimeout(WAIT_MS) { replies.receive() }
+                assertEquals("r$SLOTS", refused.id)
+                assertEquals(503, refused.status)
+                awaitCondition {
+                    infos.any { it.contains("rid=r$SLOTS") && it.contains("status=503") }
                 }
-            },
-        ) { server, provider ->
-            provider.start(server.port, server.config())
-            awaitCondition { routeHits.get() == SLOTS }
-            sendNinth.complete(Unit)
 
-            val refused = withTimeout(WAIT_MS) { replies.receive() }
-            assertEquals("r$SLOTS", refused.id)
-            assertEquals(503, refused.status)
-
-            release.complete(Unit)
-            repeat(SLOTS) { assertEquals(200, withTimeout(WAIT_MS) { replies.receive() }.status) }
+                release.complete(Unit)
+                repeat(SLOTS) { assertEquals(200, withTimeout(WAIT_MS) { replies.receive() }.status) }
+            }
         }
-    }
+
+    @Test
+    fun `relayed request logs a timing line without headers or body`() =
+        withCapturedInfo { infos ->
+            val replies = Channel<RelayResponseFrame>(Channel.UNLIMITED)
+            withRelay(
+                deviceHandler = {
+                    send(
+                        Frame.Text(
+                            requestJson(
+                                id = TIMED_FRAME_ID,
+                                method = "POST",
+                                path = "/mcp?code=secret",
+                                headers = mapOf("Authorization" to listOf("Bearer secret-client-token")),
+                                body = "secret-arg",
+                            ),
+                        ),
+                    )
+                    replies.send(decodeResponse(nextText()))
+                    awaitClientClose()
+                },
+                localRoutes = {
+                    post("/mcp") {
+                        delay(REPLAY_DELAY_MS)
+                        call.respondText("done")
+                    }
+                },
+            ) { server, provider ->
+                provider.start(server.port, server.config())
+
+                assertEquals(200, withTimeout(WAIT_MS) { replies.receive() }.status)
+                awaitCondition { infos.any { it.contains("Relay request") } }
+
+                val entry = infos.first { it.contains("Relay request") }
+                assertTrue(entry.startsWith("MCP:RelaySession|"), entry)
+                assertTrue(
+                    entry.contains("Relay request rid=${TIMED_FRAME_ID.take(RelayTiming.RID_LENGTH)}"),
+                    entry,
+                )
+                assertTrue(entry.contains("POST /mcp "), entry)
+                assertTrue(entry.contains("status=200"), entry)
+                val replayMs = entry.substringAfter("replayMs=").substringBefore(" ").toLong()
+                assertTrue(replayMs >= REPLAY_DELAY_MS, entry)
+                assertTrue(infos.none { it.contains("secret") }, infos.toString())
+            }
+        }
+
+    @Test
+    fun `replay cancelled by a closed socket logs no timing line`() =
+        withCapturedInfo { infos ->
+            val routeHit = CompletableDeferred<Unit>()
+            val release = CompletableDeferred<Unit>()
+            val connections = AtomicInteger(0)
+            withRelay(
+                deviceHandler = {
+                    // Only the first connection sends the frame; the provider reconnects after the close.
+                    if (connections.incrementAndGet() == 1) {
+                        send(Frame.Text(requestJson("c1", "GET", "/hang")))
+                        routeHit.await()
+                        close(CloseReason(CloseReason.Codes.NORMAL, "bye"))
+                    } else {
+                        awaitClientClose()
+                    }
+                },
+                localRoutes = {
+                    get("/hang") {
+                        routeHit.complete(Unit)
+                        release.await()
+                        call.respondText("late")
+                    }
+                },
+            ) { server, provider ->
+                provider.start(server.port, server.config())
+
+                awaitError(provider)
+                delay(CANCELLED_SETTLE_MS)
+                assertTrue(infos.none { it.contains("Relay request") }, infos.toString())
+                release.complete(Unit)
+            }
+        }
 
     @Test
     fun `handshake rejected with 401 reports error and retries`() =
@@ -485,5 +598,14 @@ class RelayTunnelProviderTest {
         const val SETTLE_MS = 2_000L
         const val START_GRACE_MS = 200L
         const val SLOTS = 8
+
+        /** Frame id of the timing-line test; only its first 8 characters may reach the log. */
+        const val TIMED_FRAME_ID = "3f2a9c1e-7b2d-4a11-9c3e-6f0a1b2c3d4e"
+
+        /** Local route delay of the timing-line test; `replayMs` must be at least this. */
+        const val REPLAY_DELAY_MS = 50L
+
+        /** Grace period for a timing line that must NOT appear after a cancelled replay. */
+        const val CANCELLED_SETTLE_MS = 200L
     }
 }
