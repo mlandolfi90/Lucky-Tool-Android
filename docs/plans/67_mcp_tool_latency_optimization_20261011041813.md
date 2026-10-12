@@ -3157,3 +3157,26 @@ US4:
 | R4-09 | INFO: restated text across levels | (a) gates substitution: G2 only, Context points to it; (b) eventual freshness: Context only (D1.5 and Q.1 Action 3 trimmed); (c) D3.13 rationale moved into D3.13, Task 3.2 cites it; (d) US4 prerequisite line removed; (e) untested 500 fallback: US4 AC only (Task 4.3 DoD item removed; the `startTiming` KDoc only states `resBytes=0`); (f) last US3 AC shortened to the intentional changes, pointing to D3.4/D3.12 |
 | R4-10 | INFO: only `inflight=0` tested | Row `inflight counts requests already in flight` (overlapping POSTs: `inflight=0` then `inflight=1`) |
 | R4-11 | INFO (user decision): every pending decision still PENDING | Not decided here; the status paragraph of "Pending decisions" records that the whole list goes to the user and names D1.2, D3.13, G2, G4, G5 as needing an explicit answer |
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 1, 2026-10-12
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| C1 | CRITICAL: new `@Suppress("LongParameterList")` in `RelayTimingTest.kt`, forbidden by the plan-wide constraints and by CLAUDE.md | Removed; the fixture is one `private val timing` plus `copy()` per test. Detekt `app/src/test/kotlin` still exits 0 |
+| C2 | CRITICAL: the plan's six CI checks never ran — `ci.yml` / `relay.yml` only trigger on PRs to `main`, and the G1 amendment put this PR on `feat/websocket-relay-provider` | Asked the user; they chose to widen the trigger. `pull_request.branches` is now `[main, "feat/**"]` in both workflows, so stacked PRs get the full gate set. This is the only out-of-scope file change, and it was explicitly approved |
+| W1 | WARNING: Task 3.5 added 7 new ktlint findings in `e2e-tests/.../E2ECalculatorTest.kt` (18 → 25) | All 7 fixed (block body + extracted `calculateEightPlusFiveBySelector`, wrapped signature, wrapped `callTool` calls). The file is back to its 18 pre-existing findings; the `e2e-tests` module applies neither linter plugin, so those 18 are outside `make lint` and CI `Lint` |
+| W2 | WARNING: literal U+202E / U+2028 embedded in `RelayTimingTest.kt` instead of the plan's escapes (Trojan-Source pattern) | Replaced with `\u202E` / `\u2028`; a byte scan of the file now finds no raw C1, separator or bidi character |
+| W3 | WARNING: the PR body reported two ad-hoc relay reversions, not the plan's four rows | The four plan rows were executed on scratch copies and all four discriminate (`/s/` branch → 2 failures; `POST /mcp` check → 1; `path: req.url` → 3; `try`/`catch` → 1). The PR body now carries that table |
+| W4 | WARNING: the `AccessibilityTreeParser` freshness KDoc deviates from the plan's verbatim text | Kept the new wording (the clear precedes the window/root reads, not `parseTree`) and declared it here and in the PR body |
+| W5 | WARNING: Task Q.1 DoD open — no review-findings section, no M1-M6 table in the PR body | This section closes Action 6; the PR body now carries the M1-M6 table with explicit "not taken" cells |
+| I1 | INFO: extra test `paged output promotes rows under an off-screen kept ancestor` not in any plan table | Kept (it guards the emitted-depth indentation of `appendWindowPageSection`, which no plan row covered) and declared |
+| I2 | INFO: two test names drifted from the plan tables | `deviceMs covers the device's answer time` restored on the relay. The Kotlin one stays shortened: the plan's "single empty page" wording makes the `@DisplayName` 129 characters, over detekt's 120-column limit |
+| I3 | INFO: imports beyond the plan's per-file lists (`JsonObject`, `assertNotEquals`, `PrivacyToolGate`) | Kept; each is required by the chosen implementation |
+| I4 | INFO: `gate` held as `lateinit var` where the plan said `val` | Kept; it is assigned in `setUp`, which the plan's fixture requires |
+| I5 | INFO: `timing.rpcInput` wrapped over 5 lines instead of the plan's single 124-character line | Kept |
+| I6 | INFO: `PaginationTestTrees` helper order differs from the plan's contiguous block | Kept |
+| I7 | INFO: extra relay test helper `numberOf(line, field)` | Kept; it keeps the 15 timing rows readable |
+| I8 | INFO: commits beyond the suggested table | Declared in the PR body: the KDoc clarification, the ktlint wrapping, the two plan-checkbox commits and the review-fix commit |
+| I9 | INFO: E2E clear loop had an unused loop variable and called `resultText()` up to 3× per iteration | Rewritten as a `while` with a press counter and a hoisted `cleared` value: one tree read per iteration plus one final |

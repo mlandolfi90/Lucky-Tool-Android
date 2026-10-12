@@ -6,8 +6,9 @@ on:
     paths:
       - 'relay/**'
       - '.github/workflows/relay.yml'
+  # feat/** so stacked PRs (one plan on top of another open PR) also get the full gate set.
   pull_request:
-    branches: [main]
+    branches: [main, "feat/**"]
     paths:
       - 'relay/**'
       - '.github/workflows/relay.yml'

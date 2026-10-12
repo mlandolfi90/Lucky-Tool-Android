@@ -640,7 +640,7 @@ describe('relay', () => {
       assert.equal(line.includes('secret-token'), false);
     });
 
-    it('deviceMs covers the device answer time', async () => {
+    it("deviceMs covers the device's answer time", async () => {
       const { logger, extra } = await recorded({ requestTimeoutMs: 2_000 });
       const ws = await device(extra.wsUrl);
       const framePromise = nextFrame(ws);

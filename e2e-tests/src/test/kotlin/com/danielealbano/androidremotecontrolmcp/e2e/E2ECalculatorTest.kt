@@ -93,6 +93,11 @@ class E2ECalculatorTest {
          * Maximum number of clear presses before giving up on emptying the display.
          */
         private const val MAX_CLEAR_PRESSES = 6
+
+        /**
+         * Result texts that count as a cleared display: `C` either empties it or leaves a zero.
+         */
+        private val CLEARED_DISPLAY = setOf("", "0")
     }
 
     @BeforeEach
@@ -237,7 +242,13 @@ class E2ECalculatorTest {
 
     @Test
     @Order(4)
-    fun `calculate 8 plus 5 via click_node selector`() = runBlocking {
+    fun `calculate 8 plus 5 via click_node selector`() {
+        runBlocking {
+            calculateEightPlusFiveBySelector()
+        }
+    }
+
+    private suspend fun calculateEightPlusFiveBySelector() {
         mcpClient.callTool("${TOOL_PREFIX}press_home")
         Thread.sleep(1_000)
 
@@ -249,12 +260,14 @@ class E2ECalculatorTest {
         )
 
         // launchCalculator does not force-stop, so the display may still hold the previous result.
-        for (attempt in 1..MAX_CLEAR_PRESSES) {
-            if (resultText() in setOf("", "0")) break
+        var clearPresses = 0
+        while (clearPresses < MAX_CLEAR_PRESSES && resultText() !in CLEARED_DISPLAY) {
             clickBySelectorWithRetry("resource_id", CLEAR_ID)
             Thread.sleep(500)
+            clearPresses += 1
         }
-        assertTrue(resultText() in setOf("", "0"), "display not cleared: '${resultText()}'")
+        val cleared = resultText()
+        assertTrue(cleared in CLEARED_DISPLAY, "display not cleared: '$cleared'")
 
         clickBySelectorWithRetry("text", "8")
         Thread.sleep(500)
@@ -275,15 +288,19 @@ class E2ECalculatorTest {
      * click_node performs no click, so a retry cannot press twice). Exceptions are NOT caught: a
      * transport error may follow a click the server already performed.
      */
-    private suspend fun clickBySelectorWithRetry(by: String, value: String) {
+    private suspend fun clickBySelectorWithRetry(
+        by: String,
+        value: String,
+    ) {
         val startTime = System.currentTimeMillis()
         var lastText: String? = null
 
         while (System.currentTimeMillis() - startTime < NODE_WAIT_TIMEOUT_MS) {
-            val result = mcpClient.callTool(
-                "${TOOL_PREFIX}click_node",
-                mapOf("by" to by, "value" to value, "exact_match" to true),
-            )
+            val result =
+                mcpClient.callTool(
+                    "${TOOL_PREFIX}click_node",
+                    mapOf("by" to by, "value" to value, "exact_match" to true),
+                )
             if (result.isError != true) return
             lastText = (result.content.firstOrNull() as? TextContent)?.text
             Thread.sleep(500)
@@ -296,10 +313,11 @@ class E2ECalculatorTest {
      * Returns the text of the calculator result node, failing the test when the node cannot be read.
      */
     private suspend fun resultText(): String {
-        val result = mcpClient.callTool(
-            "${TOOL_PREFIX}find_nodes",
-            mapOf("by" to "resource_id", "value" to RESULT_ID, "exact_match" to true),
-        )
+        val result =
+            mcpClient.callTool(
+                "${TOOL_PREFIX}find_nodes",
+                mapOf("by" to "resource_id", "value" to RESULT_ID, "exact_match" to true),
+            )
         val text = (result.content.firstOrNull() as? TextContent)?.text
         if (result.isError == true) {
             fail("find_nodes for the result failed: $text")

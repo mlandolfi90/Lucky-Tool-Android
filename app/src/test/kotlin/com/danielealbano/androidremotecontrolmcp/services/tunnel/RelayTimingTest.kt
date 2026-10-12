@@ -9,33 +9,23 @@ import org.junit.jupiter.api.Test
 
 @DisplayName("RelayTiming")
 class RelayTimingTest {
-    @Suppress("LongParameterList")
-    private fun timing(
-        id: String = FRAME_ID,
-        method: String = "POST",
-        path: String = "/mcp",
-        status: Int = 200,
-        receivedAtMs: Long = 1_791_700_000_123L,
-        queueMs: Long = 2L,
-        replayMs: Long = 57L,
-        totalMs: Long = 61L,
-        sent: Boolean = true,
-    ): RelayTiming =
+    /** Baseline timing; each test derives what it needs with [RelayTiming.copy]. */
+    private val timing =
         RelayTiming(
-            id = id,
-            method = method,
-            path = path,
-            status = status,
-            receivedAtMs = receivedAtMs,
-            queueMs = queueMs,
-            replayMs = replayMs,
-            totalMs = totalMs,
-            sent = sent,
+            id = FRAME_ID,
+            method = "POST",
+            path = "/mcp",
+            status = 200,
+            receivedAtMs = 1_791_700_000_123L,
+            queueMs = 2L,
+            replayMs = 57L,
+            totalMs = 61L,
+            sent = true,
         )
 
     @Test
     fun `logLine uses the first 8 characters of the id`() {
-        val line = timing().logLine()
+        val line = timing.logLine()
 
         assertTrue(line.contains("rid=${FRAME_ID.take(RelayTiming.RID_LENGTH)}"), line)
         assertFalse(line.contains(FRAME_ID), line)
@@ -44,24 +34,27 @@ class RelayTimingTest {
 
     @Test
     fun `logLine sanitizes the path`() {
-        val query = timing(path = "/mcp?code=x").logLine()
+        val query = timing.copy(path = "/mcp?code=x").logLine()
         assertTrue(query.contains(" /mcp "), query)
         assertFalse(query.contains("code"), query)
 
-        val capability = timing(path = "/s/tok?x").logLine()
+        val capability = timing.copy(path = "/s/tok?x").logLine()
         assertTrue(capability.contains("/s/<redacted>"), capability)
         assertFalse(capability.contains("tok"), capability)
     }
 
     @Test
     fun `logLine flags an unsent frame`() {
-        assertTrue(timing(sent = false).logLine().endsWith(" sent=false"))
-        assertFalse(timing(sent = true).logLine().contains("sent="))
+        assertTrue(timing.copy(sent = false).logLine().endsWith(" sent=false"))
+        assertFalse(timing.logLine().contains("sent="))
     }
 
     @Test
     fun `logLine prints status and all timings`() {
-        val line = timing(status = 503, receivedAtMs = 42L, queueMs = 1L, replayMs = 2L, totalMs = 3L).logLine()
+        val line =
+            timing
+                .copy(status = 503, receivedAtMs = 42L, queueMs = 1L, replayMs = 2L, totalMs = 3L)
+                .logLine()
 
         assertTrue(line.contains("status=503"), line)
         assertTrue(line.contains("recvAt=42"), line)
@@ -73,29 +66,31 @@ class RelayTimingTest {
     @Test
     fun `logLine strips control characters`() {
         val newlines =
-            timing(
-                id = "12\n45678-aaaa-bbbb-cccc-ddddddddddddd",
-                method = "GET\nX",
-                path = "/mcp\r\nforged",
-            ).logLine()
+            timing
+                .copy(
+                    id = "12\n45678-aaaa-bbbb-cccc-ddddddddddddd",
+                    method = "GET\nX",
+                    path = "/mcp\r\nforged",
+                ).logLine()
         assertFalse(newlines.contains("\n"), newlines)
         assertFalse(newlines.contains("\r"), newlines)
         assertTrue(newlines.contains("GET?X"), newlines)
         assertTrue(newlines.contains("/mcp??forged"), newlines)
 
-        val unicode = timing(method = "GET\u0085X", path = "/mcp‮evil x").logLine()
+        // Escapes, never the literal characters: U+202E would reverse this line in every viewer.
+        val unicode = timing.copy(method = "GET\u0085X", path = "/mcp\u202Eevil\u2028x").logLine()
         assertTrue(unicode.contains("GET?X"), unicode)
         assertTrue(unicode.contains("/mcp?evil?x"), unicode)
         assertFalse(unicode.contains("\u0085"), unicode)
-        assertFalse(unicode.contains("‮"), unicode)
-        assertFalse(unicode.contains(" "), unicode)
+        assertFalse(unicode.contains("\u202E"), unicode)
+        assertFalse(unicode.contains("\u2028"), unicode)
     }
 
     @Test
     fun `logLine cuts long paths at 128 characters`() {
         val path = "/" + "a".repeat(300)
 
-        val line = timing(path = path).logLine()
+        val line = timing.copy(path = path).logLine()
 
         val token = line.substringAfter("POST ").substringBefore(" status=")
         assertEquals("${path.take(RelayTiming.MAX_PATH_CHARS)}…", token)
