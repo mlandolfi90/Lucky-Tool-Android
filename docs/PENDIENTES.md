@@ -131,29 +131,50 @@ toca tenga una línea `w: file:///...`, y dos de los suyos la tienen. Decidido p
 el plan 67 cierra declarando que no introduce ninguna, y las heredadas se atacan acá, con su propio
 plan.
 
-- Medido el 2026-10-12 en la ejecución verde de CI 38207816721 (rama del plan 67): **272 líneas
-  `w:` en 29 archivos**. Ninguna rompe el build; `CLAUDE.md` sí pide que no haya advertencias.
-- Las 4 que bloquearon el portón del plan 67, todas `'val labeledBy: AccessibilityNodeInfo!' is
-  deprecated. Deprecated in Java.`:
-  - `services/accessibility/AccessibilityTreeParser.kt:226`, dentro de `readLabeledByText`;
-  - su test, `AccessibilityTreeParserTest.kt:738`, `:745` y `:753`.
-  - Son anteriores al plan 67: la rama base trae las mismas cuatro, y el plan no modifica esas
-    líneas. Queda por averiguar con qué se reemplaza esa lectura sin perder la etiqueta.
-- Las otras 268 se reparten por tipo así:
-  - 159: `androidx.hilt.lifecycle.viewmodel.compose` movió un símbolo de paquete;
-  - 28: llamada segura (`?.`) innecesaria sobre un receptor que no es nulo;
-  - 27: una API de Java obsoleta (incluidas las 4 de `labeledBy`);
-  - 21: `!!` innecesario sobre un receptor que no es nulo;
-  - 21: el portapapeles viejo; la advertencia pide `LocalClipboard`;
-  - 14: condición que siempre da el mismo resultado;
-  - 2: llamada a un receptor que puede ser nulo sin `?.` ni `!!`.
-- Dónde se concentran: `ui/screens/ServerScreen.kt` (35), `mcp/oauth/OAuthRoutes.kt` (21), y 14 cada
-  uno en `ui/screens/settings/TunnelSettingsScreen.kt`, `ui/screens/SettingsScreen.kt`,
-  `ui/screens/MainScreen.kt`, `ui/screens/LogsScreen.kt` y `mcp/oauth/OAuthTokenGrants.kt`.
-- Propuesta: atacarlas por tipo y no por archivo, empezando por las 159 del paquete de Hilt, que son
-  un cambio de import mecánico; las de condición siempre igual se revisan una por una, porque cada
-  una puede esconder un error de lógica. `CLAUDE.md` prohíbe silenciarlas con `@Suppress`, así que
-  cada grupo se arregla en la raíz.
+**Corrección del 2026-10-12, medida:** la primera versión de este punto decía «272 líneas `w:` en 29
+archivos». Las 272 son líneas de log, no advertencias: el mismo archivo se compila para los dos
+sabores y para `main`, `test` y `testDebug`, así que cada advertencia aparece unas seis veces.
+**Distintas hay 43, en 29 archivos.** El trabajo es seis veces más chico de lo que parecía.
+
+- Medido el 2026-10-12 sobre la ejecución verde de CI 38207816721 (rama del plan 67), deduplicando
+  por `archivo:línea:columna` y mensaje. Ninguna rompe el build; `CLAUDE.md` sí pide que no haya
+  advertencias.
+- **24 — Hilt movió `hiltViewModel` de paquete** a `androidx.hilt.lifecycle.viewmodel.compose`. Es un
+  cambio de `import` por archivo, mecánico, en 24 pantallas de Compose. Es el grupo más grande y el
+  más barato.
+- **6 — API de Java obsoleta**, y acá cada una es distinta:
+  - `geo/CountryDisplay.kt:24` — el constructor `Locale(String, String)`. Reemplazo: `Locale.Builder()`
+    (o `Locale.of`, según el nivel de Java del toolchain; hay que mirarlo, no suponerlo).
+  - `services/accessibility/AccessibilityTreeParser.kt:226` y su test (`:738`, `:745`, `:753`) —
+    `labeledBy`. **Es la que bloqueó el portón del plan 67.** El compilador no ofrece reemplazo en el
+    mensaje, así que primero hay que averiguar con qué se lee la etiqueta sin perderla. Si no existe
+    reemplazo soportado, hay un conflicto real con la regla de `CLAUDE.md` que prohíbe silenciar
+    advertencias, y lo decide el humano: no se silencia por nuestra cuenta.
+  - `services/notifications/NotificationProviderImpl.kt:185` —
+    `MODE_BACKGROUND_ACTIVITY_START_ALLOWED`. Hay que verificar el reemplazo vigente.
+- **4 — llamada segura (`?.`) innecesaria** sobre un receptor que no es nulo:
+  `mcp/oauth/OAuthTokenGrants.kt:106`, `services/apps/AppIconCache.kt:136`,
+  `services/channel/EventChannelService.kt:66`, `ui/screens/LogsScreen.kt:199`.
+- **3 — `!!` innecesario**: `mcp/oauth/OAuthRoutes.kt:133`, `:134`, `:135`.
+- **3 — el portapapeles viejo** (`LocalClipboardManager`): `ui/screens/ServerScreen.kt:76`,
+  `ui/screens/settings/ChannelSettingsScreen.kt:63`,
+  `ui/screens/settings/TunnelSettingsScreen.kt:527`. Ojo: **no es un cambio de nombre**. El
+  reemplazo (`LocalClipboard`) es una API `suspend`, así que los tres lugares necesitan un ámbito de
+  corrutina. Es el grupo más caro de los barato-aparentes.
+- **2 — condición que siempre da lo mismo**: `mcp/oauth/OAuthAccessValidator.kt:31` (siempre `true`)
+  y `mcp/oauth/OAuthTokenGrants.kt:96` (siempre `false`). **Leídas el 2026-10-12: NO son errores de
+  lógica.** En las dos, el autor repitió un chequeo de nulo que ya estaba contenido en la condición
+  anterior, para conseguir el *smart cast* de Kotlin; el compilador hoy lo deduce solo. El arreglo es
+  quitar la repetición, y el riesgo es perder el smart cast, así que se verifica compilando.
+- **1 — receptor que puede ser nulo sin `?.` ni `!!`**:
+  `app/src/testDebug/.../E2EConfigReceiverTest.kt:52`.
+- Dónde se concentran: `ui/screens/ServerScreen.kt` (5), y 3 cada uno en `mcp/oauth/OAuthRoutes.kt` y
+  en el test del parser de accesibilidad. Las demás son una o dos por archivo.
+- Propuesta: atacarlas **por tipo y no por archivo**, en este orden —primero los 24 imports de Hilt,
+  después los `?.` y `!!` innecesarios y el receptor nulable, después las dos condiciones
+  redundantes, después el portapapeles (que pide corrutinas), y al final las 6 de Java, porque dos de
+  ellas requieren averiguar el reemplazo antes de tocar nada. `CLAUDE.md` prohíbe silenciarlas con
+  `@Suppress`, así que cada grupo se arregla en la raíz.
 - Decide el humano: si el objetivo es llegar a cero advertencias y si el portón de CI pasa a fallar
   cuando aparezca una nueva.
 
