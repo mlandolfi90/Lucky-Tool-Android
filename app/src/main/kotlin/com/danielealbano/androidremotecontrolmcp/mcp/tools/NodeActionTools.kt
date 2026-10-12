@@ -670,12 +670,13 @@ private fun getFreshWindowsLocked(
 
     // Drop the framework's accessibility node cache before reading. Chromium WebView
     // suppresses/throttles the content-changed events that invalidate that cache, so a JavaScript
-    // DOM change (e.g. updated text) would otherwise read back stale — and node.refresh() cannot
-    // re-fetch what the cache still serves as current. Clearing here makes get_screen_state,
-    // find_nodes, and the action tools' re-reads (which all go through getFreshWindows) round-trip
-    // live and populate the node cache with live nodes. The lightweight wait_for_node/wait_for_idle
-    // poll paths do not go through here and clear the cache themselves (see UtilityTools). See
-    // AccessibilityServiceProvider.clearFrameworkNodeCache.
+    // DOM change (e.g. updated text) would otherwise be served stale from the framework cache. Clearing
+    // here makes get_screen_state, find_nodes, and the action tools' re-reads (which all go through
+    // getFreshWindows) round-trip live and populate the node cache with live nodes. The lightweight
+    // wait_for_node/wait_for_idle poll paths do not go through here and clear the cache themselves
+    // (see UtilityTools). See AccessibilityServiceProvider.clearFrameworkNodeCache. Nodes read after
+    // this clear are fetched live: window.root bypasses the cache, and getChild returns nodes fetched
+    // or prefetched by this same read. The traversal therefore performs no per-node refresh().
     accessibilityServiceProvider.clearFrameworkNodeCache()
 
     // Accumulate real AccessibilityNodeInfo references from ALL windows for cache population.
@@ -694,13 +695,6 @@ private fun getFreshWindowsLocked(
 
             for (window in accessibilityWindows) {
                 val rootNode = window.root ?: continue
-
-                // Force the accessibility framework to re-query the underlying
-                // AccessibilityNodeProvider (e.g., Compose's virtual node provider).
-                // Without this, window.root can return stale cached snapshots —
-                // particularly problematic for Jetpack Compose apps where
-                // TYPE_WINDOW_CONTENT_CHANGED events may be throttled or missed.
-                rootNode.refresh()
 
                 // Extract metadata BEFORE parsing
                 val wId = window.id
@@ -767,9 +761,6 @@ private fun getFreshWindowsLocked(
                 "No windows available and no active window root node. " +
                     "The screen may be transitioning.",
             )
-
-    // Force fresh data from the accessibility framework (see multi-window path comment).
-    rootNode.refresh()
 
     // Extract metadata from the root node before recycling.
     // Use rootNode.window (available API 21+) to detect the actual window type

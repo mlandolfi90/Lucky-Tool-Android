@@ -19,6 +19,12 @@ import javax.inject.Inject
  * The root node passed to [parseTree] is NOT recycled by the parser — the caller retains
  * ownership. When [nodeMap] is provided, the root IS stored in the map.
  *
+ * Freshness contract: callers MUST clear the framework node cache
+ * ([AccessibilityServiceProvider.clearFrameworkNodeCache]) inside the same [AccessibilityTreeLock]
+ * critical section immediately before [parseTree]. Every node returned by `getChild` is then
+ * fetched live (or prefetched) by this read, so the parser performs no per-node `refresh()`
+ * (one would add a blocking IPC to the target app's UI thread per node).
+ *
  * This class is Hilt-injectable and stateless (no injected cache, no internal mutable state).
  */
 class AccessibilityTreeParser
@@ -153,17 +159,6 @@ class AccessibilityTreeParser
             for (i in 0 until childCount) {
                 val childNode = node.getChild(i)
                 if (childNode != null) {
-                    // Refresh nodes that are likely virtual (Compose, WebView, custom
-                    // AccessibilityNodeProvider implementations). Virtual nodes can
-                    // return stale cached data after recomposition/DOM changes.
-                    // - No viewIdResourceName: virtual nodes typically lack resource IDs
-                    // - Compose extra data key: definitive marker for Compose virtual nodes
-                    // Nodes with a resource ID are real Views and don't need refresh.
-                    if (childNode.viewIdResourceName == null ||
-                        childNode.availableExtraData.contains(COMPOSE_SEMANTICS_ID_KEY)
-                    ) {
-                        childNode.refresh()
-                    }
                     children.add(
                         parseNode(
                             node = childNode,
@@ -202,7 +197,7 @@ class AccessibilityTreeParser
 
             // Store real node reference + metadata in cache map (if caching is active).
             // Metadata (depth, index, parentId) is needed by ActionExecutorImpl to
-            // re-verify node identity after refresh() (S1 fix).
+            // re-verify node identity after its refresh() in ActionExecutorImpl.performNodeAction (S1 fix).
             nodeMap?.put(nodeId, CachedNode(node, depth, index, parentId))
 
             // Defensive: nodeMap == null is redundant with recycleNode in normal flow,
@@ -266,12 +261,6 @@ class AccessibilityTreeParser
 
             /** `getExtras()` key holding the target URL for web links and images. */
             private const val EXTRA_KEY_TARGET_URL = "AccessibilityNodeInfo.targetUrl"
-
-            /**
-             * Extra data key added by Compose's AccessibilityNodeProvider to every
-             * virtual accessibility node. Present in [AccessibilityNodeInfo.getAvailableExtraData].
-             */
-            internal const val COMPOSE_SEMANTICS_ID_KEY = "androidx.compose.ui.semantics.id"
 
             /** Maps [AccessibilityWindowInfo] type constants to human-readable labels. */
             fun mapWindowType(type: Int): String =

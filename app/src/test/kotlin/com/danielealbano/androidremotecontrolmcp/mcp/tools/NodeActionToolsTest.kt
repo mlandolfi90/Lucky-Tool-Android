@@ -21,6 +21,7 @@ import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.unmockkAll
+import io.mockk.verify
 import io.mockk.verifyOrder
 import io.modelcontextprotocol.kotlin.sdk.types.CallToolResult
 import io.modelcontextprotocol.kotlin.sdk.types.TextContent
@@ -179,6 +180,42 @@ class NodeActionToolsTest {
             maxObserved.get(),
             "concurrent getFreshWindows reads overlapped the framework-cache critical section",
         )
+    }
+
+    @Test
+    @DisplayName("getFreshWindows does not refresh window root nodes")
+    fun getFreshWindowsDoesNotRefreshWindowRootNodes() {
+        // Act
+        getFreshWindows(mockTreeParser, mockAccessibilityServiceProvider, mockNodeCache)
+
+        // Assert
+        verify(exactly = 0) { mockRootNode.refresh() }
+        verifyOrder {
+            mockAccessibilityServiceProvider.clearFrameworkNodeCache()
+            mockAccessibilityServiceProvider.getAccessibilityWindows()
+            mockTreeParser.parseTree(mockRootNode, "root_w0", any())
+        }
+    }
+
+    @Test
+    @DisplayName("getFreshWindows fallback does not refresh the active root node")
+    fun getFreshWindowsFallbackDoesNotRefreshRootNode() {
+        // Arrange
+        every { mockAccessibilityServiceProvider.getAccessibilityWindows() } returns emptyList()
+        every { mockAccessibilityServiceProvider.getRootNode() } returns mockRootNode
+        every { mockRootNode.windowId } returns 0
+        every { mockRootNode.window } returns null
+
+        // Act
+        getFreshWindows(mockTreeParser, mockAccessibilityServiceProvider, mockNodeCache)
+
+        // Assert
+        verify(exactly = 0) { mockRootNode.refresh() }
+        verifyOrder {
+            mockAccessibilityServiceProvider.clearFrameworkNodeCache()
+            mockAccessibilityServiceProvider.getRootNode()
+            mockTreeParser.parseTree(mockRootNode, "root_w0", any())
+        }
     }
 
     @Nested

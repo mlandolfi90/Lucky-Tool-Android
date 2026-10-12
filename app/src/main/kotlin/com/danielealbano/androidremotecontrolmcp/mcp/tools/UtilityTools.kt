@@ -363,9 +363,8 @@ class WaitForNodeTool
  * without creating intermediate [com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityNodeData]
  * objects or populating [AccessibilityNodeCache]. Returns true on first match (early exit).
  *
- * Refreshes root nodes and virtual/Compose child nodes using the same logic as
- * [AccessibilityTreeParser.parseNode] to ensure fresh data from Jetpack Compose
- * and other virtual node providers.
+ * Clears the framework node cache before the walk, so every node read is fetched live; no
+ * per-node refresh() is performed (same freshness contract as [AccessibilityTreeParser]).
  *
  * Child nodes obtained via [AccessibilityNodeInfo.getChild] are NOT recycled.
  * On API 33+ (this project's minSdk) [AccessibilityNodeInfo.recycle] is a no-op.
@@ -407,8 +406,8 @@ private fun rawNodeExistsLocked(
 
     // Drop the framework's accessibility node cache before this poll read. Chromium WebView
     // suppresses/throttles the content-changed events that invalidate that cache, so a node added
-    // by a JavaScript DOM change would otherwise never appear here (refresh() cannot re-fetch what
-    // the cache still serves as current) and wait_for_node would time out on present content. See
+    // by a JavaScript DOM change would otherwise never appear here (stale data would be served from
+    // the framework cache) and wait_for_node would time out on present content. See
     // AccessibilityServiceProvider.clearFrameworkNodeCache.
     accessibilityServiceProvider.clearFrameworkNodeCache()
 
@@ -418,7 +417,6 @@ private fun rawNodeExistsLocked(
         try {
             for (window in accessibilityWindows) {
                 val rootNode = window.root ?: continue
-                rootNode.refresh()
                 if (rawNodeMatchesRecursive(rootNode, findBy, value, 0)) {
                     return true
                 }
@@ -440,14 +438,12 @@ private fun rawNodeExistsLocked(
                 "No windows available and no active window root node. " +
                     "The screen may be transitioning.",
             )
-    rootNode.refresh()
     return rawNodeMatchesRecursive(rootNode, findBy, value, 0)
 }
 
 /**
  * Recursively walks a raw [AccessibilityNodeInfo] tree checking for a match.
- * Returns true immediately on first match (early exit). Refreshes virtual/Compose
- * child nodes before reading their properties.
+ * Returns true immediately on first match (early exit).
  *
  * Child nodes obtained via [AccessibilityNodeInfo.getChild] are NOT recycled —
  * [AccessibilityNodeInfo.recycle] is a no-op on API 33+ (this project's minSdk).
@@ -481,14 +477,6 @@ private fun rawNodeMatchesRecursive(
     val childCount = node.childCount
     for (i in 0 until childCount) {
         val child = node.getChild(i) ?: continue
-
-        // Refresh virtual/Compose nodes — same logic as AccessibilityTreeParser.parseNode
-        if (child.viewIdResourceName == null ||
-            child.availableExtraData.contains(AccessibilityTreeParser.COMPOSE_SEMANTICS_ID_KEY)
-        ) {
-            child.refresh()
-        }
-
         if (rawNodeMatchesRecursive(child, findBy, value, depth + 1)) {
             return true
         }

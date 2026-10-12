@@ -5,7 +5,7 @@ package com.danielealbano.androidremotecontrolmcp.services.accessibility
  *
  * The MCP server handles requests concurrently, and every fresh read first drops the shared
  * framework node cache ([AccessibilityServiceProvider.clearFrameworkNodeCache]) and then traverses
- * it (`getWindows`/`getRootInActiveWindow` + `getChild`/`refresh`) to repopulate live nodes. Without
+ * it (`getWindows`/`getRootInActiveWindow` + `getChild`) to repopulate live nodes. Without
  * serialization, one request's cache clear could wipe the cache mid-traversal of another request,
  * yielding a torn tree (parent metadata captured pre-clear, children re-fetched post-clear) and, via
  * the id→node cache populated from that torn snapshot, flaky node-id resolution for later actions.

@@ -404,8 +404,8 @@ class UtilityToolsTest {
         }
 
         @Test
-        fun `rawNodeExists refreshes virtual and Compose child nodes`() {
-            // Child with viewIdResourceName == null -> should be refreshed
+        fun `rawNodeExists does not refresh child nodes after clearing the framework cache`() {
+            // Child with viewIdResourceName == null (virtual node)
             val virtualChild = mockk<AccessibilityNodeInfo>()
             every { virtualChild.text } returns null
             every { virtualChild.contentDescription } returns null
@@ -415,20 +415,17 @@ class UtilityToolsTest {
             every { virtualChild.availableExtraData } returns emptyList()
             every { virtualChild.refresh() } returns true
 
-            // Child with Compose semantics key -> should be refreshed
+            // Child with Compose semantics key
             val composeChild = mockk<AccessibilityNodeInfo>()
             every { composeChild.text } returns null
             every { composeChild.contentDescription } returns null
             every { composeChild.viewIdResourceName } returns "com.example:id/compose"
             every { composeChild.className } returns "android.widget.TextView"
             every { composeChild.childCount } returns 0
-            every { composeChild.availableExtraData } returns
-                listOf(
-                    AccessibilityTreeParser.COMPOSE_SEMANTICS_ID_KEY,
-                )
+            every { composeChild.availableExtraData } returns listOf(COMPOSE_SEMANTICS_KEY)
             every { composeChild.refresh() } returns true
 
-            // Child with non-null resourceId and no Compose key -> should NOT be refreshed
+            // Child with non-null resourceId and no Compose key
             val realChild = mockk<AccessibilityNodeInfo>()
             every { realChild.text } returns null
             every { realChild.contentDescription } returns null
@@ -445,9 +442,20 @@ class UtilityToolsTest {
 
             rawNodeExists(FindBy.TEXT, "nonexistent", mockAccessibilityServiceProvider)
 
-            verify { virtualChild.refresh() }
-            verify { composeChild.refresh() }
+            verify(exactly = 0) { virtualChild.refresh() }
+            verify(exactly = 0) { composeChild.refresh() }
             verify(exactly = 0) { realChild.refresh() }
+            verifyOrder {
+                mockAccessibilityServiceProvider.clearFrameworkNodeCache()
+                mockAccessibilityServiceProvider.getAccessibilityWindows()
+            }
+        }
+
+        @Test
+        fun `rawNodeExists does not refresh window root nodes`() {
+            rawNodeExists(FindBy.TEXT, "nonexistent", mockAccessibilityServiceProvider)
+
+            verify(exactly = 0) { mockRootNode.refresh() }
         }
 
         @Test
@@ -555,6 +563,12 @@ class UtilityToolsTest {
 
             val result = rawNodeExists(FindBy.TEXT, "FallbackMatch", mockAccessibilityServiceProvider)
             assertTrue(result)
+
+            verify(exactly = 0) { fallbackRoot.refresh() }
+            verifyOrder {
+                mockAccessibilityServiceProvider.clearFrameworkNodeCache()
+                mockAccessibilityServiceProvider.getRootNode()
+            }
         }
 
         @Test
@@ -945,5 +959,13 @@ class UtilityToolsTest {
                     unmockkStatic(SystemClock::class)
                 }
             }
+    }
+
+    companion object {
+        /**
+         * Extra data key Compose adds to its virtual accessibility nodes. Kept here as a literal:
+         * the traversals no longer branch on it, so production code does not define it.
+         */
+        private const val COMPOSE_SEMANTICS_KEY = "androidx.compose.ui.semantics.id"
     }
 }
