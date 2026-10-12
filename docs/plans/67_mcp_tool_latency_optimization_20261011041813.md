@@ -2859,9 +2859,9 @@ with it (M1 was taken before implementation, see Prerequisites) and add the M1-M
 **Definition of Done:**
 - [ ] Local pre-checks clean; the six CI checks green, read with `gh`;
       no Kotlin `w: ` warning for files of this plan.
-- [ ] MCP protocol compliance confirmed (Action 4).
-- [ ] Every reversion row observed failing and restored (Kotlin rows only under G5); results in the PR body.
-- [ ] `code-reviewer` plan-compliance pass clean and recorded; PR URL reported.
+- [x] MCP protocol compliance confirmed (Action 4).
+- [x] Every reversion row observed failing and restored (Kotlin rows only under G5); results in the PR body.
+- [x] `code-reviewer` plan-compliance pass clean and recorded; PR URL reported.
 
 ---
 
@@ -3180,3 +3180,18 @@ US4:
 | I7 | INFO: extra relay test helper `numberOf(line, field)` | Kept; it keeps the 15 timing rows readable |
 | I8 | INFO: commits beyond the suggested table | Declared in the PR body: the KDoc clarification, the ktlint wrapping, the two plan-checkbox commits and the review-fix commit |
 | I9 | INFO: E2E clear loop had an unused loop variable and called `resultText()` up to 3× per iteration | Rewritten as a `while` with a press counter and a hoisted `cleared` value: one tree read per iteration plus one final |
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 2, 2026-10-12
+
+Round 2 verified every round-1 row (C1, C2, W1-W5, I1-I9) as fixed, and reported no CRITICAL finding.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| W2-1 | WARNING: Q.1 Action 3's warning gate is file-scoped ("no `w: file:///...` line for any file this plan creates or modifies"), and two plan files carry four such lines: `AccessibilityTreeParser.kt:226:22` and `AccessibilityTreeParserTest.kt:738:39, :745:39, :753:26`, all `'val labeledBy: AccessibilityNodeInfo!' is deprecated. Deprecated in Java.` | **Open, pending the user's decision.** All four are pre-existing: they sit in `readLabeledByText`, which this branch does not touch (its hunks in that file are at lines 22, 161, 200 and 264), and the base branch carries the same four. Filtering the whole CI job log for every plan file finds no other hit, so **this plan introduces zero Kotlin warnings**. Fixing the root cause means changing accessibility label-resolution logic that no plan action covers, which the plan forbids improvising; the alternative is to scope the gate to warnings this plan introduces. The decision is the user's, so Q.1 DoD item 1 stays open |
+| I2-1 | INFO: the new `get_screen_state` invalid-params bullet landed 4th of 6 in `docs/MCP_TOOLS.md` Error Cases; Task 2.6 Action 1(f) says to append it as the **last** bullet | Fixed: the bullet now sits last, after the two screenshot bullets. Text unchanged |
+| I2-2 | INFO: all four Q.1 DoD checkboxes were still `[ ]` although Actions 1-7 are done | Items 2, 3 and 4 flipped, item 3 with the G5 caveat. Item 1 stays open pending W2-1 |
+| I2-3 | INFO: two relay test helpers beyond the plan's Setup (`recorded(overrides)`, `oneLine(logger)`), and `deviceMs covers the device's answer time` passes `requestTimeoutMs: 2_000`, an override the plan's row does not mention | Kept and declared. The helpers keep the 15 timing rows readable; the timeout override only removes flakiness (the 300 ms default would already cover the row's `sleep(60)`). Row behaviour is unaffected |
+| I2-4 | INFO: `RelayTunnelProviderTest` extracts `withCapturedInfo { }` instead of the plan's inline `mockkStatic` / `try`-`finally` per test, and additionally stubs `Log.d`, `Log.w(2)`, `Log.w(3)`, `Log.e(2)`, `Log.e(3)` | Kept and declared. The extra stubs are required — a static mock rejects unstubbed calls — and the helper preserves the Task 4.5 DoD contract that every test unmocks in a `finally` |
+| I2-5 | INFO: within US4 the device commit (`737310f`) precedes the relay commit (`b290f90`), the reverse of the plan's suggested-commit table | Declared. The two sides are independent languages and each commit compiles and tests on its own, so no item depends on one after it |

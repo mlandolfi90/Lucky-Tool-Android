@@ -396,9 +396,9 @@ Only request the screenshot when the node list alone is not sufficient to unders
 - **Permission denied**: Accessibility service not enabled or not ready
 - **Action failed**: All windows returned null root nodes
 - **Action failed**: No windows available and no active window root node
-- **Invalid params**: `include_offscreen` or `include_hierarchy` present but not a JSON boolean (strings, numbers, objects and `null` are rejected)
 - **Permission denied**: Screen capture not available (when `include_screenshot` is true)
 - **Action failed**: Screenshot capture failed
+- **Invalid params**: `include_offscreen` or `include_hierarchy` present but not a JSON boolean (strings, numbers, objects and `null` are rejected)
 
 ---
 
