@@ -92,8 +92,9 @@ class CompactTreeFormatter
             node: AccessibilityNodeData,
             depth: Int = 0,
             visitors: List<(node: AccessibilityNodeData, depth: Int) -> Unit>,
+            options: CompactFormatOptions = CompactFormatOptions(),
         ) {
-            val isKept = shouldKeepNode(node)
+            val isKept = isEmitted(node, options)
             if (isKept) {
                 for (visitor in visitors) {
                     visitor(node, depth)
@@ -101,7 +102,7 @@ class CompactTreeFormatter
             }
             val childDepth = if (isKept) depth + 1 else depth
             for (child in node.children) {
-                walkTree(child, childDepth, visitors)
+                walkTree(child, childDepth, visitors, options)
             }
         }
 
@@ -131,24 +132,19 @@ class CompactTreeFormatter
          * Formats multi-window screen state as a compact string.
          *
          * Each window gets its own section with a header line containing window metadata,
-         * followed by a TSV column header and element rows.
+         * followed by a TSV column header and element rows, then (when
+         * [CompactFormatOptions.includeHierarchy]) its `hierarchy:` block. [options] defaults
+         * reproduce the legacy output.
          */
         fun formatMultiWindow(
             result: MultiWindowResult,
             screenInfo: ScreenInfo,
+            options: CompactFormatOptions = CompactFormatOptions(),
         ): String {
             val sb = StringBuilder()
 
-            // Degradation note (if applicable)
-            if (result.degraded) {
-                sb.appendLine(DEGRADATION_NOTE)
-            }
-
-            // Note lines
-            sb.appendLine(NOTE_LINE)
-            sb.appendLine(NOTE_LINE_CUSTOM_ELEMENTS)
-            sb.appendLine(NOTE_LINE_FLAGS_LEGEND)
-            sb.appendLine(NOTE_LINE_OFFSCREEN_HINT)
+            // Degradation note (if applicable) + global note lines
+            appendGlobalNotes(sb, result.degraded, options)
 
             // Screen info (global)
             sb.appendLine(
@@ -161,19 +157,18 @@ class CompactTreeFormatter
                 sb.appendLine(buildWindowHeader(windowData))
                 sb.appendLine(HEADER)
                 val hierarchySb = StringBuilder()
-                walkTree(
-                    windowData.tree,
-                    visitors =
-                        listOf(
-                            { node, _ -> appendElementRow(sb, node) },
-                            { node, depth ->
-                                repeat(depth) { hierarchySb.append(HIERARCHY_INDENT) }
-                                hierarchySb.appendLine(node.id)
-                            },
-                        ),
-                )
-                sb.appendLine(HIERARCHY_HEADER)
-                sb.append(hierarchySb)
+                val rowVisitor: (AccessibilityNodeData, Int) -> Unit = { node, _ -> appendElementRow(sb, node) }
+                val hierarchyVisitor: (AccessibilityNodeData, Int) -> Unit = { node, depth ->
+                    repeat(depth) { hierarchySb.append(HIERARCHY_INDENT) }
+                    hierarchySb.appendLine(node.id)
+                }
+                val visitors =
+                    if (options.includeHierarchy) listOf(rowVisitor, hierarchyVisitor) else listOf(rowVisitor)
+                walkTree(windowData.tree, visitors = visitors, options = options)
+                if (options.includeHierarchy) {
+                    sb.appendLine(HIERARCHY_HEADER)
+                    sb.append(hierarchySb)
+                }
             }
 
             return sb.toString().trimEnd('\n')
@@ -329,6 +324,9 @@ class CompactTreeFormatter
                     "foc=focusable scr=scrollable edt=editable ena=enabled"
             const val NOTE_LINE_OFFSCREEN_HINT =
                 "note:offscreen items require scroll_to_node before interaction"
+            const val NOTE_LINE_OFFSCREEN_OMITTED =
+                "note:offscreen nodes are omitted (include_offscreen=false); scroll, or call without " +
+                    "include_offscreen=false, to see them"
             const val FLAG_ONSCREEN = "on"
             const val FLAG_OFFSCREEN = "off"
             const val FLAG_CLICKABLE = "clk"
@@ -347,6 +345,41 @@ class CompactTreeFormatter
     }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Output options (Plan 67)
+//
+// EVERY row/count/closure/hierarchy walker MUST use isEmitted so that page totals, TSV rows and
+// hierarchy lines stay consistent.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * A node is emitted (TSV row + hierarchy line) iff it passes the keep filter and, when off-screen
+ * nodes are excluded, is visible.
+ */
+private fun CompactTreeFormatter.isEmitted(
+    node: AccessibilityNodeData,
+    options: CompactFormatOptions,
+): Boolean = shouldKeepNode(node) && (options.includeOffscreen || node.visible)
+
+/** Global note lines shared by [CompactTreeFormatter.formatMultiWindow] and [formatMultiWindowPage]. */
+private fun appendGlobalNotes(
+    sb: StringBuilder,
+    degraded: Boolean,
+    options: CompactFormatOptions,
+) {
+    if (degraded) sb.appendLine(CompactTreeFormatter.DEGRADATION_NOTE)
+    sb.appendLine(CompactTreeFormatter.NOTE_LINE)
+    sb.appendLine(CompactTreeFormatter.NOTE_LINE_CUSTOM_ELEMENTS)
+    sb.appendLine(CompactTreeFormatter.NOTE_LINE_FLAGS_LEGEND)
+    sb.appendLine(
+        if (options.includeOffscreen) {
+            CompactTreeFormatter.NOTE_LINE_OFFSCREEN_HINT
+        } else {
+            CompactTreeFormatter.NOTE_LINE_OFFSCREEN_OMITTED
+        },
+    )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Pagination (Plan 47)
 //
 // Implemented as top-level/extension functions to keep CompactTreeFormatter within detekt's
@@ -354,10 +387,13 @@ class CompactTreeFormatter
 // (shouldKeepNode, buildWindowHeader, appendElementRow) and companion constants.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** Total number of kept nodes across all windows (equals the number of TSV rows emitted). */
-internal fun CompactTreeFormatter.countKeptNodes(result: MultiWindowResult): Int {
+/** Total number of emitted nodes across all windows for [options] (equals the number of TSV rows emitted). */
+internal fun CompactTreeFormatter.countKeptNodes(
+    result: MultiWindowResult,
+    options: CompactFormatOptions = CompactFormatOptions(),
+): Int {
     fun count(node: AccessibilityNodeData): Int {
-        var c = if (shouldKeepNode(node)) 1 else 0
+        var c = if (isEmitted(node, options)) 1 else 0
         for (child in node.children) c += count(child)
         return c
     }
@@ -371,7 +407,8 @@ internal fun CompactTreeFormatter.countKeptNodes(result: MultiWindowResult): Int
  * [CompactTreeFormatter.formatMultiWindow]; the only additions are the `page:` line and the
  * trailing cursor note. A window section is emitted only when it contributes at least one row to
  * this page. Each window's `hierarchy:` block lists the page's rows for that window PLUS their
- * kept-ancestors (kept-ancestor closure), preserving today's kept-depth indentation.
+ * emitted ancestors (emitted-ancestor closure), preserving the emitted-depth indentation; rendered
+ * with [ScreenStateSnapshot.options].
  *
  * [page] MUST be within 1..[ScreenStateSnapshot.totalPages] (validated by the caller).
  */
@@ -381,16 +418,13 @@ internal fun CompactTreeFormatter.formatMultiWindowPage(
 ): String {
     val result = snapshot.result
     val screenInfo = snapshot.screenInfo
+    val options = snapshot.options
     val startIndex = (page - 1) * CompactTreeFormatter.PAGE_SIZE
     val endIndexExclusive = minOf(page * CompactTreeFormatter.PAGE_SIZE, snapshot.totalKeptNodes)
-    val perWindowKept = result.windows.map { collectKeptNodes(this, it.tree) }
+    val perWindowKept = result.windows.map { collectKeptNodes(this, it.tree, options) }
 
     val sb = StringBuilder()
-    if (result.degraded) sb.appendLine(CompactTreeFormatter.DEGRADATION_NOTE)
-    sb.appendLine(CompactTreeFormatter.NOTE_LINE)
-    sb.appendLine(CompactTreeFormatter.NOTE_LINE_CUSTOM_ELEMENTS)
-    sb.appendLine(CompactTreeFormatter.NOTE_LINE_FLAGS_LEGEND)
-    sb.appendLine(CompactTreeFormatter.NOTE_LINE_OFFSCREEN_HINT)
+    appendGlobalNotes(sb, result.degraded, options)
     sb.appendLine(
         "screen:${screenInfo.width}x${screenInfo.height} " +
             "density:${screenInfo.densityDpi} orientation:${screenInfo.orientation}",
@@ -408,7 +442,7 @@ internal fun CompactTreeFormatter.formatMultiWindowPage(
         val overlapEnd = minOf(endIndexExclusive, windowEnd)
         if (overlapStart < overlapEnd) {
             val pageNodes = kept.subList(overlapStart - windowGlobalStart, overlapEnd - windowGlobalStart)
-            appendWindowPageSection(this, sb, windowData, pageNodes)
+            appendWindowPageSection(this, sb, windowData, pageNodes, options)
         }
         windowGlobalStart = windowEnd
     }
@@ -431,15 +465,16 @@ private fun buildPaginationNote(
             "fetched every page; stop once you have found what you need."
     }
 
-/** Pre-order list of kept nodes (same order/filter as walkTree's TSV emission). */
+/** Pre-order list of emitted nodes (same order/filter as walkTree's TSV emission for [options]). */
 private fun collectKeptNodes(
     formatter: CompactTreeFormatter,
     root: AccessibilityNodeData,
+    options: CompactFormatOptions,
 ): List<AccessibilityNodeData> {
     val out = ArrayList<AccessibilityNodeData>()
 
     fun walk(node: AccessibilityNodeData) {
-        if (formatter.shouldKeepNode(node)) out.add(node)
+        if (formatter.isEmitted(node, options)) out.add(node)
         for (child in node.children) walk(child)
     }
     walk(root)
@@ -447,16 +482,23 @@ private fun collectKeptNodes(
 }
 
 /**
- * Emits a window section for [pageNodes]: window header, TSV rows, and a `hierarchy:` block holding
- * those rows PLUS their kept-ancestors (kept-ancestor closure), at the same kept-depth indentation
- * as [CompactTreeFormatter.formatMultiWindow].
+ * Emits a window section for [pageNodes]: window header, TSV rows and — when
+ * [CompactFormatOptions.includeHierarchy] — a `hierarchy:` block holding those rows PLUS their
+ * emitted ancestors (emitted-ancestor closure), at the same emitted-depth indentation as
+ * [CompactTreeFormatter.formatMultiWindow].
  */
 private fun appendWindowPageSection(
     formatter: CompactTreeFormatter,
     sb: StringBuilder,
     windowData: WindowData,
     pageNodes: List<AccessibilityNodeData>,
+    options: CompactFormatOptions,
 ) {
+    sb.appendLine(formatter.buildWindowHeader(windowData))
+    sb.appendLine(CompactTreeFormatter.HEADER)
+    for (node in pageNodes) formatter.appendElementRow(sb, node)
+    if (!options.includeHierarchy) return
+
     val pageNodeIds = pageNodes.mapTo(HashSet()) { it.id }
     val closure = HashSet<String>()
 
@@ -465,21 +507,18 @@ private fun appendWindowPageSection(
         for (child in node.children) {
             if (covers(child)) subtreeCovers = true
         }
-        if (subtreeCovers && formatter.shouldKeepNode(node)) closure.add(node.id)
+        if (subtreeCovers && formatter.isEmitted(node, options)) closure.add(node.id)
         return subtreeCovers
     }
     covers(windowData.tree)
 
-    sb.appendLine(formatter.buildWindowHeader(windowData))
-    sb.appendLine(CompactTreeFormatter.HEADER)
-    for (node in pageNodes) formatter.appendElementRow(sb, node)
     sb.appendLine(CompactTreeFormatter.HIERARCHY_HEADER)
 
     fun appendHierarchy(
         node: AccessibilityNodeData,
         depth: Int,
     ) {
-        val isKept = formatter.shouldKeepNode(node)
+        val isKept = formatter.isEmitted(node, options)
         if (isKept && node.id in closure) {
             repeat(depth) { sb.append(CompactTreeFormatter.HIERARCHY_INDENT) }
             sb.appendLine(node.id)

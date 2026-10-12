@@ -47,10 +47,43 @@ object PaginationTestTrees {
         )
     }
 
+    /**
+     * Same shape as [keptNodeWindow], but leaf `i` is off-screen (`visible = false`) when
+     * `i % offscreenEvery == 0`. Ancestors stay on-screen. Emitted count with off-screen excluded =
+     * [ancestorDepth] + leaves with `i % offscreenEvery != 0`.
+     */
+    fun mixedVisibilityWindow(
+        keptLeafCount: Int,
+        offscreenEvery: Int,
+        ancestorDepth: Int = 2,
+        windowId: Int = 1,
+        packageName: String = "com.example.app",
+    ): WindowData {
+        require(offscreenEvery > 0) { "offscreenEvery must be > 0" }
+        val base = keptNodeWindow(keptLeafCount, ancestorDepth, windowId, packageName)
+        return base.copy(tree = markOffscreenLeaves(base.tree, offscreenEvery))
+    }
+
+    /** Deep copy of [node] with EVERY node off-screen (`visible = false`). */
+    fun allOffscreen(node: AccessibilityNodeData): AccessibilityNodeData =
+        node.copy(visible = false, children = node.children.map { allOffscreen(it) })
+
     fun result(
         window: WindowData,
         degraded: Boolean = false,
     ): MultiWindowResult = MultiWindowResult(windows = listOf(window), degraded = degraded)
+
+    private fun markOffscreenLeaves(
+        node: AccessibilityNodeData,
+        offscreenEvery: Int,
+    ): AccessibilityNodeData =
+        if (node.id.startsWith(LEAF_PREFIX)) {
+            node.copy(visible = node.id.removePrefix(LEAF_PREFIX).toInt() % offscreenEvery != 0)
+        } else {
+            node.copy(children = node.children.map { markOffscreenLeaves(it, offscreenEvery) })
+        }
+
+    private const val LEAF_PREFIX = "node_leaf_"
 
     private fun container(
         index: Int,

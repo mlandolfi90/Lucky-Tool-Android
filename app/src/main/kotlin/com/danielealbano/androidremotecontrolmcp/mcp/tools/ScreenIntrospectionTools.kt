@@ -12,6 +12,7 @@ import com.danielealbano.androidremotecontrolmcp.services.accessibility.Accessib
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityServiceProvider
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.AccessibilityTreeParser
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.BoundsData
+import com.danielealbano.androidremotecontrolmcp.services.accessibility.CompactFormatOptions
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.CompactTreeFormatter
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.MultiWindowResult
 import com.danielealbano.androidremotecontrolmcp.services.accessibility.ScreenInfo
@@ -72,6 +73,13 @@ class GetScreenStateHandler
 
         suspend fun execute(arguments: JsonObject?): CallToolResult {
             val includeScreenshot = parseIncludeScreenshot(arguments)
+            // Strictly validated on BOTH paths; a cursor call ignores the values (its page is rendered
+            // with the snapshot's options).
+            val options =
+                CompactFormatOptions(
+                    includeOffscreen = McpToolUtils.optionalBoolean(arguments, PARAM_INCLUDE_OFFSCREEN, true),
+                    includeHierarchy = McpToolUtils.optionalBoolean(arguments, PARAM_INCLUDE_HIERARCHY, true),
+                )
             val cursorElement = arguments?.get("cursor")
             // Absent, JSON null, or a blank string ⇒ fresh cursorless capture (settled behavior 1).
             // A present, non-blank value (INCLUDING a non-primitive object/array) ⇒ paged path,
@@ -81,7 +89,7 @@ class GetScreenStateHandler
                     cursorElement is JsonNull ||
                     ((cursorElement as? JsonPrimitive)?.contentOrNull?.isBlank() == true)
             return if (isFresh) {
-                handleFreshRequest(includeScreenshot)
+                handleFreshRequest(includeScreenshot, options)
             } else {
                 McpToolUtils.untrustedTextResult(buildPagedText(cursorElement, includeScreenshot))
             }
@@ -94,7 +102,10 @@ class GetScreenStateHandler
                 false
             }
 
-        private suspend fun handleFreshRequest(includeScreenshot: Boolean): CallToolResult {
+        private suspend fun handleFreshRequest(
+            includeScreenshot: Boolean,
+            options: CompactFormatOptions,
+        ): CallToolResult {
             // getFreshWindows clears the framework accessibility cache before reading (see there),
             // so this fresh capture — and the node cache it populates for element/action tools —
             // round-trips live even for stale-prone WebView content.
@@ -108,10 +119,15 @@ class GetScreenStateHandler
             val processed = privacyToolGate.tree(rawResult)
             val result = processed.result
             val screenInfo = accessibilityServiceProvider.getScreenInfo()
-            val totalKept = compactTreeFormatter.countKeptNodes(result)
+            val totalKept = compactTreeFormatter.countKeptNodes(result, options)
             val totalPages = ceilDiv(totalKept, CompactTreeFormatter.PAGE_SIZE)
-            val compactOutput = buildFreshPageText(result, screenInfo, totalKept, totalPages)
-            Log.d(TAG, "get_screen_state: includeScreenshot=$includeScreenshot pages=$totalPages")
+            val compactOutput = buildFreshPageText(result, screenInfo, totalKept, totalPages, options)
+            Log.d(
+                TAG,
+                "get_screen_state: includeScreenshot=$includeScreenshot " +
+                    "includeOffscreen=${options.includeOffscreen} " +
+                    "includeHierarchy=${options.includeHierarchy} pages=$totalPages",
+            )
             return if (includeScreenshot) {
                 buildScreenshotResult(result, screenInfo, compactOutput, processed.flaggedBounds)
             } else {
@@ -124,10 +140,11 @@ class GetScreenStateHandler
             screenInfo: ScreenInfo,
             totalKept: Int,
             totalPages: Int,
+            options: CompactFormatOptions,
         ): String =
             if (totalPages <= 1) {
                 screenStateSnapshotCache.clear()
-                compactTreeFormatter.formatMultiWindow(result, screenInfo)
+                compactTreeFormatter.formatMultiWindow(result, screenInfo, options)
             } else {
                 val snapshot =
                     ScreenStateSnapshot(
@@ -136,6 +153,7 @@ class GetScreenStateHandler
                         screenInfo,
                         totalKept,
                         totalPages,
+                        options,
                     )
                 screenStateSnapshotCache.store(snapshot)
                 compactTreeFormatter.formatMultiWindowPage(snapshot, 1)
@@ -287,38 +305,16 @@ class GetScreenStateHandler
                         "${toolNamePrefix}get_node_details to retrieve full values). Optionally includes a " +
                         "low-resolution screenshot (only request the screenshot when the node " +
                         "list alone is not sufficient to understand the screen layout). " +
-                        "Includes a hierarchy section showing node nesting via indentation. " +
+                        "Includes a hierarchy section showing node nesting via indentation " +
+                        "(omit it with include_hierarchy=false). " +
                         "Large screens are split into pages of 200 nodes: the response includes a " +
                         "'page:N/total' line and a cursor; call again with that cursor to fetch the " +
                         "next page. You do NOT need to fetch every page — stop once you have found " +
-                        "what you need. A screenshot can only be requested on page 1 (without a cursor).",
+                        "what you need. A screenshot can only be requested on page 1 (without a cursor). " +
+                        "Set include_offscreen=false to omit off-screen nodes and shrink the response.",
                 inputSchema =
                     ToolSchema(
-                        properties =
-                            buildJsonObject {
-                                if (includeScreenshotParamEnabled) {
-                                    putJsonObject("include_screenshot") {
-                                        put("type", "boolean")
-                                        put(
-                                            "description",
-                                            "Include a low-resolution screenshot. " +
-                                                "Only request when the UI node list is not sufficient.",
-                                        )
-                                        put("default", false)
-                                    }
-                                }
-                                putJsonObject("cursor") {
-                                    put("type", "string")
-                                    put(
-                                        "description",
-                                        "Pagination cursor from a previous response (format " +
-                                            "\"<id>.<page>\"). Omit to capture a fresh screen state " +
-                                            "starting at page 1. A cursor is tied to one screen " +
-                                            "snapshot; if the screen changed you will be told to " +
-                                            "request a fresh one.",
-                                    )
-                                }
-                            },
+                        properties = buildGetScreenStateProperties(includeScreenshotParamEnabled),
                         required = emptyList(),
                     ),
             ) { request -> execute(request.arguments) }
@@ -329,6 +325,8 @@ class GetScreenStateHandler
             internal const val SCREENSHOT_MAX_SIZE = 700
             private const val TAG = "MCP:ScreenIntrospection"
             internal const val CURSOR_RADIX = 36
+            internal const val PARAM_INCLUDE_OFFSCREEN = "include_offscreen"
+            internal const val PARAM_INCLUDE_HIERARCHY = "include_hierarchy"
             internal const val INVALID_CURSOR_MESSAGE =
                 "note:invalid cursor. Call get_screen_state without a cursor to get a fresh " +
                     "screen-state snapshot starting at page 1."
@@ -396,6 +394,54 @@ fun registerScreenIntrospectionTools(
         )
     }
 }
+
+/** get_screen_state input-schema properties (kept out of [GetScreenStateHandler.register] for length). */
+private fun buildGetScreenStateProperties(includeScreenshotParamEnabled: Boolean): JsonObject =
+    buildJsonObject {
+        if (includeScreenshotParamEnabled) {
+            putJsonObject("include_screenshot") {
+                put("type", "boolean")
+                put(
+                    "description",
+                    "Include a low-resolution screenshot. " +
+                        "Only request when the UI node list is not sufficient.",
+                )
+                put("default", false)
+            }
+        }
+        putJsonObject("cursor") {
+            put("type", "string")
+            put(
+                "description",
+                "Pagination cursor from a previous response (format " +
+                    "\"<id>.<page>\"). Omit to capture a fresh screen state " +
+                    "starting at page 1. A cursor is tied to one screen " +
+                    "snapshot; if the screen changed you will be told to " +
+                    "request a fresh one.",
+            )
+        }
+        putJsonObject(GetScreenStateHandler.PARAM_INCLUDE_OFFSCREEN) {
+            put("type", "boolean")
+            put(
+                "description",
+                "Include nodes not visible to the user (flag 'off': hidden pager pages, prefetched " +
+                    "list rows). Set false for a smaller response with on-screen nodes only. Applies " +
+                    "to fresh captures only; cursor pages reuse the value of the capture that issued " +
+                    "the cursor.",
+            )
+            put("default", true)
+        }
+        putJsonObject(GetScreenStateHandler.PARAM_INCLUDE_HIERARCHY) {
+            put("type", "boolean")
+            put(
+                "description",
+                "Include the 'hierarchy:' section (node nesting by indentation) for each window. " +
+                    "Set false for a smaller response. Applies to fresh captures only; cursor pages " +
+                    "reuse the value of the capture that issued the cursor.",
+            )
+            put("default", true)
+        }
+    }
 
 /**
  * Parses a pagination cursor "<id>.<page>" into (id, page). Validates FORMAT only (id present, page

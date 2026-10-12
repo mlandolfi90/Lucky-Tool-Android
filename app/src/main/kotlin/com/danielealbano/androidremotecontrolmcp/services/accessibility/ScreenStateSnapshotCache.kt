@@ -10,6 +10,8 @@ package com.danielealbano.androidremotecontrolmcp.services.accessibility
  * @property screenInfo Screen dimensions/orientation captured at snapshot time.
  * @property totalKeptNodes Total number of kept TSV nodes across all windows.
  * @property totalPages Number of pages (ceil(totalKeptNodes / PAGE_SIZE)).
+ * @property options Output options of the capture that created this snapshot; every cursor page
+ *   of this snapshot is rendered with them.
  */
 data class ScreenStateSnapshot(
     val id: String,
@@ -17,6 +19,7 @@ data class ScreenStateSnapshot(
     val screenInfo: ScreenInfo,
     val totalKeptNodes: Int,
     val totalPages: Int,
+    val options: CompactFormatOptions = CompactFormatOptions(),
 )
 
 /**
