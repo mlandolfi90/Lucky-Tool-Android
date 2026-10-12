@@ -128,7 +128,7 @@ The typical startup flow: User opens app → enables Accessibility Service in An
 
 - `app/src/main/kotlin/com/danielealbano/androidremotecontrolmcp/`
   - `McpApplication.kt` — Application class (Hilt setup)
-  - `services/accessibility/` — `McpAccessibilityService.kt`, `AccessibilityTreeParser.kt`, `ElementFinder.kt`, `ActionExecutor.kt`, `ActionExecutorImpl.kt`, `AccessibilityServiceProvider.kt`, `AccessibilityServiceProviderImpl.kt`, `TypeInputController.kt`, `TypeInputControllerImpl.kt`, `ScreenInfo.kt`, `CompactTreeFormatter.kt`, `AccessibilityNodeCache.kt`, `AccessibilityNodeCacheImpl.kt`
+  - `services/accessibility/` — `McpAccessibilityService.kt`, `AccessibilityTreeParser.kt`, `ElementFinder.kt`, `ActionExecutor.kt`, `ActionExecutorImpl.kt`, `AccessibilityServiceProvider.kt`, `AccessibilityServiceProviderImpl.kt`, `TypeInputController.kt`, `TypeInputControllerImpl.kt`, `ScreenInfo.kt`, `CompactTreeFormatter.kt`, `CompactFormatOptions.kt`, `AccessibilityNodeCache.kt`, `AccessibilityNodeCacheImpl.kt`
   - `services/screencapture/` — `ScreenCaptureProvider.kt`, `ScreenCaptureProviderImpl.kt`, `ScreenshotEncoder.kt`, `ScreenshotAnnotator.kt`, `ApiLevelProvider.kt`
   - `services/storage/` — `StorageLocationProvider.kt`, `StorageLocationProviderImpl.kt`, `FileOperationProvider.kt`, `FileOperationProviderImpl.kt`
   - `services/apps/` — `AppManager.kt`, `AppManagerImpl.kt`
@@ -209,11 +209,11 @@ The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas,
 
 | Tool | Description | Parameters | Output |
 |------|-------------|------------|--------|
-| `android_get_screen_state` | Returns consolidated screen state: app info, screen dimensions, and a compact filtered flat TSV list of UI nodes | `include_screenshot` (boolean, optional, default false) | `TextContent` with compact TSV (text/desc truncated to 100 chars, comma-separated abbreviated flags with on/off visibility). Optionally includes `ImageContent` with annotated low-resolution JPEG screenshot (700px max, red bounding boxes with node ID labels). |
+| `android_get_screen_state` | Returns consolidated screen state: app info, screen dimensions, and a compact filtered flat TSV list of UI nodes | `include_screenshot` (boolean, optional, default false), `cursor` (string, optional), `include_offscreen` (boolean, optional, default true), `include_hierarchy` (boolean, optional, default true) | `TextContent` with compact TSV (text/desc truncated to 100 chars, comma-separated abbreviated flags with on/off visibility). Optionally includes `ImageContent` with annotated low-resolution JPEG screenshot (700px max, red bounding boxes with node ID labels). |
 
 **Error**: Returns `CallToolResult(isError = true)` if accessibility permission not granted or screen capture not available.
 
-**Note**: `android_get_screen_state` returns a filtered flat TSV list — structural-only nodes (no text, no contentDescription, no resourceId, not interactive) are omitted. Text and contentDescription are truncated to 100 characters; use `android_get_node_details` to retrieve full values. Flags use comma-separated abbreviations with a legend in the TSV notes. When screenshot is included, it is annotated with red bounding boxes and node ID labels for on-screen nodes.
+**Note**: `android_get_screen_state` returns a filtered flat TSV list — structural-only nodes (no text, no contentDescription, no resourceId, not interactive) are omitted. Text and contentDescription are truncated to 100 characters; use `android_get_node_details` to retrieve full values. Flags use comma-separated abbreviations with a legend in the TSV notes. When screenshot is included, it is annotated with red bounding boxes and node ID labels for on-screen nodes. `include_offscreen=false` omits nodes not visible to the user and `include_hierarchy=false` omits the `hierarchy:` section; both apply to fresh captures only (cursor pages reuse the capture's values).
 
 ### 2. Touch Action Tools (5 tools)
 
@@ -231,7 +231,7 @@ The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas,
 
 | Tool | Description | Required Params | Optional Params |
 |------|-------------|-----------------|-----------------|
-| `android_find_nodes` | Find UI nodes by criteria | `by` (string: text/content_desc/resource_id/class_name), `value` (string) | `exact_match` (boolean, default false) |
+| `android_find_nodes` | Find UI nodes by criteria | `by` (string: text/content_desc/resource_id/class_name), `value` (string) | `exact_match` (boolean, default false), `visible_only` (boolean, default false) |
 | `android_click_node` | Click an accessibility node | `node_id` (string) | — |
 | `android_long_click_node` | Long-click an accessibility node | `node_id` (string) | — |
 | `android_tap_node` | Gesture-based tap at a random point within node bounds (unlike `android_click_node`, which uses ACTION_CLICK) | `node_id` (string) | `inset_percentage` (number: 0.0-45.0, default 5.0) |
