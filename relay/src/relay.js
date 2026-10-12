@@ -1,7 +1,9 @@
 import { createServer } from 'node:http';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { WebSocketServer } from 'ws';
 import { FRAME_TYPES, decodeDeviceFrame, encodePing, encodeRequestFrame } from './frames.js';
+import { formatRequestLog, rpcSummary, safePath, shortId } from './requestLog.js';
 
 export const DEVICE_PATH = '/device';
 export const HEALTH_PATH = '/relay/health';
@@ -174,14 +176,51 @@ export function createRelay(config, logger = console) {
     pending.clear();
   }
 
+  /**
+   * Starts the timing record of one request and logs it once, when its response closes: answered, refused, failed
+   * (the createServer 500 included, with resBytes=0) or abandoned by the client (`aborted=1`; phases still running
+   * print `-`). `totalMs`, status and abort state are read first; JSON-RPC sniffing runs after them, so it never
+   * adds to the measured latency. A failure while building or writing the line is contained here: a missing log
+   * line must never crash the relay.
+   */
+  function startTiming(req, res, url) {
+    const timing = {
+      rid: '-',
+      method: req.method,
+      path: url === null ? '-' : safePath(url.pathname),
+      reqBytes: 0,
+      resBytes: 0,
+      inflight: inFlight,
+      idleMs: null,
+      sentAt: null,
+      bodyMs: null,
+      deviceMs: null,
+      rpcInput: null,
+    };
+    const startedAt = performance.now();
+    res.once('close', () => {
+      const totalMs = performance.now() - startedAt;
+      const status = res.headersSent ? res.statusCode : null;
+      const aborted = !res.writableFinished;
+      try {
+        const { rpcInput, ...fields } = timing;
+        logger.info(formatRequestLog({ ...fields, ...rpcSummary(rpcInput), status, totalMs, aborted }));
+      } catch {
+        logger.warn('relay: timing log failed');
+      }
+    });
+    return timing;
+  }
+
   async function handleHttp(req, res) {
     const url = parseTarget(req.url);
-    if (url === null) {
-      sendJson(res, 400, { error: 'invalid request target' }, true);
+    if (url !== null && url.pathname === HEALTH_PATH) {
+      sendJson(res, 200, { status: 'ok', deviceConnected: device !== null });
       return;
     }
-    if (url.pathname === HEALTH_PATH) {
-      sendJson(res, 200, { status: 'ok', deviceConnected: device !== null });
+    const timing = startTiming(req, res, url);
+    if (url === null) {
+      timing.resBytes = sendJson(res, 400, { error: 'invalid request target' }, true);
       return;
     }
     try {
@@ -189,27 +228,49 @@ export function createRelay(config, logger = console) {
       if (inFlight >= config.maxPending) throw new RelayError(503, 'too many pending requests');
       inFlight += 1;
       try {
-        const body = await readBody(req, config.maxBodyBytes, config.bodyTimeoutMs);
-        const response = await forward(req, url, body);
+        const bodyStart = performance.now();
+        let body;
+        try {
+          body = await readBody(req, config.maxBodyBytes, config.bodyTimeoutMs);
+        } finally {
+          timing.bodyMs = performance.now() - bodyStart;
+        }
+        timing.reqBytes = body.length;
+        timing.rpcInput = {
+          method: req.method,
+          pathname: url.pathname,
+          contentType: req.headers['content-type'],
+          body,
+        };
+        const id = randomUUID();
+        timing.rid = shortId(id);
+        timing.sentAt = Date.now();
+        timing.idleMs = device === null ? null : timing.sentAt - device.lastSeen;
+        const deviceStart = performance.now();
+        let response;
+        try {
+          response = await forward(req, url, body, id);
+        } finally {
+          timing.deviceMs = performance.now() - deviceStart;
+        }
         if (response.body.length > config.maxResponseBytes) throw new RelayError(502, 'device response too large');
-        writeResponse(req, res, response);
+        timing.resBytes = writeResponse(req, res, response);
       } finally {
         inFlight -= 1;
       }
     } catch (err) {
       if (err instanceof RelayError) {
-        sendJson(res, err.status, { error: err.message }, CLOSE_CONNECTION_STATUSES.has(err.status));
+        timing.resBytes = sendJson(res, err.status, { error: err.message }, CLOSE_CONNECTION_STATUSES.has(err.status));
         return;
       }
       throw err;
     }
   }
 
-  function forward(req, url, body) {
+  function forward(req, url, body, id) {
     if (device === null) {
       return Promise.reject(new RelayError(503, 'device not connected'));
     }
-    const id = randomUUID();
     const frame = encodeRequestFrame({
       id,
       method: req.method,
@@ -251,6 +312,7 @@ export function createRelay(config, logger = console) {
     return headers;
   }
 
+  /** Returns the body bytes sent (0 for HEAD, 204 and 304). */
   function writeResponse(req, res, frame) {
     for (const [name, values] of Object.entries(frame.headers)) {
       if (!HOP_BY_HOP_HEADERS.has(name.toLowerCase())) res.setHeader(name, values);
@@ -258,10 +320,11 @@ export function createRelay(config, logger = console) {
     res.statusCode = frame.status;
     if (req.method === 'HEAD' || NO_BODY_STATUSES.has(frame.status)) {
       res.end();
-      return;
+      return 0;
     }
     res.setHeader('content-length', frame.body.length);
     res.end(frame.body);
+    return frame.body.length;
   }
 
   function close() {
@@ -328,10 +391,12 @@ function readBody(req, maxBytes, timeoutMs) {
   });
 }
 
+/** Returns the body bytes sent. */
 function sendJson(res, status, payload, closeConnection = false) {
   const body = Buffer.from(JSON.stringify(payload), 'utf8');
   const headers = { 'content-type': 'application/json', 'content-length': body.length };
   if (closeConnection) headers.connection = 'close';
   res.writeHead(status, headers);
   res.end(body);
+  return body.length;
 }

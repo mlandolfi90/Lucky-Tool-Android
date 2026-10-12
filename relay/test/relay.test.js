@@ -4,7 +4,15 @@ import { connect } from 'node:net';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { CLOSE_REPLACED } from '../src/relay.js';
-import { TEST_TOKEN, connectDevice, nextFrame, rejectedUpgradeStatus, respond, startRelay } from './helpers.js';
+import {
+  TEST_TOKEN,
+  connectDevice,
+  nextFrame,
+  recordingLogger,
+  rejectedUpgradeStatus,
+  respond,
+  startRelay,
+} from './helpers.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const NO_FRAME = 'no frame';
@@ -96,6 +104,16 @@ function requestsDispatched(server, count) {
   });
 }
 
+/** The per-request timing lines a recording logger captured. */
+const timingLines = (logger) => logger.lines.filter((line) => line.startsWith('relay: request '));
+
+/** Numeric value of `field` in a timing line, or null when the field printed `-`. */
+function numberOf(line, field) {
+  const match = new RegExp(`${field}=(-|[0-9.]+)`).exec(line);
+  assert.ok(match !== null, `${field} missing from ${line}`);
+  return match[1] === '-' ? null : Number(match[1]);
+}
+
 describe('relay', () => {
   let ctx;
   const extras = [];
@@ -120,8 +138,8 @@ describe('relay', () => {
     return ws;
   }
 
-  async function extraRelay(overrides) {
-    const extra = await startRelay(overrides);
+  async function extraRelay(overrides, logger) {
+    const extra = await startRelay(overrides, logger);
     extras.push(extra);
     return extra;
   }
@@ -535,5 +553,305 @@ describe('relay', () => {
 
     const [code] = await closed;
     assert.equal(code, 1001);
+  });
+
+  describe('timing log', () => {
+    const TOOL_CALL_BODY = JSON.stringify({
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name: 'tap_node', arguments: { text: 'secret-arg' } },
+    });
+
+    /** A relay with a recording logger plus a connected device. */
+    async function recorded(overrides = {}) {
+      const logger = recordingLogger();
+      const extra = await extraRelay(overrides, logger);
+      return { logger, extra };
+    }
+
+    async function oneLine(logger) {
+      await eventually(() => timingLines(logger).length === 1, DEADLINE_MS, 'one timing line');
+      return timingLines(logger)[0];
+    }
+
+    it('proxied request logs one timing line', async () => {
+      const { logger, extra } = await recorded();
+      const ws = await device(extra.wsUrl);
+      const framePromise = nextFrame(ws);
+      const fetchPromise = fetchText(`${extra.baseUrl}/mcp`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: TOOL_CALL_BODY,
+      });
+
+      const frame = await framePromise;
+      respond(ws, frame.id, { body: 'answer' });
+      const { res } = await fetchPromise;
+      assert.equal(res.status, 200);
+
+      const line = await oneLine(logger);
+      assert.match(line, new RegExp(`rid=${frame.id.slice(0, 8)}`));
+      assert.match(line, /method=POST/);
+      assert.match(line, / path=\/mcp /);
+      assert.match(line, /rpc=tools\/call/);
+      assert.match(line, /tool=tap_node/);
+      assert.match(line, /status=200/);
+      assert.match(line, new RegExp(`reqBytes=${Buffer.byteLength(TOOL_CALL_BODY)}`));
+      assert.match(line, /resBytes=6/);
+      assert.match(line, /inflight=0/);
+      for (const field of ['idleMs', 'sentAt', 'bodyMs', 'deviceMs', 'totalMs']) {
+        assert.equal(typeof numberOf(line, field), 'number', `${field} should be numeric in ${line}`);
+      }
+    });
+
+    it('timing line keeps secrets out', async () => {
+      const { logger, extra } = await recorded();
+      const ws = await device(extra.wsUrl);
+      const framePromise = nextFrame(ws);
+      const fetchPromise = fetchText(`${extra.baseUrl}/mcp?code=secret-code`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer secret-client-token' },
+        body: TOOL_CALL_BODY,
+      });
+
+      const frame = await framePromise;
+      respond(ws, frame.id, { body: 'answer' });
+      await fetchPromise;
+
+      const line = await oneLine(logger);
+      assert.equal(logger.lines.some((entry) => entry.includes('secret')), false);
+      assert.equal(line.includes('127.0.0.1'), false);
+    });
+
+    it('capability path is redacted', async () => {
+      const { logger, extra } = await recorded();
+      const ws = await device(extra.wsUrl);
+      const framePromise = nextFrame(ws);
+      const fetchPromise = fetchText(`${extra.baseUrl}/s/secret-token`);
+
+      const frame = await framePromise;
+      respond(ws, frame.id, { body: 'file' });
+      await fetchPromise;
+
+      const line = await oneLine(logger);
+      assert.match(line, / path=\/s\/<redacted> /);
+      assert.match(line, /rpc=- /);
+      assert.equal(line.includes('secret-token'), false);
+    });
+
+    it('deviceMs covers the device answer time', async () => {
+      const { logger, extra } = await recorded({ requestTimeoutMs: 2_000 });
+      const ws = await device(extra.wsUrl);
+      const framePromise = nextFrame(ws);
+      const fetchPromise = fetchText(`${extra.baseUrl}/mcp`, { method: 'POST', body: '{}' });
+
+      const frame = await framePromise;
+      await sleep(60);
+      respond(ws, frame.id, { body: 'answer' });
+      await fetchPromise;
+
+      const line = await oneLine(logger);
+      assert.ok(numberOf(line, 'deviceMs') >= 50, line);
+    });
+
+    it('request without device is logged with 503', async () => {
+      const { logger, extra } = await recorded();
+
+      const { res } = await fetchText(`${extra.baseUrl}/mcp`, { method: 'POST', body: '{}' });
+      assert.equal(res.status, 503);
+
+      const line = await oneLine(logger);
+      assert.match(line, /status=503/);
+      assert.match(line, /rid=- /);
+      assert.equal(numberOf(line, 'bodyMs'), null);
+      assert.equal(numberOf(line, 'deviceMs'), null);
+    });
+
+    it('device timeout is logged with 504', async () => {
+      const { logger, extra } = await recorded();
+      const ws = await device(extra.wsUrl);
+      const framePromise = nextFrame(ws);
+
+      const { res } = await fetchText(`${extra.baseUrl}/mcp`, { method: 'POST', body: '{}' });
+      await framePromise;
+      assert.equal(res.status, 504);
+
+      const line = await oneLine(logger);
+      assert.match(line, /status=504/);
+      assert.equal(typeof numberOf(line, 'deviceMs'), 'number');
+    });
+
+    it('health checks are not logged', async () => {
+      const { logger, extra } = await recorded();
+
+      const { res } = await fetchText(`${extra.baseUrl}/relay/health`);
+      assert.equal(res.status, 200);
+      await sleep(50);
+
+      assert.deepEqual(timingLines(logger), []);
+    });
+
+    it('malformed target is logged with 400', async () => {
+      const { logger, extra } = await recorded();
+
+      const raw = await rawRequest(
+        extra.port,
+        'GET http://[/x HTTP/1.1\r\nHost: relay.invalid\r\nConnection: close\r\n\r\n',
+      );
+      assert.match(raw, /^HTTP\/1\.1 400 /);
+
+      const line = await oneLine(logger);
+      assert.match(line, /status=400/);
+      assert.match(line, / path=- /);
+    });
+
+    it('client abort is flagged', async () => {
+      const { logger, extra } = await recorded();
+      const ws = await device(extra.wsUrl);
+      const framePromise = nextFrame(ws);
+      const socket = await openSocket(
+        extra.port,
+        'POST /mcp HTTP/1.1\r\nHost: relay.invalid\r\nContent-Length: 2\r\n\r\n{}',
+      );
+
+      const frame = await framePromise;
+      socket.destroy();
+
+      const line = await oneLine(logger);
+      assert.match(line, /aborted=1$/);
+      assert.match(line, /status=- /);
+      assert.equal(numberOf(line, 'deviceMs'), null);
+
+      respond(ws, frame.id, { body: 'late' });
+      await sleep(50);
+      assert.equal(timingLines(logger).length, 1);
+    });
+
+    it('oversized body is logged with 413', async () => {
+      const { logger, extra } = await recorded();
+      await device(extra.wsUrl);
+      const chunk = 'a'.repeat(2048);
+
+      const raw = await rawRequest(
+        extra.port,
+        `POST /mcp HTTP/1.1\r\nHost: relay.invalid\r\nTransfer-Encoding: chunked\r\n\r\n${chunk.length.toString(16)}\r\n${chunk}\r\n0\r\n\r\n`,
+      );
+      assert.match(raw, /^HTTP\/1\.1 413 /);
+
+      const line = await oneLine(logger);
+      assert.match(line, /status=413/);
+      assert.match(line, /rid=- /);
+      assert.equal(typeof numberOf(line, 'bodyMs'), 'number');
+      assert.equal(numberOf(line, 'deviceMs'), null);
+    });
+
+    it('stalled upload is logged with 408', async () => {
+      const logger = recordingLogger();
+      const strict = await extraRelay({ maxPending: 1, bodyTimeoutMs: 150 }, logger);
+      await device(strict.wsUrl);
+
+      const raw = await rawRequest(strict.port, STALLED_UPLOAD);
+      assert.match(raw, /^HTTP\/1\.1 408 /);
+
+      const line = await oneLine(logger);
+      assert.match(line, /status=408/);
+      assert.match(line, /rid=- /);
+      assert.ok(numberOf(line, 'bodyMs') >= 100, line);
+      assert.equal(numberOf(line, 'deviceMs'), null);
+    });
+
+    it('oversized device response is logged with 502', async () => {
+      const { logger, extra } = await recorded();
+      const ws = await device(extra.wsUrl);
+      const framePromise = nextFrame(ws);
+      const fetchPromise = fetchText(`${extra.baseUrl}/mcp`);
+
+      const frame = await framePromise;
+      respond(ws, frame.id, { body: 'a'.repeat(2049) });
+      const { res, text } = await fetchPromise;
+      assert.equal(res.status, 502);
+
+      const line = await oneLine(logger);
+      assert.match(line, /status=502/);
+      assert.match(line, new RegExp(`rid=${frame.id.slice(0, 8)}`));
+      assert.equal(typeof numberOf(line, 'deviceMs'), 'number');
+      assert.match(line, new RegExp(`resBytes=${Buffer.byteLength(text)}`));
+    });
+
+    it('bodiless answers log resBytes=0', async () => {
+      const { logger, extra } = await recorded();
+      const ws = await device(extra.wsUrl);
+
+      let framePromise = nextFrame(ws);
+      let fetchPromise = fetchText(`${extra.baseUrl}/x`, { method: 'HEAD' });
+      let frame = await framePromise;
+      respond(ws, frame.id, { body: 'ignored' });
+      await fetchPromise;
+
+      framePromise = nextFrame(ws);
+      fetchPromise = fetchText(`${extra.baseUrl}/x`, { method: 'POST', body: 'y' });
+      frame = await framePromise;
+      respond(ws, frame.id, { status: 204, body: 'ignored' });
+      await fetchPromise;
+
+      await eventually(() => timingLines(logger).length === 2, DEADLINE_MS, 'two timing lines');
+      const [head, noContent] = timingLines(logger);
+      assert.match(head, /status=200/);
+      assert.match(head, /resBytes=0/);
+      assert.match(noContent, /status=204/);
+      assert.match(noContent, /resBytes=0/);
+    });
+
+    it('inflight counts requests already in flight', async () => {
+      const { logger, extra } = await recorded();
+      const ws = await device(extra.wsUrl);
+
+      const firstFrame = nextFrame(ws);
+      const first = fetchText(`${extra.baseUrl}/mcp`, { method: 'POST', body: '{}' });
+      const frame1 = await firstFrame;
+      const secondFrame = nextFrame(ws);
+      const second = fetchText(`${extra.baseUrl}/mcp`, { method: 'POST', body: '{}' });
+      const frame2 = await secondFrame;
+
+      respond(ws, frame1.id, { body: 'a' });
+      respond(ws, frame2.id, { body: 'b' });
+      await first;
+      await second;
+
+      await eventually(() => timingLines(logger).length === 2, DEADLINE_MS, 'two timing lines');
+      const lines = timingLines(logger);
+      const lineOf = (id) => lines.find((line) => line.includes(`rid=${id.slice(0, 8)}`));
+      assert.match(lineOf(frame1.id), /inflight=0/);
+      assert.match(lineOf(frame2.id), /inflight=1/);
+    });
+
+    it('timing log failure is contained', async () => {
+      const lines = [];
+      const push = (message) => {
+        lines.push(message);
+      };
+      const exploding = {
+        lines,
+        info(message) {
+          if (message.startsWith('relay: request ')) throw new Error('boom');
+          lines.push(message);
+        },
+        warn: push,
+        error: push,
+      };
+      const extra = await extraRelay({}, exploding);
+
+      const first = await fetchText(`${extra.baseUrl}/mcp`, { method: 'POST', body: '{}' });
+      const second = await fetchText(`${extra.baseUrl}/mcp`, { method: 'POST', body: '{}' });
+      assert.equal(first.res.status, 503);
+      assert.equal(second.res.status, 503);
+
+      await eventually(
+        () => lines.filter((line) => line === 'relay: timing log failed').length === 2,
+        DEADLINE_MS,
+        'two contained failures',
+      );
+    });
   });
 });
