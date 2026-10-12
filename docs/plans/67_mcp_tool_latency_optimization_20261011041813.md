@@ -419,25 +419,25 @@ the saving is output size, not read time.
 a row clipped at the screen edge is on-screen.
 
 **Acceptance criteria:**
-- [ ] `get_screen_state` accepts `include_offscreen` and `include_hierarchy` (boolean, default `true`) (D2.1).
-- [ ] Without the options, the output is byte-identical to the pre-plan output for a fresh single page, a fresh paged
+- [x] `get_screen_state` accepts `include_offscreen` and `include_hierarchy` (boolean, default `true`) (D2.1).
+- [x] Without the options, the output is byte-identical to the pre-plan output for a fresh single page, a fresh paged
       capture and every cursor page.
-- [ ] `include_offscreen=false` omits every `visible == false` node from TSV rows and hierarchy; on-screen
+- [x] `include_offscreen=false` omits every `visible == false` node from TSV rows and hierarchy; on-screen
       descendants of an omitted node are promoted to the nearest emitted ancestor's depth (as structural-only nodes
       are today); `NOTE_LINE_OFFSCREEN_HINT` is replaced by `NOTE_LINE_OFFSCREEN_OMITTED` (D2.3).
-- [ ] `include_hierarchy=false` prints no `hierarchy:` header or lines in any window, single-page and paged (D2.4).
-- [ ] Page count and `nodes:a-b/total` count emitted rows: `countKeptNodes(result, options)` equals the TSV row count
+- [x] `include_hierarchy=false` prints no `hierarchy:` header or lines in any window, single-page and paged (D2.4).
+- [x] Page count and `nodes:a-b/total` count emitted rows: `countKeptNodes(result, options)` equals the TSV row count
       for all 4 option combinations.
-- [ ] A cursor call renders with the options stored in its snapshot; option params on a cursor call are validated
+- [x] A cursor call renders with the options stored in its snapshot; option params on a cursor call are validated
       and otherwise ignored (D2.2).
-- [ ] `find_nodes` accepts `visible_only` (boolean, default `false`); when `true` only `visible == true` matches are
+- [x] `find_nodes` accepts `visible_only` (boolean, default `false`); when `true` only `visible == true` matches are
       returned (D2.8; filter position per Context, privacy constraint).
-- [ ] A non-boolean value (string, number, JSON null, object) for any of the three params returns
+- [x] A non-boolean value (string, number, JSON null, object) for any of the three params returns
       `CallToolResult(isError = true)` via `McpToolUtils.optionalBoolean` (D2.5).
-- [ ] Unchanged with any option values: screenshot annotation, `privacyToolGate.tree` / `texts` input (the full
+- [x] Unchanged with any option values: screenshot annotation, `privacyToolGate.tree` / `texts` input (the full
       merged tree / full match list), node-cache population, `include_screenshot` and `exact_match` parsing, settings
       UI (D2.7).
-- [ ] Schemas expose the three params with defaults; `docs/MCP_TOOLS.md` and `docs/PROJECT.md` are updated.
+- [x] Schemas expose the three params with defaults; `docs/MCP_TOOLS.md` and `docs/PROJECT.md` are updated.
 
 ### Task 2.1 — Output options model and snapshot field
 
@@ -480,7 +480,7 @@ so existing positional constructor calls compile.
 ```
 
 **Definition of Done:**
-- [ ] `CompactFormatOptions` exists with both defaults `true`; `ScreenStateSnapshot.options` is the 6th and last
+- [x] `CompactFormatOptions` exists with both defaults `true`; `ScreenStateSnapshot.options` is the 6th and last
       constructor param, defaulted.
 
 ### Task 2.2 — Formatter honours options through one emission predicate
@@ -732,10 +732,10 @@ In its KDoc, replace "kept-ancestors (kept-ancestor closure), preserving today's
 [ScreenStateSnapshot.options]."
 
 **Definition of Done:**
-- [ ] Outside `isEmitted`, no walker in this file calls `shouldKeepNode(`.
-- [ ] `CompactTreeFormatter`'s member function count is unchanged (10): new logic is top-level or extension
+- [x] Outside `isEmitted`, no walker in this file calls `shouldKeepNode(`.
+- [x] `CompactTreeFormatter`'s member function count is unchanged (10): new logic is top-level or extension
       functions (detekt `TooManyFunctions`).
-- [ ] `appendGlobalNotes` with default options prints exactly the pre-plan note lines in the same order.
+- [x] `appendGlobalNotes` with default options prints exactly the pre-plan note lines in the same order.
 
 ### Task 2.3 — get_screen_state params
 
@@ -909,9 +909,9 @@ The handler class is `GetScreenStateHandler` (`ScreenIntrospectionTools.kt:55`).
 ```
 
 **Definition of Done:**
-- [ ] Schema property order (with `include_screenshot` enabled): `include_screenshot`, `cursor`,
+- [x] Schema property order (with `include_screenshot` enabled): `include_screenshot`, `cursor`,
       `include_offscreen`, `include_hierarchy`.
-- [ ] The cursor path is unchanged apart from the validation; it never reads the parsed `options`.
+- [x] The cursor path is unchanged apart from the validation; it never reads the parsed `options`.
 
 ### Task 2.4 — find_nodes visible_only
 
@@ -965,7 +965,7 @@ All edits in `.../mcp/tools/NodeActionTools.kt` (`FindNodesTool`). `ElementFinde
 ```
 
 **Definition of Done:**
-- [ ] The `find_nodes` schema lists `visible_only` right after `exact_match`; the debug line carries `visibleOnly`.
+- [x] The `find_nodes` schema lists `visible_only` right after `exact_match`; the debug line carries `visibleOnly`.
 
 ### Task 2.5 — Tests for US2
 
@@ -1131,7 +1131,7 @@ exists today). New imports: `kotlinx.serialization.json.JsonNull`, `kotlinx.seri
 | `rejects object` | `putJsonObject("flag") {}` → `InvalidParams`, message contains `"must be a boolean"` |
 
 **Definition of Done:**
-- [ ] All rows implemented. The only edits to existing tests are: the two `formatMultiWindow` stub updates and the
+- [x] All rows implemented. The only edits to existing tests are: the two `formatMultiWindow` stub updates and the
       `val gate` extraction in `PaginationTests` of `ScreenIntrospectionToolsTest`; the move of `snapshotOf` /
       `tsvRows` / `hierarchyLines` to outer-class scope (with the new `options` parameter of `snapshotOf`) in
       `CompactTreeFormatterTest`; the `val gate` extraction in `FindNodesToolTests`; and the import additions listed
@@ -1297,8 +1297,8 @@ line, after "...for on-screen nodes."):
 ```
 
 **Definition of Done:**
-- [ ] Documented schemas match `buildGetScreenStateProperties` and `FindNodesTool.register` strings exactly.
-- [ ] No size-saving figure is published.
+- [x] Documented schemas match `buildGetScreenStateProperties` and `FindNodesTool.register` strings exactly.
+- [x] No size-saving figure is published.
 
 ---
 
