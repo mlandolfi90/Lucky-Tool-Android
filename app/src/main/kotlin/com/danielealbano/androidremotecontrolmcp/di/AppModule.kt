@@ -24,6 +24,8 @@ import com.danielealbano.androidremotecontrolmcp.mcp.oauth.JwtTokenService
 import com.danielealbano.androidremotecontrolmcp.mcp.oauth.JwtTokenServiceImpl
 import com.danielealbano.androidremotecontrolmcp.mcp.oauth.OAuthApprovalCoordinator
 import com.danielealbano.androidremotecontrolmcp.mcp.oauth.OAuthApprovalCoordinatorImpl
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinatorImpl
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyPipeline
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyPipelineImpl
 import com.danielealbano.androidremotecontrolmcp.privacy.model.PrivacyModelStore
@@ -204,6 +206,11 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindServerLogRepository(impl: ServerLogRepositoryImpl): ServerLogRepository
+
+    /** Binds the in-memory ledger of per-app action approvals. */
+    @Binds
+    @Singleton
+    abstract fun bindActionApprovalCoordinator(impl: ActionApprovalCoordinatorImpl): ActionApprovalCoordinator
 }
 
 @Suppress("TooManyFunctions")
