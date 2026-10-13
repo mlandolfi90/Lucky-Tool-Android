@@ -486,7 +486,7 @@ block, so every compile task of every variant and test source set (and every CI 
 
 **Acceptance criteria**
 - [x] All five Kotlin modules set `allWarningsAsErrors`.
-- [ ] A deliberately introduced warning fails CI (Task 6.2).
+- [x] A deliberately introduced warning fails CI (Task 6.2).
 
 ### Task 5.1 — Enable the flag
 
@@ -530,13 +530,13 @@ does: the PR is opened before CI is read.
 
 ### Task 6.2 — Publish and read CI once
 
-- [ ] Commits in order, staging named files only: plan doc → US1 → US2 → US3 → US4 → US5. Push once.
-- [ ] PR `feat/kotlin-warnings-zero` → `feat/lucky-brand-icon-and-name` (`gh pr create --repo mlandolfi90/Lucky-Tool-Android`), body per TOOLS.md, Manual QA Steps of US3 listed as declared and not taken.
-- [ ] At the same time, branch `probe/werror-gate` = final head + one commit reverting Action 4.1.1 only, with a **draft** PR against `feat/kotlin-warnings-zero`, so both CI runs overlap.
-- [ ] Read each CI run **once** with `gh run view`:
+- [x] Commits in order, staging named files only: plan doc → US1 → US2 → US3 → US4 → US5. Push once.
+- [x] PR `feat/kotlin-warnings-zero` → `feat/lucky-brand-icon-and-name` (`gh pr create --repo mlandolfi90/Lucky-Tool-Android`), body per TOOLS.md, Manual QA Steps of US3 listed as declared and not taken.
+- [x] At the same time, branch `probe/werror-gate` = final head + one commit reverting Action 4.1.1 only, with a **draft** PR against `feat/kotlin-warnings-zero`, so both CI runs overlap.
+- [x] Read each CI run **once** with `gh run view`:
   - PR: all five jobs green, `0` lines matching `w: file:///` in the log, the new and updated tests listed as passed.
   - Probe: the compile jobs fail with `warnings found and -Werror specified` naming `CountryDisplay.kt:24`.
-- [ ] Close the probe PR and delete the probe branch.
+- [x] Close the probe PR and delete the probe branch.
 
 ---
 
@@ -581,3 +581,13 @@ Coverage confirmed: 43/43 warnings, one action each; every diff's context matche
 | N2 | ServerScreen toast is skipped if the screen leaves composition before the coroutine runs | Accepted: as specified by the plan |
 | N3 | The baseline covers only the variants CI compiles | Accepted: by design; CI green is the proof |
 | N4 | Plan checkboxes unticked | Ticked |
+
+## CI result — read once (2026-10-13)
+
+- PR #9, run `38354988320` on `c10aa22`: all five jobs green; `0` lines matching `w: file:///`; unit tests 2490/0 failed
+  (FOSS) and 2530/0 failed (GMS). Touched suites, both variants: AppIconCacheTest 4, ClipboardExtensionsTest 2,
+  CountryDisplayTest 6, EventChannelServiceTest 15, OAuthAccessValidatorTest 10, OAuthFlowIntegrationTest 30,
+  AccessibilityTreeParserTest 33, E2EConfigReceiverTest 10 — all passed.
+- Probe PR #10, run `38355017368` on `fa47c0d`: Unit & Integration, both release builds and E2E failed with
+  `warnings found and -Werror specified` at `CountryDisplay.kt:24:20`; Lint (no compilation) green. PR closed, branch
+  deleted.
