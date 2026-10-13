@@ -46,8 +46,15 @@ class BrandResourcesTest {
 
     /** The transform attributes of one group, as a map of the six names this plan sets. */
     private fun Element.transform(): Map<String, String> =
-        listOf("pivotX", "pivotY", "scaleX", "scaleY", "translateX", "translateY")
-            .associateWith { getAttribute("android:$it") }
+        listOf(
+            "pivotX",
+            "pivotY",
+            "scaleX",
+            "scaleY",
+            "translateX",
+            "translateY",
+            "rotation",
+        ).associateWith { getAttribute("android:$it") }
 
     /** The `path` elements that are direct children of this element, not descendants. */
     private fun Element.childPaths(): List<Element> =
@@ -136,6 +143,12 @@ class BrandResourcesTest {
                 "$drawable: a clip-path can clip its whole group away, and every row here " +
                     "selects the path tag, so none of them would see it"
             }
+            TRIM_ATTRIBUTES.forEach { attribute ->
+                assertFalse(attribute in read(drawable)) {
+                    "$drawable: $attribute draws only part of the stroke, or none of it, " +
+                        "while every colour, width and pathData assertion still holds"
+                }
+            }
             paths.forEachIndexed { index, path ->
                 assertValidPathData(path.getAttribute("android:pathData"), "$drawable path #$index")
             }
@@ -147,6 +160,9 @@ class BrandResourcesTest {
         val outer = parse(FOREGROUND).elements("group").first()
         assertEquals(SAFE_ZONE_TRANSFORM, outer.transform()) {
             "the mark must map to 22..86 of the 108 canvas (painted radius 32.30 <= 33)"
+        }
+        assertEquals(3, parse(FOREGROUND).elements("group").size) {
+            "the mark is three groups; one more nesting them rescales the whole drawing"
         }
         assertEquals(SHIELD_PATH, outer.childPaths().first().getAttribute("android:pathData")) {
             "the painted outline sets the radius as much as the transform does: a shoulder " +
@@ -267,6 +283,11 @@ class BrandResourcesTest {
         assertFalse("android:fillAlpha" in read(MONOCHROME)) {
             "a layer with no fill has nothing to fade"
         }
+        assertFalse("aapt" in read(MONOCHROME)) {
+            "an aapt:attr child can redirect a stroke to a transparent colour while the " +
+                "plain attribute still reads white, and declaring the namespace on the " +
+                "path hides it from the root attribute set"
+        }
         assertEquals(
             listOf(SAFE_ZONE_TRANSFORM, INNER_BORDER_TRANSFORM, FLAME_TRANSFORM),
             document.elements("group").map { it.transform() },
@@ -308,6 +329,7 @@ class BrandResourcesTest {
     fun `notification icon drops the inner border and the symbol`() {
         val document = parse(NOTIFICATION)
         assertEquals(2, document.elements("path").size) { "one shield border and the flame" }
+        assertEquals(1, document.elements("group").size) { "only the flame is grouped" }
         assertEquals(listOf(OPAQUE_WHITE, ""), strokeColours(NOTIFICATION)) {
             "a small icon renders alpha only, so a faded stroke erases the silhouette " +
                 "and the knockout colour must not appear at all at 24dp"
@@ -410,6 +432,7 @@ class BrandResourcesTest {
         val FOREGROUND_STROKE_ALPHAS = listOf("", "0.85", "", "", "", "")
         val MONOCHROME_STROKE_COLOURS = List(6) { OPAQUE_WHITE }
         val NO_FILL_ALPHA = List(6) { "" }
+        val TRIM_ATTRIBUTES = listOf("android:trimPathStart", "android:trimPathEnd")
 
         val FOREGROUND_ROOT_ATTRIBUTES =
             listOf(
@@ -462,6 +485,7 @@ class BrandResourcesTest {
                 "scaleY" to "1.0",
                 "translateX" to "22",
                 "translateY" to "22",
+                "rotation" to "",
             )
 
         val INNER_BORDER_TRANSFORM =
@@ -472,6 +496,7 @@ class BrandResourcesTest {
                 "scaleY" to "0.86",
                 "translateX" to "",
                 "translateY" to "",
+                "rotation" to "",
             )
 
         val FLAME_TRANSFORM =
@@ -482,6 +507,7 @@ class BrandResourcesTest {
                 "scaleY" to "2.2",
                 "translateX" to "14.4",
                 "translateY" to "15.4",
+                "rotation" to "",
             )
 
         /** SVG path commands and the number of parameters each repetition consumes. */

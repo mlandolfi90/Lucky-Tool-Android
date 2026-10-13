@@ -910,3 +910,48 @@ the 33 circle); the declared `dp` size of the two adaptive drawables (their only
 mipmaps, where `AdaptiveIconDrawable` lays each layer out to the mask, and `AboutScreen`, which
 overrides with `Modifier.size`); and `fillType`, `strokeMiterLimit` and a group-level `alpha`, per
 I-R6-2. Everything that can fade, repaint, clip or hide the art is now pinned.
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 7, 2026-10-13
+
+Scope: the single commit `22755a4`. Verdict: **the delta is sound, the round is NOT CLEAN.** The five
+assertions it added were confirmed correct, non-vacuous and strictly stronger than the
+namespace-filtered form they replaced, and all eleven claimed closures reproduced on the reviewer's own
+compiled runs. The hunt then found **four more visible ways** to change how the shipped art renders
+with all 15 rows passing — none a no-op, none in the declared terminus.
+
+**On the trade-off round 7 raised.** It offered a bounded but exhaustive closure — pin every group's
+and every path's complete attribute-name set — and flagged, correctly, that this would retire part of
+the documented terminus by guarding `fillType`, `strokeMiterLimit`, `strokeLineCap`, `strokeLineJoin`
+and `name`, and said that trade needed a decision. **The trade turned out to be avoidable.** The
+`VectorDrawable` attribute surface is finite and round 7 enumerated it; within it, the *visible* items
+left unpinned were exactly the four findings. Pinning those four precisely closes the class and leaves
+the terminus as measured, so nothing had to be decided away. Verified after the change: all four
+classes are caught **and** every terminus item still survives, which is the check that the fix did not
+quietly overreach.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| W-R7-1 | WARNING: **`android:trimPathStart` / `android:trimPathEnd` were unguarded on every path in all three drawables.** They trim the stroked geometry, so `trimPathEnd="0"` draws nothing while every colour, width, alpha, pathData and transform assertion stays green. Measured: the foreground's neon outer border gone; the notification's 24dp silhouette erased, leaving a bare flame; and on every monochrome path at once, **a wholly invisible themed icon** — that layer is strokes only, so it has nothing else to show. Breaks US1 AC1 and US2 AC1. | **Closed** in the row that iterates all three drawables: neither attribute may appear in any of the three files. `trimPathOffset` is deliberately left out and stays in the terminus — measured a no-op at the default full range. Verified by the real compiled test: four such mutations each fail one row |
+| W-R7-2 | WARNING: **`android:rotation` was unguarded on every group.** `Element.transform()` read six attribute names; `<group>` admits exactly two more, and `rotation` is the visible one. A rotation about pivot `0,0` moves the whole 64-unit box, so it defeats US1 AC2 (every painted pixel inside the key-content circle) and Task 1.1's DoD, which requires the outer group's transform to be *exactly* pivot 0,0 / scale 1.0 / translate 22. | **Closed at the root of the problem** rather than per row: `rotation` was added to the helper's key list, so every group whose transform is asserted now pins it — the foreground's three, the tinted layer's three and the notification's one, which is every group in the change. The three expected-transform constants each gained `"rotation" to ""`. Verified: 90°, 180°, 45° and a plausible accidental 7° each fail one row |
+| W-R7-3 | WARNING: **an extra nesting `<group>` was unguarded in the foreground and the notification.** Wrapping the existing groups in a `scale 0.1` group shrinks everything under it and passed all 15 rows; the tinted layer was already immune because its row pins its group-transform list to exactly three. Breaks US1 AC2 and US2 AC1. | **Closed** by pinning the group *count* in the two rows that own those files — three in the foreground, one in the notification — which leaves the existing path-to-transform bindings doing their own job instead of duplicating them. Verified: the foreground wrapper fails 8 rows and the notification wrapper 3 |
+| W-R7-4 | WARNING: **the tinted layer's `strokeColor` could still be redirected through an `aapt:attr` child** whose namespace is declared on the `<path>` rather than the root, so the new root attribute set never saw it, and that layer's only paint guard forbade `<gradient>`, not `aapt:attr`. This is round 6's W-R6-4 class, closed for the notification and the foreground and left open on the one layer whose colour *is* its opacity. Breaks US1 AC1. | **Closed**: the tinted layer may not mention `aapt` anywhere, on any element — which covers the attr child and the namespace wherever it is declared. Verified with the full mutation, keeping the plain `#FFFFFF` and redirecting the stroke to a transparent `ColorStateList`: it now fails one row. The reviewer's honest caveat is kept: with no SDK on this host the XML legality and the suite's silence were measured, the renderer's acceptance of an inline `ColorStateList` was inferred from the documented attribute type |
+| W-R7-5 | WARNING: two records overstated the coverage. The plan's round-6 section ends "**Everything that can fade, repaint, clip or hide the art is now pinned**", and `22755a4`'s commit message says the notification's flat painting is "which the other two files already required". Both are contradicted by the four findings above. | **Corrected here, not by rewriting either record.** The round-6 sentence stays as written — it is a sacred review section and this row is its correction; the claim was true of everything round 6 had measured and false as a general statement, which is exactly why round 7 was asked to hunt. The commit message stands as pushed: amending it would mean force-pushing rewritten history for a prose fix. The PR body's copy of the same sentence **was** editable and was corrected there |
+
+**Suite shape after round 7:** still **15 test methods**. The shared infrastructure differs from the
+plan's "in full" block in **six** places — two forced by ktlint and four additive: **5** helpers and
+**25** companion constants beyond the plan's 6 members and 14 constants (`TRIM_ATTRIBUTES` is the
+twenty-fifth).
+
+**Measured after the change:** the real compiled test 15/15 on this host; the eleven mutations of
+round 6 plus these eleven all caught, each in the row that owns its file; every terminus item still
+surviving; ktlint 1.8.0 → 0 findings and detekt 2.0.0-alpha.5 → exit 0 on both source sets.
+
+**Declared terminus, re-measured and unchanged.** Deliberately unpinned, each measured to have no
+visible effect on these shapes: `strokeLineCap` and `strokeLineJoin`; the declared `dp` size of the
+two adaptive drawables; `fillType`; `strokeMiterLimit`; `trimPathOffset`; `android:name` on a group or
+a path; `android:alpha` on a group; and `tileMode` on the gradient, whose stops already span the whole
+body. The honest form of the claim round 6 got wrong: **within the `VectorDrawable` attribute surface
+that round 7 enumerated, every item that visibly changes the art is pinned, and the rest are listed
+here with the measurement that found them harmless.**
