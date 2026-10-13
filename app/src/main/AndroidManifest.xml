@@ -170,6 +170,11 @@
             android:exported="false"
             android:label="@string/approval_title" />
 
+        <activity
+            android:name=".ui.PolicyApprovalActivity"
+            android:exported="false"
+            android:label="@string/policy_approval_title" />
+
         <!-- Remove WorkManager's default on-startup initializer: McpApplication implements
              Configuration.Provider for on-demand initialization with the Hilt worker factory. -->
         <provider
