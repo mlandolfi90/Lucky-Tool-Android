@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -36,6 +37,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -45,6 +47,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -73,7 +81,7 @@ fun AboutScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.tab_about)) },
+            title = { Text(stringResource(R.string.tab_about), modifier = Modifier.semantics { heading() }) },
             windowInsets = WindowInsets(0),
         )
         Column(
@@ -292,13 +300,25 @@ private fun UpdateSettingsSection(
     )
     Spacer(Modifier.height(8.dp))
 
-    Row(verticalAlignment = Alignment.CenterVertically) {
+    Row(
+        modifier =
+            Modifier.toggleable(
+                value = autoCheckEnabled,
+                role = Role.Switch,
+                onValueChange = viewModel::setAutoCheckEnabled,
+            ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
         Text(
             text = stringResource(R.string.about_auto_update_label),
             style = MaterialTheme.typography.bodyLarge,
             modifier = Modifier.weight(1f),
         )
-        Switch(checked = autoCheckEnabled, onCheckedChange = viewModel::setAutoCheckEnabled)
+        Switch(
+            checked = autoCheckEnabled,
+            onCheckedChange = null,
+            modifier = Modifier.minimumInteractiveComponentSize(),
+        )
     }
 
     Spacer(Modifier.height(8.dp))
@@ -307,7 +327,11 @@ private fun UpdateSettingsSection(
         enabled = checkState !is UpdateCheckUiState.Checking,
     ) {
         if (checkState is UpdateCheckUiState.Checking) {
-            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+            val checkingDescription = stringResource(R.string.about_checking_updates_cd)
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp).semantics { contentDescription = checkingDescription },
+                strokeWidth = 2.dp,
+            )
         } else {
             Text(stringResource(R.string.about_check_updates_button))
         }
@@ -327,7 +351,11 @@ private fun UpdateCheckStatusText(
             text = stringResource(R.string.about_update_found, state.update.versionName),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.clickable { onOpenUrl(state.update.releaseUrl) },
+            // Polite live region: TalkBack announces the check result when it appears.
+            modifier =
+                Modifier
+                    .clickable { onOpenUrl(state.update.releaseUrl) }
+                    .semantics { liveRegion = LiveRegionMode.Polite },
         )
         return
     }
@@ -350,5 +378,6 @@ private fun UpdateStatusLine(text: String) {
         text = text,
         style = MaterialTheme.typography.bodyMedium,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
     )
 }

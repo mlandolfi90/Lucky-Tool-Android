@@ -35,7 +35,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.data.model.GeofenceZone
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.GeofenceSettingsViewModel
 import kotlinx.coroutines.Dispatchers
@@ -96,17 +100,23 @@ fun GeofenceListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Geofence Zones") },
+                title = { Text("Geofence Zones", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.approval_profiles_back),
+                        )
                     }
                 },
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { onNavigateToMap(null) }) {
-                Icon(Icons.Default.Add, "Add zone")
+                Icon(
+                    Icons.Default.Add,
+                    contentDescription = stringResource(R.string.geofence_add_zone_cd),
+                )
             }
         },
     ) { padding ->
@@ -142,7 +152,11 @@ fun GeofenceListScreen(
                         trailingContent = {
                             Row {
                                 IconButton(onClick = { zoneToDelete = zone }) {
-                                    Icon(Icons.Default.Delete, "Delete")
+                                    Icon(
+                                        Icons.Default.Delete,
+                                        contentDescription =
+                                            stringResource(R.string.geofence_delete_zone_cd, zone.name),
+                                    )
                                 }
                             }
                         },

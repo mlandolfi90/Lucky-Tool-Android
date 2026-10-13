@@ -1,6 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="event_channel_subtitle">Notifications, WiFi, and geofence event forwarding</string>
+    <string name="event_channel_geofence_events">Geofence Events</string>
+    <!-- gms: geofence screens (TalkBack descriptions) -->
+    <string name="geofence_delete_zone_cd">Delete zone %1$s</string>
+    <string name="geofence_radius_slider_cd">Zone radius</string>
+    <string name="geofence_notify_on_enter_cd">Notify on enter</string>
+    <string name="geofence_notify_on_exit_cd">Notify on exit</string>
+    <string name="geofence_add_zone_cd">Add zone</string>
+    <string name="geofence_my_location_cd">My location</string>
+    <string name="geofence_search_address_cd">Search address</string>
     <!-- gms: Location rationale mentions geofences (overrides the main default) -->
     <string name="permission_location_rationale">Read GPS position and trigger geofences.</string>
     <!-- gms: Background Location permission row (geofence-only) -->

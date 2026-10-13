@@ -27,6 +27,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -62,7 +64,9 @@ fun PolicyApprovalScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.policy_approval_title)) },
+                title = {
+                    Text(stringResource(R.string.policy_approval_title), modifier = Modifier.semantics { heading() })
+                },
                 windowInsets = WindowInsets(0),
             )
         },

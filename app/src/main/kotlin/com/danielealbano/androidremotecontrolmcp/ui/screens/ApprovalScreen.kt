@@ -40,6 +40,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -81,7 +83,7 @@ fun ApprovalScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.approval_title)) },
+            title = { Text(stringResource(R.string.approval_title), modifier = Modifier.semantics { heading() }) },
             windowInsets = WindowInsets(0),
         )
         if (pending.isEmpty()) {

@@ -26,6 +26,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -87,7 +89,7 @@ private fun EditorTopBar(
     TopAppBar(
         title = {
             val titleRes = if (isNew) R.string.approval_profile_new_title else R.string.approval_profile_edit_title
-            Text(stringResource(titleRes))
+            Text(stringResource(titleRes), modifier = Modifier.semantics { heading() })
         },
         navigationIcon = {
             IconButton(onClick = onBack) {

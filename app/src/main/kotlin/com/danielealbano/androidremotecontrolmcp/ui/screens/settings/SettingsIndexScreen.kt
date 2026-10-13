@@ -27,6 +27,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.ui.navigation.SettingsRoute
 
@@ -38,7 +40,7 @@ fun SettingsIndexScreen(
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.tab_settings)) },
+            title = { Text(stringResource(R.string.tab_settings), modifier = Modifier.semantics { heading() }) },
             windowInsets = WindowInsets(0),
         )
         SettingsEntriesColumn(

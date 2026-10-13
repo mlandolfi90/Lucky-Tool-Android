@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,6 +34,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -44,6 +46,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -89,10 +93,15 @@ fun TunnelSettingsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.settings_tunnel_title)) },
+            title = {
+                Text(stringResource(R.string.settings_tunnel_title), modifier = Modifier.semantics { heading() })
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.approval_profiles_back),
+                    )
                 }
             },
             windowInsets = WindowInsets(0),
@@ -122,7 +131,13 @@ fun TunnelSettingsScreen(
 
             // Tunnel Enable/Disable Toggle
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth().toggleable(
+                        value = serverConfig.tunnelEnabled,
+                        enabled = sectionEnabled,
+                        role = Role.Switch,
+                        onValueChange = viewModel::updateTunnelEnabled,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -132,8 +147,9 @@ fun TunnelSettingsScreen(
                 )
                 Switch(
                     checked = serverConfig.tunnelEnabled,
-                    onCheckedChange = viewModel::updateTunnelEnabled,
+                    onCheckedChange = null,
                     enabled = sectionEnabled,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 )
             }
 
@@ -335,9 +351,9 @@ private fun NgrokConfigFields(
                             },
                         contentDescription =
                             if (showAuthtoken) {
-                                "Hide authtoken"
+                                stringResource(R.string.remote_access_ngrok_authtoken_hide)
                             } else {
-                                "Show authtoken"
+                                stringResource(R.string.remote_access_ngrok_authtoken_show)
                             },
                     )
                 }

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
@@ -22,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -30,6 +32,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
@@ -245,10 +251,15 @@ fun McpToolsSettingsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.settings_mcp_tools_title)) },
+            title = {
+                Text(stringResource(R.string.settings_mcp_tools_title), modifier = Modifier.semantics { heading() })
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.approval_profiles_back),
+                    )
                 }
             },
             windowInsets = WindowInsets(0),
@@ -325,7 +336,8 @@ private fun ToolCategoryHeader(
         )
         return
     }
-    Column(modifier = Modifier.clickable { onNavigateToPermissions() }) {
+    val openPermissionsLabel = stringResource(R.string.settings_mcp_tools_open_permissions_action)
+    Column(modifier = Modifier.clickable(onClickLabel = openPermissionsLabel) { onNavigateToPermissions() }) {
         Row(
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -364,15 +376,24 @@ private fun ToolRow(
     onParamToggle: (String, String, Boolean) -> Unit,
 ) {
     val toolEnabled = perms.isToolEnabled(tool.toolName)
+    val toggleEnabled = controlsEnabled && categoryGranted
     ListItem(
         headlineContent = { Text(tool.displayName) },
         trailingContent = {
             Switch(
                 checked = toolEnabled,
-                onCheckedChange = { onToolToggle(tool.toolName, it) },
-                enabled = controlsEnabled && categoryGranted,
+                onCheckedChange = null,
+                enabled = toggleEnabled,
+                modifier = Modifier.minimumInteractiveComponentSize(),
             )
         },
+        modifier =
+            Modifier.toggleable(
+                value = toolEnabled,
+                enabled = toggleEnabled,
+                role = Role.Switch,
+                onValueChange = { onToolToggle(tool.toolName, it) },
+            ),
     )
     if (toolEnabled) {
         tool.params.forEach { param ->
@@ -421,22 +442,44 @@ private fun ToolParamRow(
         } else {
             null
         }
+    val paramEnabled = perms.isParamEnabled(toolName, param.paramName)
+    val toggleEnabled = controlsEnabled && categoryGranted && paramGranted
+    val onToggle: (Boolean) -> Unit = { onParamToggle(toolName, param.paramName, it) }
+    val openPermissionsLabel = stringResource(R.string.settings_mcp_tools_open_permissions_action)
     ListItem(
         headlineContent = { Text(param.displayName) },
         modifier =
             if (showParamNote) {
-                Modifier.padding(start = 32.dp).clickable { onNavigateToPermissions() }
+                Modifier.padding(start = 32.dp).clickable(onClickLabel = openPermissionsLabel) {
+                    onNavigateToPermissions()
+                }
             } else {
-                Modifier.padding(start = 32.dp)
+                Modifier.padding(start = 32.dp).toggleable(
+                    value = paramEnabled,
+                    enabled = toggleEnabled,
+                    role = Role.Switch,
+                    onValueChange = onToggle,
+                )
             },
         leadingContent = leadingIcon,
         supportingContent = supportingNote,
         trailingContent = {
-            Switch(
-                checked = perms.isParamEnabled(toolName, param.paramName),
-                onCheckedChange = { onParamToggle(toolName, param.paramName, it) },
-                enabled = controlsEnabled && categoryGranted && paramGranted,
-            )
+            if (showParamNote) {
+                // The row opens Permissions, so the (disabled) switch is its own TalkBack stop: name it.
+                Switch(
+                    checked = paramEnabled,
+                    onCheckedChange = onToggle,
+                    enabled = toggleEnabled,
+                    modifier = Modifier.semantics { contentDescription = param.displayName },
+                )
+            } else {
+                Switch(
+                    checked = paramEnabled,
+                    onCheckedChange = null,
+                    enabled = toggleEnabled,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
+                )
+            }
         },
     )
 }

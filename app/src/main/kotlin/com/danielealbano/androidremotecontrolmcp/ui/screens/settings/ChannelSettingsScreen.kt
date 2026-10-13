@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -29,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -38,12 +40,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.ui.components.setPlainText
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.ChannelViewModel
 import kotlinx.coroutines.launch
@@ -68,10 +76,13 @@ fun ChannelSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Event Channel") },
+                title = { Text("Event Channel", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.approval_profiles_back),
+                        )
                     }
                 },
             )
@@ -114,7 +125,12 @@ fun ChannelSettingsScreen(
                             IconButton(onClick = { tokenVisible = !tokenVisible }) {
                                 Icon(
                                     if (tokenVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (tokenVisible) "Hide" else "Show",
+                                    contentDescription =
+                                        if (tokenVisible) {
+                                            stringResource(R.string.access_token_hide)
+                                        } else {
+                                            stringResource(R.string.access_token_show)
+                                        },
                                 )
                             }
                             IconButton(
@@ -123,12 +139,18 @@ fun ChannelSettingsScreen(
                                     scope.launch { clipboard.setPlainText(token) }
                                 },
                             ) {
-                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy")
+                                Icon(
+                                    Icons.Default.ContentCopy,
+                                    contentDescription = stringResource(R.string.access_token_copy),
+                                )
                             }
                             IconButton(
                                 onClick = { viewModel.generateNewAuthToken() },
                             ) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Generate new")
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = stringResource(R.string.access_token_regenerate),
+                                )
                             }
                         }
                     },
@@ -141,9 +163,16 @@ fun ChannelSettingsScreen(
                     trailingContent = {
                         Switch(
                             checked = config.enabled,
-                            onCheckedChange = { viewModel.updateChannelEnabled(it) },
+                            onCheckedChange = null,
+                            modifier = Modifier.minimumInteractiveComponentSize(),
                         )
                     },
+                    modifier =
+                        Modifier.toggleable(
+                            value = config.enabled,
+                            role = Role.Switch,
+                            onValueChange = { viewModel.updateChannelEnabled(it) },
+                        ),
                 )
             }
             item {
@@ -153,37 +182,50 @@ fun ChannelSettingsScreen(
                 )
             }
             item {
+                // The row opens the filter; the switch is its own TalkBack stop, so it carries the row's name.
+                val notificationEventsLabel = stringResource(R.string.event_channel_notification_events)
                 ListItem(
-                    headlineContent = { Text("Notification Events") },
+                    headlineContent = { Text(notificationEventsLabel) },
                     leadingContent = { Icon(Icons.Default.Notifications, contentDescription = null) },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Switch(
                                 checked = config.notifications.enabled,
                                 onCheckedChange = { viewModel.updateNotificationChannelEnabled(it) },
+                                modifier = Modifier.semantics { contentDescription = notificationEventsLabel },
                             )
                             Spacer(Modifier.width(4.dp))
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                         }
                     },
-                    modifier = Modifier.clickable(onClick = onNavigateToNotificationFilter),
+                    modifier =
+                        Modifier.clickable(
+                            onClickLabel = stringResource(R.string.event_channel_open_settings_action),
+                            onClick = onNavigateToNotificationFilter,
+                        ),
                 )
             }
             item {
+                val wifiEventsLabel = stringResource(R.string.event_channel_wifi_events)
                 ListItem(
-                    headlineContent = { Text("WiFi Events") },
+                    headlineContent = { Text(wifiEventsLabel) },
                     leadingContent = { Icon(Icons.Default.Wifi, contentDescription = null) },
                     trailingContent = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Switch(
                                 checked = config.wifi.enabled,
                                 onCheckedChange = { viewModel.updateWifiChannelEnabled(it) },
+                                modifier = Modifier.semantics { contentDescription = wifiEventsLabel },
                             )
                             Spacer(Modifier.width(4.dp))
                             Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = null)
                         }
                     },
-                    modifier = Modifier.clickable(onClick = onNavigateToWifiMonitor),
+                    modifier =
+                        Modifier.clickable(
+                            onClickLabel = stringResource(R.string.event_channel_open_settings_action),
+                            onClick = onNavigateToWifiMonitor,
+                        ),
                 )
             }
             geofenceEventSourceItem(navController)

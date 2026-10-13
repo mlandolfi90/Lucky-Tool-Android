@@ -42,6 +42,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -79,7 +81,9 @@ fun ApprovalProfileAddScreen(
     }
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.approval_profiles_add_title)) },
+            title = {
+                Text(stringResource(R.string.approval_profiles_add_title), modifier = Modifier.semantics { heading() })
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) {
                     Icon(

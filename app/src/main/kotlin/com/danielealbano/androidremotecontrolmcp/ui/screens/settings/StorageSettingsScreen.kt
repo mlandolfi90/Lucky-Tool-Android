@@ -40,6 +40,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -51,6 +52,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -132,10 +135,15 @@ fun StorageSettingsScreen(
     Box(modifier = modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize()) {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings_storage_title)) },
+                title = {
+                    Text(stringResource(R.string.settings_storage_title), modifier = Modifier.semantics { heading() })
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.approval_profiles_back),
+                        )
                     }
                 },
                 windowInsets = WindowInsets(0),
@@ -281,7 +289,12 @@ fun StorageSettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier =
+                        Modifier.fillMaxWidth().toggleable(
+                            value = serverConfig.allowHttpDownloads,
+                            role = Role.Switch,
+                            onValueChange = viewModel::updateAllowHttpDownloads,
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -297,14 +310,20 @@ fun StorageSettingsScreen(
                     }
                     Switch(
                         checked = serverConfig.allowHttpDownloads,
-                        onCheckedChange = viewModel::updateAllowHttpDownloads,
+                        onCheckedChange = null,
+                        modifier = Modifier.minimumInteractiveComponentSize(),
                     )
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier =
+                        Modifier.fillMaxWidth().toggleable(
+                            value = serverConfig.allowUnverifiedHttpsCerts,
+                            role = Role.Switch,
+                            onValueChange = viewModel::updateAllowUnverifiedHttpsCerts,
+                        ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
@@ -320,7 +339,8 @@ fun StorageSettingsScreen(
                     }
                     Switch(
                         checked = serverConfig.allowUnverifiedHttpsCerts,
-                        onCheckedChange = viewModel::updateAllowUnverifiedHttpsCerts,
+                        onCheckedChange = null,
+                        modifier = Modifier.minimumInteractiveComponentSize(),
                     )
                 }
             }
@@ -543,13 +563,13 @@ private fun StorageLocationRow(
             IconButton(onClick = onEdit) {
                 Icon(
                     imageVector = Icons.Default.Edit,
-                    contentDescription = stringResource(R.string.storage_location_edit_dialog_title),
+                    contentDescription = stringResource(R.string.storage_location_edit_cd, location.name),
                 )
             }
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Default.Delete,
-                    contentDescription = stringResource(R.string.storage_location_delete_dialog_title),
+                    contentDescription = stringResource(R.string.storage_location_delete_cd, location.name),
                 )
             }
         }

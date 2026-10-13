@@ -32,6 +32,7 @@
     <string name="settings_mcp_tools_subtitle">Enable or disable tools</string>
     <string name="settings_mcp_tools_placeholder">Tool permissions — available in next update</string>
     <string name="settings_mcp_tools_missing_permission">Permission not granted — these tools are hidden from clients. Tap to grant.</string>
+    <string name="settings_mcp_tools_open_permissions_action">Open permissions</string>
     <string name="settings_mcp_tools_param_missing_permission">Permission not granted — this option is unavailable. Tap to grant.</string>
     <string name="settings_permissions_title">Permissions</string>
     <string name="settings_permissions_subtitle">Accessibility, camera, microphone</string>
@@ -65,6 +66,8 @@
     <string name="server_status_error">Error: %1$s</string>
     <string name="server_action_start">Start</string>
     <string name="server_action_stop">Stop</string>
+    <string name="server_action_start_cd">Start %1$s</string>
+    <string name="server_action_stop_cd">Stop %1$s</string>
 
     <!-- Configuration -->
     <string name="configuration_title">Configuration</string>
@@ -107,6 +110,7 @@
     <string name="permission_enabled">Enabled</string>
     <string name="permission_granted">Granted</string>
     <string name="permission_grant">Grant</string>
+    <string name="permission_action_cd">%1$s: %2$s</string>
     <string name="permission_camera">Camera</string>
     <string name="permission_microphone">Microphone</string>
     <string name="permission_notification_listener">Notification Listener</string>
@@ -206,6 +210,8 @@
     <string name="remote_access_provider_ngrok">ngrok</string>
     <string name="remote_access_provider_ngrok_desc">Account required</string>
     <string name="remote_access_ngrok_authtoken_label">ngrok Authtoken</string>
+    <string name="remote_access_ngrok_authtoken_show">Show authtoken</string>
+    <string name="remote_access_ngrok_authtoken_hide">Hide authtoken</string>
     <string name="remote_access_ngrok_domain_label">Domain (optional)</string>
     <string name="remote_access_ngrok_domain_hint">Leave empty for auto-assigned</string>
     <string name="remote_access_provider_relay">WebSocket relay</string>
@@ -267,6 +273,8 @@
     <string name="storage_location_delete_dialog_message">Remove \"%1$s\"? The MCP server will no longer be able to access files in this location.</string>
     <string name="storage_location_delete_dialog_confirm">Remove</string>
     <string name="storage_location_delete_dialog_cancel">Cancel</string>
+    <string name="storage_location_edit_cd">Edit description of %1$s</string>
+    <string name="storage_location_delete_cd">Remove %1$s</string>
     <string name="storage_location_allow_write_label">Allow Write</string>
     <string name="storage_location_allow_delete_label">Allow Delete</string>
     <string name="storage_builtin_locations_title">Built-in Locations</string>
@@ -317,6 +325,7 @@
     <string name="oauth_clients_created">Created %1$s</string>
     <string name="oauth_clients_last_used">Last used %1$s</string>
     <string name="oauth_clients_revoke">Revoke</string>
+    <string name="oauth_clients_revoke_cd">Revoke %1$s</string>
     <string name="oauth_clients_revoke_dialog_title">Revoke client?</string>
     <string name="oauth_clients_revoke_dialog_body">Revoking immediately invalidates this client\'s tokens. It must re-authorize to reconnect.</string>
     <string name="oauth_clients_revoke_confirm">Revoke</string>
@@ -341,11 +350,17 @@
     <string name="about_updates_section">Updates</string>
     <string name="about_auto_update_label">Automatically check for updates</string>
     <string name="about_check_updates_button">Check for updates</string>
+    <string name="about_checking_updates_cd">Checking for updates</string>
     <string name="about_update_up_to_date">You\'re on the latest version</string>
     <string name="about_update_check_failed">Couldn\'t check for updates. Try again later.</string>
     <string name="about_update_dev_build">Update checks are disabled for development builds</string>
     <string name="about_update_found">Version %1$s is available — tap to view the release</string>
     <string name="event_channel_subtitle">Notifications and WiFi event forwarding</string>
+    <string name="event_channel_notification_events">Notification Events</string>
+    <string name="event_channel_wifi_events">WiFi Events</string>
+    <string name="event_channel_open_settings_action">Open settings</string>
+    <string name="wifi_monitor_add_ssid_cd">Add SSID</string>
+    <string name="wifi_monitor_remove_ssid_cd">Remove %1$s</string>
     <string name="settings_privacy_title">Privacy Mode</string>
     <string name="settings_privacy_subtitle">Hide personal data from AI providers</string>
     <string name="privacy_enable_label">Enable Privacy Mode</string>

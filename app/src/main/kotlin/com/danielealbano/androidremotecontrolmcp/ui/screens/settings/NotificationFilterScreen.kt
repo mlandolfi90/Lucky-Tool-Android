@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Android
@@ -25,6 +26,7 @@ import androidx.compose.material3.SegmentedButtonDefaults
 import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,8 +35,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.data.model.NotificationFilterMode
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.ChannelViewModel
 
@@ -53,10 +60,13 @@ fun NotificationFilterScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Notification Filter") },
+                title = { Text("Notification Filter", modifier = Modifier.semantics { heading() }) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.approval_profiles_back),
+                        )
                     }
                 },
             )
@@ -101,6 +111,8 @@ fun NotificationFilterScreen(
                 val appIcons by viewModel.appIcons.collectAsStateWithLifecycle()
                 LazyColumn {
                     items(filtered, key = { it.packageId }) { app ->
+                        val selected = app.packageId in config.notifications.filterApps
+                        // The headline names the app, so the icon stays decorative and the row is the checkbox.
                         ListItem(
                             headlineContent = { Text(app.name) },
                             supportingContent = {
@@ -111,13 +123,13 @@ fun NotificationFilterScreen(
                                 if (bitmap != null) {
                                     Image(
                                         bitmap = bitmap.asImageBitmap(),
-                                        contentDescription = app.name,
+                                        contentDescription = null,
                                         modifier = Modifier.size(40.dp),
                                     )
                                 } else {
                                     Icon(
                                         imageVector = Icons.Default.Android,
-                                        contentDescription = app.name,
+                                        contentDescription = null,
                                         modifier = Modifier.size(40.dp),
                                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
@@ -125,12 +137,19 @@ fun NotificationFilterScreen(
                             },
                             trailingContent = {
                                 Checkbox(
-                                    checked = app.packageId in config.notifications.filterApps,
-                                    onCheckedChange = { checked ->
-                                        viewModel.toggleNotificationFilterApp(app.packageId, checked)
-                                    },
+                                    checked = selected,
+                                    onCheckedChange = null,
+                                    modifier = Modifier.minimumInteractiveComponentSize(),
                                 )
                             },
+                            modifier =
+                                Modifier.toggleable(
+                                    value = selected,
+                                    role = Role.Checkbox,
+                                    onValueChange = { checked ->
+                                        viewModel.toggleNotificationFilterApp(app.packageId, checked)
+                                    },
+                                ),
                         )
                     }
                 }
