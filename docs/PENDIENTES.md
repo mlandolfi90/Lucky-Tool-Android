@@ -151,6 +151,20 @@ en cada pedido.
     pantalla de aprobación.
   - El riesgo que esto cubre no es un modelo malo sino uno **engañado** (un texto en pantalla o una
     notificación que le da órdenes): los límites duros y la notificación lo frenan aunque el modelo caiga.
+- **Plan 70, decidido por el humano el 2026-10-13:**
+  - un toque sobre algo que la app no sabe clasificar (ícono sin nombre, botón dibujado, página web dentro
+    de la app) **cuenta como botón de acción**; la notificación ofrece «esto no es un botón de acción», y
+    la app lo aprende, igual que con los montos;
+  - las excepciones que aflojan un perfil («no es un monto», «no es un botón de acción») piden la huella
+    si está activada, y si no, la notificación con una segunda confirmación;
+  - **ninguna excepción es para siempre**: quedan a la vista en el perfil de la app y se quitan con un
+    toque cuando el humano quiera;
+  - dos plantillas al crear un perfil, editables después: «App de dinero» (leer y navegar corren solas,
+    escribir pregunta en el chat, botón de acción por notificación, **monto máximo obligatorio** y por
+    encima prohibido) y «App común» (todo corre solo salvo el botón de acción, que pregunta en el chat;
+    sin monto).
+  - Fases: plan 70 con corre sola, preguntar en el chat, notificación, prohibido y monto máximo, más la
+    protección de la propia app; plan 70b con los extras (huella, «Parar», pantalla de aprobación).
 - **No es opcional:** el agente nunca puede tocar la propia app Lucky (aprobaciones, perfiles, ajustes);
   si no, podría aprobarse solo o aflojar sus límites.
 - **Plan 71, decidido el 2026-10-13:** si el agente corrige una tarea ya aprobada, los cambios menores
