@@ -59,9 +59,9 @@ The app runs directly on your Android device (or emulator) and exposes an HTTP s
 - Auto-start on boot
 - Remote access tunnels via Cloudflare Quick Tunnels, ngrok or a self-hosted WebSocket relay (public HTTPS URL)
 
-### 57 MCP Tools across 14 Categories
+### 59 MCP Tools across 15 Categories
 
-Screen introspection, system actions, touch actions, gestures, node actions, text input, utilities, file operations, app management, camera, intents, notifications, location, and sharing.
+Screen introspection, system actions, touch actions, gestures, node actions, text input, utilities, file operations, app management, camera, intents, notifications, location, sharing, and approvals.
 
 All tool names use the `android_` prefix by default (e.g., `android_tap`). When a device slug is configured (e.g., `pixel7`), the prefix becomes `android_pixel7_` (e.g., `android_pixel7_tap`).
 
@@ -72,17 +72,18 @@ See [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md) for the full tool reference with inpu
 - Server status monitoring (running/stopped) with permission warning banner
 - Connection info display (IP, port, token, tunnel URL)
 - Per-tool and per-parameter permissions (enable/disable individual MCP tools)
+- Per-app approval profiles (Settings > Approval profiles): for each app, choose whether reading, navigating, typing and action buttons run on their own, need your OK in the chat, need your approval on the phone, or are forbidden, with a maximum amount and amount tiers
 - Permission management (Accessibility, Notifications, Camera, Microphone)
 - Remote access tunnel configuration (Cloudflare / ngrok / WebSocket relay)
 - Storage location management (automatic locations + SAF authorization for file tools)
-- Server log viewer (MCP tool calls, tunnel events)
+- Server log viewer (MCP tool calls, tunnel events, approval decisions)
 - Headless setup via ADB (configure, grant permissions, start/stop server without UI)
 
 ### Comparison with Alternatives
 
 | Feature | This project | [mobile-mcp] | [Android-MCP] | [android-mcp-server] | [adb-mcp] | [droidrun-mcp] |
 |---------|:-:|:-:|:-:|:-:|:-:|:-:|
-| MCP tools | 57 | 21 | 11 | 5 | 10 | 11 |
+| MCP tools | 59 | 21 | 11 | 5 | 10 | 11 |
 | Runs on the phone (no ADB) | :white_check_mark: | :x: | :x: | :x: | :x: | :x: |
 | Action latency | 10-100 ms | 1-4 s | 1-4 s | 1-4 s | 1-4 s | 1-4 s |
 | Works over the internet | :white_check_mark: | :x: | :x: | :x: | :x: | :x: |
@@ -153,7 +154,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for full build requirements and instructi
 
    - **Accessibility Service** — **required.** Powers UI introspection, action execution, and screenshots; nothing works without it.
      - **If the toggle is greyed out** (Android 13+, common on Samsung/One UI for apps installed from an APK): this is Android's "Restricted settings" protection. A dialog reads *"Restricted setting — For your security, this setting is currently unavailable."* To unblock it, go to **Settings → Apps → Android Remote Control MCP → App info**, tap the **⋮ menu** (top-right), choose **Allow restricted settings**, confirm with your PIN/pattern/biometric, then enable the Accessibility Service. (Play Store / F-Droid installs are not affected.)
-   - **Notifications** — **optional** (recommended for OAuth). OAuth sign-in approvals (Claude.ai / Claude Desktop, ChatGPT, or any third-party OAuth client) arrive as heads-up notifications you tap to confirm the 2-digit code and approve. It is **no longer required** for OAuth login, though: if you don't grant this permission, pending requests still appear as a **card on the app's Server screen** that you tap to review and approve/deny. The **Event Channel** push feature — e.g. pushing device events to Claude Code — runs as a foreground service that posts its status notification through this permission on Android 13+.
+   - **Notifications** — **optional** (recommended for OAuth and [approval profiles](#approval-profiles)). OAuth sign-in approvals (Claude.ai / Claude Desktop, ChatGPT, or any third-party OAuth client) arrive as heads-up notifications you tap to confirm the 2-digit code and approve. It is **no longer required** for OAuth login, though: if you don't grant this permission, pending requests still appear as a **card on the app's Server screen** that you tap to review and approve/deny. Action approvals from approval profiles work the same way: a heads-up notification you tap to open the approval screen, plus a card on the Server screen while any approval is pending, which is the way in without this permission. The **Event Channel** push feature — e.g. pushing device events to Claude Code — runs as a foreground service that posts its status notification through this permission on Android 13+.
    - **Other permissions** (optional) — Camera, Microphone, and Location enable their corresponding MCP tools. The app works without them; only the dependent features are disabled until granted. See the [Permissions Reference](#permissions-reference) below for the complete list.
    - **Storage locations** — configure in Settings > Storage if you plan to use the file tools (automatic locations like Downloads, plus custom locations via SAF).
 
@@ -337,7 +338,8 @@ The bearer token is shown in the app's connection info and can be copied directl
 | Auto-start on Boot | Disabled | Start MCP server automatically when device boots |
 | Device Slug | Empty | Optional device identifier for tool name prefix (e.g., `pixel7` makes tools `android_pixel7_tap`) |
 | Remote Access Tunnel | Disabled | Expose server via public HTTPS URL (Cloudflare Quick Tunnels, ngrok or a self-hosted WebSocket relay) |
-| Tool Permissions | All enabled | Per-tool and per-parameter enable/disable (Settings > MCP Tools) |
+| Tool Permissions | All enabled | Per-tool and per-parameter enable/disable (Settings > MCP Tools). The two approval tools are always enabled. |
+| Approval Profiles | None | Per-app rules for what any connected AI may do in that app (Settings > Approval profiles). See [Approval Profiles](#approval-profiles). |
 | File Size Limit | 50 MB | Maximum file size for file operations (range 1-500 MB) |
 | Allow HTTP Downloads | Disabled | Allow non-HTTPS downloads via `android_download_from_url` |
 | Download Timeout | 60 seconds | Timeout for file downloads (range 10-300 seconds) |
@@ -568,6 +570,29 @@ Authentication is combined (dual-accept): a `/mcp` request is authorized by a va
 - **Default binding `127.0.0.1`**: Only accessible via adb port forwarding or tunnels (most secure)
 - **Optional binding `0.0.0.0`**: Accessible over network (use only on trusted networks; security warning displayed when enabling)
 - **HTTPS**: Optional, disabled by default. When enabled, uses auto-generated self-signed certificates or upload your own CA-signed certificate. Certificate is stored in app-private storage.
+
+### Approval Profiles
+
+Settings > Approval profiles attaches a profile to an app, such as a banking app. The profile applies to every connected AI and sets one rule for each kind of action: reading, navigating, typing, and action buttons (pay, send, confirm, or anything that cannot be identified). Each rule is one of:
+- **Runs alone**;
+- **Ask in the chat**: the AI must ask you in the conversation first;
+- **Approve on the phone**: you get a notification, tap it, and approve or deny in the app (the notification itself has no buttons, so the AI cannot press them);
+- **Forbidden**.
+
+Action buttons are recognised by words such as pay, send or confirm, in English and Spanish. The check errs on the safe side: some ordinary buttons, such as "Done", "Sign in" or "Accept", also count as action buttons.
+
+Two templates are offered when you add a profile (Money app is preselected):
+- **Money app**: typing asks in the chat, action buttons need your approval on the phone, and a **maximum amount is required**; anything above it is forbidden.
+- **Common app**: only action buttons ask in the chat; no amount limit.
+
+Amount handling:
+- With a maximum amount set, every number typed in that app counts as an amount. Optional tiers below the maximum can require a stricter rule for larger amounts.
+- Enter the maximum and the tiers as plain numbers: digits, a dot for decimals (up to 8), no thousands separators (`150000` or `99.90`).
+- From the approval screen you can mark a field as "not an amount", or an element as "not an action button". You confirm each one twice, and it stays until you remove it in the profile.
+
+The AI can never act on this app itself (approval screen, settings, its notifications), with or without profiles. Pending approvals also appear as a card on the Server screen, so they reach you even with notifications off. If the saved profiles cannot be read, every action inside apps except reading is blocked until they can. "Ask in the chat" relies on the AI being honest: use "Approve on the phone" or "Forbidden" where you need a guarantee.
+
+See [docs/MCP_TOOLS.md](docs/MCP_TOOLS.md#approval-profiles) for what an AI client sees.
 
 ### Permissions
 

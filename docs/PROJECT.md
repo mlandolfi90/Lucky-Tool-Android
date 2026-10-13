@@ -136,16 +136,33 @@ The typical startup flow: User opens app → enables Accessibility Service in An
   - `services/camera/` — `CameraProvider.kt`, `CameraProviderImpl.kt`, `ServiceLifecycleOwner.kt`
   - `services/location/` — `LocationProvider.kt`, `LocationProviderImpl.kt`
   - `services/mcp/` — `McpServerService.kt`, `BootCompletedReceiver.kt`, `AdbConfigHandler.kt`, `AdbConfigReceiver.kt`, `AdbServiceTrampolineActivity.kt`
+  - `services/mcp/` (approval profiles) — `PolicyApprovalNotifier.kt`
   - `services/tunnel/` — `TunnelProvider.kt`, `TunnelManager.kt`, `CloudflareTunnelProvider.kt`, `CloudflaredBinaryResolver.kt`, `AndroidCloudflareBinaryResolver.kt`, `NgrokTunnelProvider.kt`, `RelayTunnelProvider.kt`, `RelaySession.kt`, `RelayTiming.kt`, `RelayTarget.kt`, `RelayFrames.kt`, `LocalRequestReplayer.kt`
   - `mcp/` — `McpServer.kt`, `McpStatelessTransport.kt`, `McpToolException.kt`, `CertificateManager.kt`
   - `mcp/tools/` — `McpToolUtils.kt`, `TreeFingerprint.kt`, `ScreenIntrospectionTools.kt`, `TouchActionTools.kt`, `NodeActionTools.kt`, `NodeSelectorResolver.kt`, `TextInputTools.kt`, `SystemActionTools.kt`, `GestureTools.kt`, `UtilityTools.kt`, `FileTools.kt`, `AppManagementTools.kt`, `CameraTools.kt`, `LocationTools.kt`
+  - `mcp/tools/` (approval profiles) — `ApprovalTools.kt`
   - `mcp/auth/` — `BearerTokenAuth.kt`
+  - `policy/` — per-app approval profiles (see [Approval Profiles](#approval-profiles-per-app-action-policy)): `WireCode.kt`
+  - `policy/model/` — `PolicyActionType.kt`, `RuleMode.kt`, `ProfileTemplate.kt`, `SelectorKind.kt`, `PolicySelector.kt`, `AmountTier.kt`, `PolicyException.kt`, `ApprovalProfile.kt`, `PolicyExceptionKind.kt`, `ProfilesSnapshot.kt`, `PolicyLimits.kt`, `AmountLimits.kt`, `ProfileTemplates.kt`, `ProfileValidationError.kt`, `ApprovalProfileValidator.kt`
+  - `policy/amount/` — `AmountScan.kt`, `AmountTokenizer.kt`, `AmountReader.kt`, `AmountParser.kt`
+  - `policy/engine/` — `PolicyLabels.kt`, `ActionKeywords.kt`, `PolicyTarget.kt`, `PolicySubject.kt`, `DecisionReason.kt`, `PolicyDecision.kt`, `PolicyEngine.kt`, `OwnPackageName.kt`, `TargetClassifier.kt`, `AmountRule.kt`, `PolicyEngineImpl.kt`
+  - `policy/subject/` — `ToolPolicyClass.kt`, `ToolPolicyCatalog.kt`, `SubjectResolution.kt`, `PolicySubjectResolver.kt`, `ToolSubjectResolver.kt`, `PolicyWindowSource.kt`, `PolicyWindowSourceImpl.kt`, `IntentTargetResolver.kt`, `IntentTargetResolverImpl.kt`, `WindowHitTester.kt`, `NodeLabels.kt`, `PolicyTargets.kt`, `SubjectSupport.kt`, `WindowSubjectResolver.kt`, `NodeSubjectResolver.kt`, `CoordinateSubjectResolver.kt`, `TextSubjectResolver.kt`, `NotificationSubjectResolver.kt`, `LaunchSubjectResolver.kt`, `ToolSubjectResolverImpl.kt`
+  - `policy/approval/` — `ActionApprovalPolicy.kt`, `PendingAction.kt`, `CallFingerprint.kt`, `ExceptionEligibility.kt`, `PendingReevaluator.kt`, `ActionApprovalCoordinator.kt`, `PendingActionTable.kt`, `GrantLedger.kt`, `ActionApprovalCoordinatorImpl.kt`, `PolicyApprovalLabels.kt`
+  - `policy/gate/` — `ToolPolicyGate.kt`, `GateTiming.kt`, `GateResults.kt`, `GateAssessment.kt`, `GateOutcomes.kt`, `GateAuthorizer.kt`, `ToolPolicyGateImpl.kt`, `PendingReevaluatorImpl.kt`
+  - `policy/log/` — `ApprovalLogMessage.kt`, `ApprovalEventLogger.kt`
+  - `policy/di/` — `PolicyModule.kt`, `PolicySubjectModule.kt`, `PolicyGateModule.kt`
   - `ui/` — `MainActivity.kt`
+  - `ui/` (approval profiles) — `PolicyApprovalActivity.kt`
   - `ui/theme/` — `Theme.kt`, `Color.kt`, `Type.kt`
   - `ui/screens/` — `HomeScreen.kt`
+  - `ui/screens/` (approval profiles) — `PolicyApprovalScreen.kt`
+  - `ui/screens/settings/` (approval profiles) — `ApprovalProfilesScreen.kt`, `ApprovalProfileAddScreen.kt`, `ApprovalProfileEditorScreen.kt`, `ApprovalProfileAmountSection.kt`, `ApprovalProfileExceptionsSection.kt`, `ApprovalProfileComponents.kt`, `ApprovalProfileEditorActions.kt`, `ApprovalProfileUiText.kt`, `ApprovalProfileDestinations.kt`
   - `ui/components/` — `ServerStatusCard.kt`, `ConfigurationSection.kt`, `RemoteAccessSection.kt`, `ConnectionInfoCard.kt`, `PermissionsSection.kt`, `ServerLogsSection.kt`, `StorageLocationsSection.kt`
+  - `ui/components/` (approval profiles) — `PolicyApprovalCardView.kt`, `ApprovalLogText.kt`
   - `ui/viewmodels/` — `MainViewModel.kt`
+  - `ui/viewmodels/` (approval profiles) — `PolicyApprovalUiState.kt`, `PolicyApprovalViewModel.kt`, `PolicyApprovalCountViewModel.kt`, `ApprovalProfilesListState.kt`, `ApprovalProfilesViewModel.kt`, `ApprovalProfileEditorState.kt`, `ApprovalProfileEditorViewModel.kt`
   - `data/repository/` — `SettingsRepository.kt`, `SettingsRepositoryImpl.kt`, `RelaySettings.kt`, `RelaySettingsImpl.kt`
+  - `data/repository/` (approval profiles) — `ApprovalProfileRepository.kt`, `ApprovalProfileRepositoryImpl.kt`, `ApprovalProfileResults.kt`, `ProfileStoreStatus.kt`
   - `data/model/` — `ServerConfig.kt`, `ServerStatus.kt`, `ServerLogEntry.kt`, `BindingAddress.kt`, `CertificateSource.kt`, `ScreenshotData.kt`, `TunnelProviderType.kt`, `TunnelStatus.kt`, `StorageLocation.kt`, `FileInfo.kt`, `AppInfo.kt`, `AppFilter.kt`, `CameraInfo.kt`, `CameraResolution.kt`, `LocationData.kt`
   - `di/` — `AppModule.kt`
   - `utils/` — `NetworkUtils.kt`, `PermissionUtils.kt`, `Logger.kt`, `RecentsUtils.kt`
@@ -202,7 +219,9 @@ Tool errors are returned as `CallToolResult(isError = true)` with an error messa
 
 ## MCP Tools Specification
 
-The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas, detailed usage examples, and implementation notes, see [MCP_TOOLS.md](MCP_TOOLS.md).
+The MCP server exposes 59 tools across 15 categories. For full JSON-RPC schemas, detailed usage examples, and implementation notes, see [MCP_TOOLS.md](MCP_TOOLS.md).
+
+> **Approval profiles**: every tool call passes through `ToolPolicyGate` before it runs. A call on an app with an approval profile can return `forbidden`, `needs_human_confirmation`, `awaiting_approval`, `denied`, `expired` or `too_many_pending` instead of running. See [Approval Profiles](#approval-profiles-per-app-action-policy) and [MCP_TOOLS.md](MCP_TOOLS.md#approval-profiles).
 
 > **Tool Naming Convention**: All tool names are prefixed with `android_` by default (e.g., `android_tap`, `android_find_nodes`). When a device slug is configured (e.g., `pixel7`), the prefix becomes `android_pixel7_` (e.g., `android_pixel7_tap`). See [MCP_TOOLS.md](MCP_TOOLS.md) for details.
 
@@ -374,6 +393,20 @@ The MCP server exposes 57 tools across 14 categories. For full JSON-RPC schemas,
 **Capability URLs**: Random single-purpose token, expires after 1 hour, multiple fetches allowed, served from memory (total in-memory budget 64 MB). `android_share_file_via_web` is limited to the smaller of the configured file size limit and 64 MB.
 
 **Errors**: `android_get_shared_content` has no specific errors — an empty inbox is a normal (non-error) response. `android_share_file_via_web` returns `McpToolException.InvalidParams` for missing/invalid `location_id` or `path`, and `McpToolException.ActionFailed` if the file is not found, the location is not authorized, or the file exceeds the size limit.
+
+### 15. Approval Tools (2 tools)
+
+| Tool | Description | Required Params | Optional Params |
+|------|-------------|-----------------|-----------------|
+| `android_get_approval_status` | State of an approval request (`pending` / `approved` / `denied` / `expired`), with an optional long-poll that returns when the request is decided or expires | `approval_id` (string) | `wait_ms` (integer, 0-60000, default 0) |
+| `android_confirm_human_approval` | Record the human's agreement in the conversation for an `ASK_IN_CHAT` request. Creates a single-use 2-minute grant for the identical call. | `approval_id` (string) | — |
+
+**Not app-scoped and always registered**: profiles never gate these tools, and the per-tool permissions cannot disable them (otherwise an approval request could never finish). Results are server-generated, with no untrusted-content warning: `textResult` on success, `errorTextResult` on error. `android_get_approval_status` reads state and expiry in one `ActionApprovalCoordinator.statusOf` call and long-polls at most `min(wait_ms, expires_at_ms - now)`. An unknown `approval_id` reads `expired`.
+
+**Errors**: `McpToolException.InvalidParams` for a missing or empty `approval_id`, or `wait_ms` outside 0-60000. `android_confirm_human_approval` returns `isError=true` with one of:
+- `{"status":"not_confirmable"}` for a `NOTIFY` request;
+- `{"status":"denied"}` for a denied request;
+- `{"status":"expired"}` for an expired or unknown id.
 
 ---
 
@@ -690,7 +723,138 @@ MCP tools return data originating from the Android device (UI element text, cont
 - Helper functions: `untrustedTextResult()`, `untrustedTextAndImageResult()`, `untrustedImageResult()`
 - Pure action confirmations (tap, click, swipe, etc.) that return only server-generated text are exempt
 - New tools returning device content MUST use the `untrusted*` helpers
+- Approval outcomes that name the target app (`forbidden`, `needs_human_confirmation`, `awaiting_approval`) use the `untrusted*` helpers; `denied`, `expired`, `too_many_pending` and the approval tools' results are server-generated and do not
 - **Limitation**: Image content (screenshots, camera photos) cannot carry an inline text warning. The warning is added as a separate `TextContent` before the `ImageContent`, but a multimodal LLM processing the image directly could still be influenced by adversarial text rendered on screen. This is an inherent limitation of the MCP protocol.
+
+### Approval Profiles (Per-App Action Policy)
+
+The owner can attach an approval profile to an app (package) in **Settings → Approval profiles**. A profile applies to EVERY tool call from ANY MCP client that acts on that app. Apps without a profile behave as if the feature did not exist, except for the own-package guard, which is unconditional. The profile editor does not offer this app itself (`@OwnPackageName`).
+
+**Data model** (`policy/model/`, kotlinx.serialization):
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `packageName` | `String` | The app the profile belongs to |
+| `template` | `ProfileTemplate` | `MONEY_APP` or `COMMON_APP`: the template it was created from |
+| `rules` | `Map<PolicyActionType, RuleMode>` | One mode for each of `READ`, `NAVIGATE`, `TYPE`, `ACTION_BUTTON` |
+| `maxAmount` | `String?` | Plain decimal string (`AmountLimits.canonical`). Any amount above it is `FORBIDDEN`. `null` = amounts are not checked. |
+| `amountTiers` | `List<AmountTier>` | Ascending `{upTo, mode}` steps up to `maxAmount` |
+| `notAmountFields` | `List<PolicyException>` | Fields the owner marked "not an amount" (by `PolicySelector`) |
+| `notActionButtons` | `List<PolicyException>` | Elements the owner marked "not an action button" (by `PolicySelector`) |
+| `updatedAtMs` | `Long` | Last change |
+
+- **Rule modes**: `RUN` (runs), `ASK_IN_CHAT` (the agent must ask the human in the conversation and confirm with `android_confirm_human_approval`), `NOTIFY` (the owner approves on the device), `FORBIDDEN` (hard limit). Severity, strictest wins: `RUN` < `ASK_IN_CHAT` < `NOTIFY` < `FORBIDDEN`. New modes are additive enum values with their own severity.
+- **Selectors**: `RESOURCE_ID` (the view id) when the element has one, otherwise `LABEL` (`<className>|<normalized hint, label or content description>`), always built by `PolicyLabels.preferredSelector`, so stored exceptions and live targets compare equal.
+- **Validation** (`ApprovalProfileValidator`, pure). Each error is a `ProfileValidationError` shown through a string resource. A profile is valid only when:
+  - the package name is a valid Android package name and all four rules are set;
+  - a `MONEY_APP` profile has `maxAmount`;
+  - `maxAmount` and every tier `upTo` are plain ASCII decimals `> 0` (`AmountLimits.parse`): `.` is the only decimal mark, at most 8 decimals (`AmountLimits.MAX_DECIMALS`), at most 30 characters, no sign, no exponent, no grouping separators; the stored form is `AmountLimits.canonical` (`1500.50` → `1500.5`);
+  - tiers exist only with `maxAmount`, are at most 5, strictly ascending, each `upTo` ≤ `maxAmount`, and tier modes never get less strict as amounts grow;
+  - each exception list has at most 100 entries and every selector value is non-blank and at most 256 characters.
+
+**Storage**:
+- A dedicated Preferences DataStore, `approval_profiles`, provided in `AppModule` like `oauth_clients`, is accessed only through `ApprovalProfileRepository`.
+- One key per package (`profile:<packageName>`), holding the profile as JSON.
+- Up to 100 stored profiles (readable and unreadable together).
+- Writes: `upsert` (create or replace, keeping the stored exception lists), `updateSettings` (template, rules, `maxAmount`, tiers of an existing profile, atomically under the repository `Mutex`), `delete`, `addException` / `removeException`. Every write is validated first; the disk is written before the in-memory snapshot.
+- The gate reads an in-memory `ProfilesSnapshot`, so profile edits apply to the next tool call without restarting the server.
+- No MCP tool reads or writes this store.
+- **Fail-closed**:
+  - a stored value that cannot be decoded, names another package or fails validation puts its package in `ProfilesSnapshot.unreadable`; every non-read action on that package is then `FORBIDDEN` (reason `PROFILE_UNREADABLE`), and the log names only the package;
+  - if the store cannot be read at all, `current()` throws `ProfileStoreUnreadableException` (`storeStatus` = `UNREADABLE`) and the next call retries the read; it never reads as "no profiles". The gate (`ProfilesView` in `policy/gate/GateAssessment.kt`) then hands the subject resolver the named marker `ProfilesView.UNREADABLE_STORE_MARKER` (not a valid package name) as the only profiled package and evaluates every target package as unreadable. Result:
+    - every non-`READ` app-scoped call is `FORBIDDEN`: `profile_unreadable`, `own_package` for this app, or a `BlockCause` code when the target cannot be attributed;
+    - `READ` calls whose targets resolve run; unattributable ones are `FORBIDDEN` (`target_unresolved`);
+    - not-app-scoped and exempt-exit tools run without reading the store;
+    - the mutation `Mutex` applies as if a profile existed.
+  - The profile list shows an error card with "Try again" while the store is unreadable, and a delete-only row for each unreadable package.
+
+**Templates** (applied on creation, editable afterwards): see [Approval Profile Defaults](#approval-profile-defaults).
+
+**What a call does** (`policy/subject/`):
+- `ToolPolicyCatalog` maps every registered tool to a class:
+  - not app-scoped (file, camera and location tools, `list_apps`, `get_clipboard`, the sharing tools, the approval tools);
+  - exempt exit actions (`press_home`, `press_recents`, `open_notifications`, `open_quick_settings`, `dismiss_keyboard`; also `press_key` `HOME`);
+  - an app-scoped resolver kind.
+
+  A tool missing from the catalog makes `LoggedToolRegistrar.addTool` throw `IllegalStateException` at registration (fail-closed).
+- How the target app is found:
+  - window reads use every visible app window (the strictest `READ` rule among them applies);
+  - node tools use the resolved node's window (an ambiguous selector: every on-screen candidate, evaluated before the tool returns its ambiguity error);
+  - coordinate tools use `WindowHitTester`: every window containing the point counts (except this app's own touch-through tool-call overlay), plus the nearest interactive element at the point; `pinch` hit-tests its centre and both finger start points (centre x ± `ActionExecutorImpl.PINCH_BASE_DISTANCE`, clamped like `ActionExecutorImpl.pinch`) and targets the union;
+  - intents use the explicit component or package, else `PackageManager` resolution;
+  - notification tools use the posting app.
+
+  `getCurrentPackageName()` is never used to decide.
+- How taps and clicks are classified:
+  - a label matching an action keyword (whole word, accent-insensitive, `Locale.ROOT`, Spanish and English) is `ACTION_BUTTON`, even over an exception. The matching fails on the safe side: labels such as "Done" (Spanish `done`), "Sign in" or "Accept" count as action buttons;
+  - an identified target with a non-keyword label is `NAVIGATE`;
+  - a target with no usable label, or one that cannot be identified, is `ACTION_BUTTON`, unless its selector is in `notActionButtons`.
+- `android_swipe` in a profiled app is `ACTION_BUTTON` (slide-to-pay). `android_scroll` is `NAVIGATE`.
+- While at least one profile exists, each of these is `FORBIDDEN` before any rule is read (`BlockCause`):
+  - a call that cannot be attributed to an app (`target_unresolved`);
+  - an unresolvable implicit intent, or any implicit broadcast or service intent (`unresolved_implicit_intent`);
+  - a broadcast or service intent into a profiled package (`background_component_in_profiled_app`);
+  - a tap on the IME window while a profiled app or this app has input focus (`ime_input_in_profiled_app`).
+
+**Amounts** (`policy/amount/AmountParser`, pure, regex-free, linear):
+- Checked only when the profile has `maxAmount`. Then every number counts as an amount: type tools and `press_key` `DEL`/`TAB`/`SPACE` (the field's FINAL value: current text plus the edit, after `PlaceholderSubstitutor.substitute`), notification replies, intent data and extras, `open_uri` URIs, and clipboard text.
+- The largest number wins. Ambiguous `1.500` / `1,500` reads as the larger value. Signs and `(500)` are ignored, scientific notation counts, Unicode digits count, currency symbols are ignored.
+- Input over the length cap or an exponent over the cap counts as above `maxAmount`.
+- Password fields and fields in `notAmountFields` never count. Words (`5k`, `mil`) are not numbers.
+- Above `maxAmount` → `FORBIDDEN`. Otherwise the first tier whose `upTo` covers the amount applies (an amount above the last tier keeps the last tier's mode), combined with the action-type rule; strictest wins.
+
+**Exceptions**:
+- "Not an amount" and "not an action button" are learned only from the approval screen:
+  - "Not an amount" is offered only when the reason is an amount reason, on an identifiable, non-password field with a selector;
+  - "Not an action button" is offered only when the reason is `UNKNOWN_TARGET`, on an identifiable target with a selector.
+- Each needs a second confirmation (a dialog).
+- Each is listed in the profile editor and can be removed at any time. The UI says "until you remove it", never "forever".
+- Adding one goes through `PendingReevaluator` (`policy/gate/PendingReevaluatorImpl`): it stores the exception with `addException`, re-runs the engine on the pending request's stored subject and applies the result with `applyReevaluation`; it never approves. A request that still needs approval stays pending; one that no longer needs approval closes as `EXPIRED` without a grant (the agent repeats the call); one that is now forbidden closes as `DENIED`. The result (`ExceptionReevaluation`) tells the approval screen whether the exception was stored, even when the request was no longer pending afterwards.
+
+**Approvals** (`policy/approval/ActionApprovalCoordinator`, in-memory, `Mutex`-guarded like `OAuthApprovalCoordinatorImpl`):
+- States: `PENDING`, `APPROVED`, `DENIED`, `EXPIRED`. An unknown id reads `EXPIRED`. Expiry wins over a late approval.
+- Ids are 16 `SecureRandom` bytes in lowercase hex.
+- A request stays pending for at most 5 minutes; at most 10 requests can be pending (a new one beyond that is refused with `too_many_pending`; joins never count).
+- A grant lasts 2 minutes and is single use. A grant approved by the owner on the device satisfies `ASK_IN_CHAT` and `NOTIFY`; a grant confirmed through `android_confirm_human_approval` satisfies only `ASK_IN_CHAT`.
+- Fingerprint: SHA-256 over the tool name, the canonical JSON arguments, the target package and the selector. Identical calls join the same pending entry; a stricter call upgrades it in place. A grant runs only the identical call.
+- `NOTIFY` waits up to 60 s inside the call, then returns `awaiting_approval`.
+- When `McpServerService` stops, the approval notification and its observer are cancelled, then every pending request becomes `DENIED` and every grant is dropped (`clearAll()`, before and again after the Ktor server stops).
+
+**Concurrency** (`ToolPolicyGateImpl`):
+- When at least one profile exists (or the store is unreadable), every call of a tool class that is not read-only (read-only: `SCREEN_READ`, `NODE_DETAILS_READ`, `NOTIFICATION_LIST`) takes a single mutation `Mutex`. Under it the call is resolved and evaluated ONCE, and an authorized call (`RUN`, or a consumed grant) runs before the lock is released: two window-tree reads, the gate's and the tool's.
+- Tools without a resolver (not app-scoped, exempt exits) never read the store and never take the lock; with zero profiles nothing locks.
+- A `NOTIFY` wait releases the lock. Once the owner approves, the call takes the lock again and is re-resolved and re-evaluated without waiting. It runs only when the fingerprint is unchanged and the decision is not stricter than the one authorized, or when the fresh decision allows it on its own; otherwise it returns the fresh outcome. A read-only class whose subject turns out to be non-`READ` takes the same re-check under the lock.
+- The lock is held for the whole run of an authorized mutating call, so a long tool (`type`, about 250 ms per character) queues every other mutating call until it ends; calls of read-only classes do not wait for it.
+
+**Own-package guard** (non-negotiable): any non-`READ` action whose target package is this app's own (`@OwnPackageName`, provided from `BuildConfig.APPLICATION_ID`, flavor and debug suffixes included) is `FORBIDDEN`, always, even with zero profiles. This covers:
+- the approval screen, the profile editor and the settings;
+- the app's notifications;
+- intents to its components;
+- coordinate taps landing on its windows.
+
+Without it, an agent could approve its own requests.
+
+**Owner UI**:
+- Notification channel `policy_approvals` (importance HIGH). `PolicyApprovalNotifier` posts one heads-up notification (id 1004) for the unexpired `NOTIFY` requests: the app and action type for a single request, a count for several. `ASK_IN_CHAT` requests never notify. It is posted again only when the set of unexpired `NOTIFY` request ids changes, alerts only once while shown (`setOnlyAlertOnce(true)`), and times out with the latest pending window.
+- The notification has NO action buttons, because an agent could press them through the notification tools. The owner taps it, which opens `PolicyApprovalActivity` (not exported, no `FLAG_SECURE`), and approves or denies there.
+- The lock-screen (public) version names neither the app nor the action, and no version shows the amount.
+- While at least one request is pending (`ASK_IN_CHAT` included), the Server screen shows a pending-approvals card (like the OAuth one) that opens the same approval screen. It is the path when the notification permission is denied or the notification was dismissed.
+- The approval screen lists every pending request (`ASK_IN_CHAT` ones too) and is the only place an amount is displayed (never for password fields). Each card shows the app icon and name, action type, tool, amount, field label (display only), reason, rule and a countdown, with Deny / Approve (Approve disabled once the window has lapsed) and, when `ExceptionEligibility.selectorFor` offers one, the exception buttons. Action types and rule modes are labelled only through `PolicyApprovalLabels` (`policy_action_type_*`, `policy_rule_mode_*`), shared with the profile editor.
+- The profile editor lives in Settings → Approval profiles: list (unreadable packages shown with delete only), add (launcher apps with search, or a package name; this app and already-profiled apps are not offered), template choice (`MONEY_APP` preselected, `DEFAULT_TEMPLATE`), the four rules, maximum amount and tiers with validation errors, and the learned exceptions with remove buttons. A stored readable profile is saved with `updateSettings`; any other package with `upsert`.
+
+**`ASK_IN_CHAT` limitation**: the app cannot verify that the human was asked; this mode relies on the model. Use `NOTIFY` or `FORBIDDEN` where a guarantee is needed.
+
+**Logging**:
+- Log type `ServerLogEntry.Type.APPROVAL` (id 8, never renumbered), written only through `ApprovalEventLogger`.
+- The message (`ApprovalLogMessage`) is `<outcome> action=<code> mode=<code> reason=<code> app=<package>`: absent fields are omitted and `app` is last. `reason` holds a `DecisionReason` code or a `BlockCause.code`.
+- Outcome codes (`ApprovalLogOutcome`, stored on disk, never renamed), by writer:
+  - the gate: `approved`, `denied`, `expired`, `forbidden`, `needs_confirmation`, `awaiting_approval`, `too_many_pending` (with the un-prefixed tool name and the duration);
+  - `PendingReevaluatorImpl`: `reevaluated` (with the tool name);
+  - the approval screen: `owner_approved` (`expired` for an approval that came too late), `owner_denied`, `exception_added` (whenever the exception was stored);
+  - the profile editor: `exception_removed`, `profile_created`, `profile_updated`, `profile_deleted` (package only).
+- The Logs screen has an Approvals chip and renders each line from string resources as outcome, app and reason.
+- It NEVER records amount values, field text, selector values or approval ids.
+- `TOOL_CALL` entries use the constant markers `forbidden`, `needs_confirmation`, `awaiting_approval` or `denied` for calls the gate halted that way; every other `isError` result (including `expired` and `too_many_pending`) keeps `failed`. `LogsScreen` and `ServerLogsSection` show those four markers from string resources (`ApprovalLogText.kt`), never raw.
 
 ---
 
@@ -741,6 +905,30 @@ MCP tools return data originating from the Android device (UI element text, cont
 - **Feedback Type**: FEEDBACK_GENERIC
 - **Flags**: FLAG_REPORT_VIEW_IDS, FLAG_RETRIEVE_INTERACTIVE_WINDOWS, FLAG_INPUT_METHOD_EDITOR
 - **Capabilities**: CAPABILITY_CAN_PERFORM_GESTURES, CAPABILITY_CAN_RETRIEVE_WINDOW_CONTENT
+
+### Approval Profile Defaults
+
+- **Profiles**: none. Every app behaves as before, except the own-package guard.
+- **Templates** offered when a profile is created (`MONEY_APP` preselected; every value editable afterwards):
+
+| | `MONEY_APP` | `COMMON_APP` |
+|---|---|---|
+| `READ` | `RUN` | `RUN` |
+| `NAVIGATE` | `RUN` | `RUN` |
+| `TYPE` | `ASK_IN_CHAT` | `RUN` |
+| `ACTION_BUTTON` | `NOTIFY` | `ASK_IN_CHAT` |
+| `maxAmount` | REQUIRED (cannot be saved without it); above it → `FORBIDDEN` | none (amounts not checked) |
+| Amount tiers | none | none |
+
+`maxAmount` is required for `MONEY_APP` because the app does not know which currency each app uses: the owner sets the number.
+
+- **Approval window**: 300 000 ms (5 minutes)
+- **Approval grant TTL**: 120 000 ms (2 minutes, single use)
+- **`NOTIFY` wait inside the call**: 60 000 ms
+- **`android_get_approval_status` `wait_ms`**: 0 (range 0-60000)
+- **Max pending approvals**: 10
+- **Max profiles**: 100; at most 5 amount tiers and 100 entries per exception list per profile
+- **Amount limits**: plain decimal `> 0`, `.` as the only decimal mark, at most 8 decimals, no thousands separators
 
 ### UI Defaults
 
@@ -816,7 +1004,7 @@ All common development tasks are accessible via `make <target>`. Run `make help`
 
 - **[TOOLS.md](TOOLS.md)** — Git branching conventions, commit format, PR creation, GitHub CLI commands, and local CI testing with `act`
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — Detailed application architecture: component interactions, service lifecycle diagrams, threading model, inter-service communication patterns
-- **[MCP_TOOLS.md](MCP_TOOLS.md)** — Full MCP tools documentation with JSON-RPC schemas, usage examples, error codes, and implementation notes for all 57 tools
+- **[MCP_TOOLS.md](MCP_TOOLS.md)** — Full MCP tools documentation with JSON-RPC schemas, usage examples, error codes, and implementation notes for all 59 tools, plus the approval-profile outcomes
 
 ---
 
