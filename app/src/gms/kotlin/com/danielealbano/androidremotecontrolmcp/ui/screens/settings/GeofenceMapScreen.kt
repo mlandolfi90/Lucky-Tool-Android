@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod", "TooManyFunctions", "MagicNumber")
+@file:Suppress("LongMethod", "CyclomaticComplexMethod", "TooManyFunctions", "MagicNumber")
 
 package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
 

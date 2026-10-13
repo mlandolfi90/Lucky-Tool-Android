@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "LongMethod", "LongParameterList")
+@file:Suppress("LongMethod", "LongParameterList")
 
 package com.danielealbano.androidremotecontrolmcp.ui.screens
 
