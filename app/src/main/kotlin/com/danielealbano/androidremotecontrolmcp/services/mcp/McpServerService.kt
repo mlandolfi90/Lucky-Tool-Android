@@ -31,6 +31,7 @@ import com.danielealbano.androidremotecontrolmcp.mcp.tools.McpToolUtils
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.ReferenceCountedToolCallIndicator
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.ToolCallIndicator
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerAppManagementTools
+import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerApprovalTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerCameraTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerFileTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerGestureTools
@@ -45,6 +46,7 @@ import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerTextInputTool
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerTouchActionTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerUtilityTools
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.gate.ToolPolicyGate
 import com.danielealbano.androidremotecontrolmcp.privacy.PlaceholderSubstitutor
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyModeManager
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyModeStatus
@@ -185,6 +187,8 @@ class McpServerService : Service() {
     @Inject lateinit var pseudonymStore: PseudonymStore
 
     @Inject lateinit var nerCache: NerCache
+
+    @Inject lateinit var toolPolicyGate: ToolPolicyGate
 
     /** Config of the currently running server; used to build capability-link base URLs. */
     @Volatile
@@ -455,6 +459,7 @@ class McpServerService : Service() {
             LoggedToolRegistrar(
                 server,
                 serverLogRepository,
+                toolPolicyGate,
                 toolCallIndicator,
             )
         registerAccessibilityToolBundle(registrar, toolNamePrefix, perms)
@@ -472,6 +477,8 @@ class McpServerService : Service() {
         )
         registerLocationTools(registrar, locationProvider, privacyToolGate, toolNamePrefix, perms)
         registerSharingBundle(registrar, toolNamePrefix, perms, fileSizeLimitMb)
+        // Always registered, never subject to tool permissions: the only way past ASK_IN_CHAT and NOTIFY.
+        registerApprovalTools(registrar, actionApprovalCoordinator, System::currentTimeMillis, toolNamePrefix)
     }
 
     private fun registerAccessibilityToolBundle(
