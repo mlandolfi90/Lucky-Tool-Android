@@ -199,6 +199,7 @@ class McpServerService : Service() {
     private var mcpServer: McpServer? = null
     private var tunnelObserverJob: Job? = null
     private var approvalObserverJob: Job? = null
+    private var policyApprovalObserverJob: Job? = null
 
     /**
      * Tracks whether the LAST [onStartCommand] action was an explicit stop. Lets [onDestroy] re-commit
@@ -419,6 +420,16 @@ class McpServerService : Service() {
                     }
                 }
 
+            // Observe pending action approvals; only NOTIFY entries surface, re-posted only when their ids change.
+            policyApprovalObserverJob =
+                coroutineScope.launch {
+                    PolicyApprovalNotifier
+                        .awaitingChanges(actionApprovalCoordinator.observePending(), System::currentTimeMillis)
+                        .collect { awaiting ->
+                            PolicyApprovalNotifier.update(this@McpServerService, awaiting, System.currentTimeMillis())
+                        }
+                }
+
             Log.i(TAG, "MCP server started successfully on ${config.bindingAddress.address}:${config.port}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start MCP server", e)
@@ -585,6 +596,11 @@ class McpServerService : Service() {
         approvalObserverJob?.cancel()
         approvalObserverJob = null
         OAuthApprovalNotifier.cancel(this)
+
+        // Cancel the action-approval observer and remove its notification before the pending entries are denied.
+        policyApprovalObserverJob?.cancel()
+        policyApprovalObserverJob = null
+        PolicyApprovalNotifier.cancel(this)
 
         // Deny every pending action approval (waking calls still waiting) and drop unused grants.
         runBlocking { actionApprovalCoordinator.clearAll() }

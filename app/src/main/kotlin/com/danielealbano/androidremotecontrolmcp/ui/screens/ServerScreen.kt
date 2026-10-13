@@ -47,6 +47,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.data.model.BindingAddress
 import com.danielealbano.androidremotecontrolmcp.ui.ApprovalActivity
+import com.danielealbano.androidremotecontrolmcp.ui.PolicyApprovalActivity
 import com.danielealbano.androidremotecontrolmcp.ui.components.BatteryOptimizationCard
 import com.danielealbano.androidremotecontrolmcp.ui.components.CalloutCard
 import com.danielealbano.androidremotecontrolmcp.ui.components.ConnectionInfoCard
@@ -57,6 +58,7 @@ import com.danielealbano.androidremotecontrolmcp.ui.components.setPlainText
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.ChannelViewModel
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.LogsViewModel
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.MainViewModel
+import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.PolicyApprovalCountViewModel
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.PrivacyViewModel
 import com.danielealbano.androidremotecontrolmcp.utils.NetworkUtils
 import kotlinx.coroutines.launch
@@ -78,6 +80,7 @@ fun ServerScreen(
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     val logsViewModel: LogsViewModel = hiltViewModel()
+    val policyApprovalCountViewModel: PolicyApprovalCountViewModel = hiltViewModel()
 
     val privacyConfig by privacyViewModel.privacyConfig.collectAsStateWithLifecycle()
     val privacyCardDismissed by privacyViewModel.privacyCardDismissed.collectAsStateWithLifecycle()
@@ -89,6 +92,7 @@ fun ServerScreen(
     val isAccessibilityEnabled by viewModel.isAccessibilityEnabled.collectAsStateWithLifecycle()
     val isBatteryOptimizationIgnored by viewModel.isBatteryOptimizationIgnored.collectAsStateWithLifecycle()
     val pendingApprovalCount by viewModel.pendingApprovalCount.collectAsStateWithLifecycle()
+    val pendingPolicyApprovalCount by policyApprovalCountViewModel.pendingCount.collectAsStateWithLifecycle()
 
     val channelConfig by channelViewModel.eventChannelConfig.collectAsStateWithLifecycle()
     val channelStatus by channelViewModel.channelConnectionStatus.collectAsStateWithLifecycle()
@@ -133,6 +137,11 @@ fun ServerScreen(
                 )
                 Spacer(Modifier.height(16.dp))
             }
+
+            PendingPolicyApprovalsCard(
+                count = pendingPolicyApprovalCount,
+                onClick = { context.startActivity(Intent(context, PolicyApprovalActivity::class.java)) },
+            )
 
             if (serverConfig.bindingAddress == BindingAddress.LOCALHOST && !serverConfig.tunnelEnabled) {
                 NetworkAccessSuggestionCard(
@@ -261,6 +270,28 @@ private fun PendingApprovalsCard(
         TextButton(onClick = onClick) {
             Text(stringResource(R.string.server_pending_approvals_action))
         }
+    }
+}
+
+/**
+ * In-app path to the action-approval screen, mirroring [PendingApprovalsCard]: the fallback when POST_NOTIFICATIONS is
+ * denied or the notification was dismissed. Emits nothing (not even the spacer) while nothing is pending.
+ */
+@Composable
+private fun PendingPolicyApprovalsCard(
+    count: Int,
+    onClick: () -> Unit,
+) {
+    if (count > 0) {
+        CalloutCard(
+            icon = Icons.Default.Notifications,
+            title = stringResource(R.string.server_pending_policy_approvals_title, count),
+        ) {
+            TextButton(onClick = onClick) {
+                Text(stringResource(R.string.server_pending_approvals_action))
+            }
+        }
+        Spacer(Modifier.height(16.dp))
     }
 }
 
