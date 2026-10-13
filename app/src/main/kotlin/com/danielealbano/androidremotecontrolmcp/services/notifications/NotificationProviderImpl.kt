@@ -178,12 +178,14 @@ private fun hasContent(notification: Notification): Boolean {
 
 private fun buildBalOptions(): Bundle? =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        // ALLOWED is deprecated since API 36, but its replacement ALLOW_ALWAYS does not exist below API 36 (Android 14
+        // throws on it). Keep it until minSdk reaches 36, then switch to ALLOW_ALWAYS and drop this suppression.
+        @Suppress("DEPRECATION")
+        val allowed = ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED
         ActivityOptions
             .makeBasic()
             .apply {
-                setPendingIntentBackgroundActivityStartMode(
-                    ActivityOptions.MODE_BACKGROUND_ACTIVITY_START_ALLOWED,
-                )
+                setPendingIntentBackgroundActivityStartMode(allowed)
             }.toBundle()
     } else {
         null
