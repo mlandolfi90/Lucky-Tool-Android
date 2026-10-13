@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.danielealbano.androidremotecontrolmcp.data.repository.ApprovalProfileRepository
+import com.danielealbano.androidremotecontrolmcp.data.repository.ApprovalProfileRepositoryImpl
 import com.danielealbano.androidremotecontrolmcp.data.repository.EventChannelSettings
 import com.danielealbano.androidremotecontrolmcp.data.repository.EventChannelSettingsImpl
 import com.danielealbano.androidremotecontrolmcp.data.repository.OAuthClientRepository
@@ -87,6 +89,11 @@ import javax.inject.Singleton
 @Retention(AnnotationRetention.BINARY)
 annotation class OAuthClientsDataStore
 
+/** Qualifier for the dedicated approval-profiles Preferences DataStore. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ApprovalProfilesDataStore
+
 /** Extension property for creating the Preferences DataStore on [Context]. */
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "settings",
@@ -95,6 +102,11 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 /** Extension property for the dedicated OAuth-clients Preferences DataStore on [Context]. */
 private val Context.oauthClientsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "oauth_clients",
+)
+
+/** Extension property for the dedicated approval-profiles Preferences DataStore on [Context]. */
+private val Context.approvalProfilesDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "approval_profiles",
 )
 
 @Module
@@ -118,6 +130,16 @@ object AppModule {
     fun provideOAuthClientsDataStore(
         @ApplicationContext context: Context,
     ): DataStore<Preferences> = context.oauthClientsDataStore
+
+    /**
+     * Provides the dedicated application-scoped [DataStore] for per-app approval profiles.
+     */
+    @Provides
+    @Singleton
+    @ApprovalProfilesDataStore
+    fun provideApprovalProfilesDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = context.approvalProfilesDataStore
 
     /**
      * Provides [Dispatchers.IO] for background work.
@@ -167,6 +189,11 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindOAuthClientRepository(impl: OAuthClientRepositoryImpl): OAuthClientRepository
+
+    /** Binds the persisted per-app approval profiles. */
+    @Binds
+    @Singleton
+    abstract fun bindApprovalProfileRepository(impl: ApprovalProfileRepositoryImpl): ApprovalProfileRepository
 
     /** Binds the offline IP-geolocation resolver used to annotate connection requests. */
     @Binds
