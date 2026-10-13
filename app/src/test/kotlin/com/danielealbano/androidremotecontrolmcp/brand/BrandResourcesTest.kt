@@ -116,6 +116,12 @@ class BrandResourcesTest {
             .elements("path")
             .map { it.getAttribute("android:$attribute") }
 
+    /** Every attribute the drawable's root element declares, namespaces included, sorted. */
+    private fun rootAttributes(relativePath: String): List<String> {
+        val attributes = parse(relativePath).documentElement.attributes
+        return (0 until attributes.length).map { attributes.item(it).nodeName }.sorted()
+    }
+
     private fun strokeColours(relativePath: String): List<String> =
         parse(relativePath)
             .elements("path")
@@ -126,6 +132,10 @@ class BrandResourcesTest {
         DRAWABLES.forEach { drawable ->
             val paths = parse(drawable).elements("path")
             assertTrue(paths.isNotEmpty()) { "$drawable declares no path" }
+            assertTrue(parse(drawable).elements("clip-path").isEmpty()) {
+                "$drawable: a clip-path can clip its whole group away, and every row here " +
+                    "selects the path tag, so none of them would see it"
+            }
             paths.forEachIndexed { index, path ->
                 assertValidPathData(path.getAttribute("android:pathData"), "$drawable path #$index")
             }
@@ -214,14 +224,10 @@ class BrandResourcesTest {
 
     @Test
     fun `launcher foreground declares only the android and aapt namespaces`() {
-        val attributes = parse(FOREGROUND).documentElement.attributes
-        val namespaces =
-            (0 until attributes.length)
-                .map { attributes.item(it).nodeName }
-                .filter { it.startsWith("xmlns:") }
-                .sorted()
-        assertEquals(listOf("xmlns:aapt", "xmlns:android"), namespaces) {
-            "the gradient needs xmlns:aapt, and no other namespace belongs here"
+        assertEquals(FOREGROUND_ROOT_ATTRIBUTES, rootAttributes(FOREGROUND)) {
+            "the gradient needs xmlns:aapt and no other namespace belongs here; an added " +
+                "android:alpha fades the whole layer and an added android:tint repaints it, " +
+                "neither of which any colour, width, path or transform assertion can see"
         }
     }
 
@@ -274,6 +280,9 @@ class BrandResourcesTest {
         }
         assertEquals(CANVAS, document.documentElement.getAttribute("android:viewportWidth"))
         assertEquals(CANVAS, document.documentElement.getAttribute("android:viewportHeight"))
+        assertEquals(MONOCHROME_ROOT_ATTRIBUTES, rootAttributes(MONOCHROME)) {
+            "a root alpha fades this layer and a root tint can erase it outright"
+        }
         assertEquals(MONOCHROME_STROKE_COLOURS, strokeColours(MONOCHROME)) {
             "a launcher tints this layer, so its colour is opacity: a faded stroke fades " +
                 "the themed icon, which no stroke width or path can show"
@@ -290,6 +299,9 @@ class BrandResourcesTest {
         assertEquals("24dp", root.getAttribute("android:height"))
         assertEquals("64", root.getAttribute("android:viewportWidth"))
         assertEquals("64", root.getAttribute("android:viewportHeight"))
+        assertEquals(NOTIFICATION_ROOT_ATTRIBUTES, rootAttributes(NOTIFICATION)) {
+            "the tint is the only paint this file may declare at the root"
+        }
     }
 
     @Test
@@ -315,6 +327,13 @@ class BrandResourcesTest {
         }
         assertEquals(listOf("", ""), pathAttributes(NOTIFICATION, "fillAlpha")) {
             "a faded flame renders as a gap in the shield"
+        }
+        assertTrue(document.elements("aapt:attr").isEmpty()) {
+            "a stroke redirected to a transparent gradient keeps its plain colour " +
+                "attribute, so reading the attribute alone would still look right"
+        }
+        assertTrue(document.elements("gradient").isEmpty()) {
+            "at 24dp the silhouette is the icon; it is painted flat"
         }
         assertEquals(
             "?attr/colorControlNormal",
@@ -391,6 +410,29 @@ class BrandResourcesTest {
         val FOREGROUND_STROKE_ALPHAS = listOf("", "0.85", "", "", "", "")
         val MONOCHROME_STROKE_COLOURS = List(6) { OPAQUE_WHITE }
         val NO_FILL_ALPHA = List(6) { "" }
+
+        val FOREGROUND_ROOT_ATTRIBUTES =
+            listOf(
+                "android:height",
+                "android:viewportHeight",
+                "android:viewportWidth",
+                "android:width",
+                "xmlns:aapt",
+                "xmlns:android",
+            )
+
+        val MONOCHROME_ROOT_ATTRIBUTES =
+            FOREGROUND_ROOT_ATTRIBUTES - "xmlns:aapt"
+
+        val NOTIFICATION_ROOT_ATTRIBUTES =
+            listOf(
+                "android:height",
+                "android:tint",
+                "android:viewportHeight",
+                "android:viewportWidth",
+                "android:width",
+                "xmlns:android",
+            )
 
         val GRADIENT_GEOMETRY =
             mapOf(

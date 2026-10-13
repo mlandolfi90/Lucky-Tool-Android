@@ -870,3 +870,43 @@ attribute remains outside the guards.
 **Suite shape:** **15 test methods**; the shared infrastructure differs from the plan's "in full"
 block in **six** places — two forced by ktlint and four additive: **4** helpers and **21** companion
 constants beyond the plan's 6 and 14 (`NO_FILL_ALPHA` is the twenty-first).
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 6, 2026-10-13
+
+Scope: the single commit `58a1e28`, which closed round-5's I-R5-1. Rounds 4 and 5 had each audited the
+whole change independently and round 5 returned CLEAN, so this round was deliberately narrow.
+
+Verdict: **the delta is sound, the round is NOT CLEAN.** The four added assertions were confirmed
+correct and non-tautological — pinning a list of empty strings constrains both the *arity* and the
+*absence at every position*, so neither adding a path nor moving the attribute between elements
+satisfies it (both escapes were measured and caught). But the item I had explicitly asked the round to
+hunt — whether any other way of fading or hiding the art slips past — found **four, each breaking a
+stated acceptance criterion**. They were pre-existing gaps, not regressions from `58a1e28`.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| W-R6-1 | WARNING: **`android:alpha` on the `<vector>` root was unguarded in all three drawables**, including `alpha="0"`, which ships a wholly invisible icon. No row read the root element's non-`xmlns:` attributes: the namespace row filtered to names starting `xmlns:`, and the size and viewport rows read named attributes only. This is I-R5-1's own class one level up the tree — a fade that changes no colour, width, path or transform, except it fades the entire layer. Breaks US1 AC1 and US2 AC1. | **Closed.** Each drawable's root attribute-name set is now pinned as a complete sorted list (`FOREGROUND_ROOT_ATTRIBUTES`, `MONOCHROME_ROOT_ATTRIBUTES`, `NOTIFICATION_ROOT_ATTRIBUTES`) in the row that owns that file's root element, through a new `rootAttributes()` helper. Any attribute added at the root now fails, named or not. Verified by the real compiled test: `alpha="0.1"` on each of the three files and `alpha="0"` on the foreground each fail one row |
+| W-R6-2 | WARNING: **an added root `android:tint` was unguarded on the foreground and the tinted layer.** With the default `SRC_IN` mode, `tint="#0b0d0f"` repaints the whole mark in the colour it sits on, and `tint="#00000000"` makes the layer transparent. The notification file was protected only because its tint *value* is pinned; the other two declare no tint, and adding one was invisible to every row. Breaks US1 AC1. | Closed by the same complete root attribute sets. Verified: both mutations fail one row. The notification's `tintMode` (round 6 graded it merely pinnable, since US2 AC3 states the tint has no effect on a small icon) is caught as well, because the set is exhaustive rather than a list of forbidden names |
+| W-R6-3 | WARNING: **an added `<clip-path>` inside any `<group>` clipped the art away undetected.** It is a documented `VectorDrawable` group child, and every row selects the tag `path`, so a degenerate clip region was invisible to all of them. Breaks US1 AC1. | **Closed** in the row that iterates all three drawables: each must declare no `clip-path` at all. Verified: a degenerate clip in the foreground's outer group and in the tinted layer's inner group each fail one row |
+| W-R6-4 | WARNING: **the notification's `strokeColor` could be redirected to a transparent `aapt:attr` gradient** while the plain attribute stayed `#FFFFFF`, so reading the attribute alone still looked right. The foreground is guarded against exactly this by its `aapt:attr` name-list assertion and the tinted layer by its no-gradient assertion; the notification had neither. Breaks US2 AC1. | **Closed**: the notification row now asserts it declares no `aapt:attr` and no `gradient` — it is painted flat, because at 24dp the silhouette is the icon. Verified: the full mutation (declaring `xmlns:aapt`, keeping the plain colour, wrapping the stroke in a transparent two-stop gradient) now fails two rows |
+| I-R6-1 | INFO: `<clip-path>`'s own `pathData` was never structurally validated, although US4 AC1 says "every `pathData`" is. | Moot and closed by W-R6-3: no `clip-path` may exist in any of the three drawables. Verified with an invalid `"Q 1 2 3"` clip region, which now fails |
+| I-R6-2 | INFO: three measured no-ops survive and are the genuine terminus candidates — `android:fillType` (both the shield and the flame are simple closed paths, so `evenOdd` ≡ `nonZero`), `android:strokeMiterLimit` (every join in all three files is `strokeLineJoin="round"`, so the limit is never consulted; and with the join removed a low limit bevels *inward*), and `android:alpha` on a `<group>` (not a `VectorDrawable` group attribute, so it is ignored — reported with the honest caveat that this host has no SDK, so only the test's silence was observed, not the renderer). | **Added to the declared terminus** rather than pinned. Re-measured after the closure: `fillType` and `strokeMiterLimit` still survive, which is correct — they are path attributes, and the closure pins root attributes. A duplicate attribute needs no guard: the DOM parser rejects it and eight rows fail |
+| I-R6-3 | INFO: the round-5 heading is dated `2026-10-13` while rounds 1–4 read `2026-10-12`. | Not an error: the round-5 work ran past midnight UTC, and the date in each heading is the date that section was written. Recorded here so the sequence is not read as a typo |
+
+**Suite shape after round 6:** still **15 test methods**. The shared infrastructure differs from the
+plan's "in full" block in **six** places — two forced by ktlint and four additive: **5** helpers
+(`rootAttributes()` is the fifth) and **24** companion constants beyond the plan's 6 members and 14
+constants.
+
+**Measured after the change:** the real compiled test 15/15 on this host; eleven "make the brand
+disappear" mutations all caught, each by the row that owns its file; ktlint 1.8.0 → 0 findings and
+detekt 2.0.0-alpha.5 → exit 0 on both source sets.
+
+**Declared terminus, now complete.** Deliberately unpinned, each measured to have no effect on these
+shapes: `strokeLineCap` and `strokeLineJoin` (the miter tip at the shoulder lands at r ≈ 32.50, inside
+the 33 circle); the declared `dp` size of the two adaptive drawables (their only consumers are the two
+mipmaps, where `AdaptiveIconDrawable` lays each layer out to the mask, and `AboutScreen`, which
+overrides with `Modifier.size`); and `fillType`, `strokeMiterLimit` and a group-level `alpha`, per
+I-R6-2. Everything that can fade, repaint, clip or hide the art is now pinned.
