@@ -142,6 +142,14 @@ class BrandResourcesTest {
             "the painted outline sets the radius as much as the transform does: a shoulder " +
                 "moved outwards clips under the circular mask however the group is scaled"
         }
+        val root = parse(FOREGROUND).documentElement
+        assertEquals(CANVAS, root.getAttribute("android:viewportWidth")) {
+            "mapping the mark to 22..86 means nothing unless the canvas is $CANVAS units wide"
+        }
+        assertEquals(CANVAS, root.getAttribute("android:viewportHeight"))
+        assertEquals(FOREGROUND_STROKE_WIDTHS, pathAttributes(FOREGROUND, "strokeWidth")) {
+            "the radius is the outline plus half the outer stroke: at 6.0 it reaches 34.4"
+        }
     }
 
     @Test
@@ -152,24 +160,40 @@ class BrandResourcesTest {
 
     @Test
     fun `launcher foreground places the flame by the brand transform`() {
-        val flame = groupWrapping(FOREGROUND) { it.startsWith(FLAME_PREFIX) }
+        val flame = groupWrapping(FOREGROUND) { it == FLAME_PATH }
         assertEquals(FLAME_TRANSFORM, flame.transform())
     }
 
     @Test
     fun `launcher foreground carries the brand colours`() {
-        assertEquals(NEON, strokeColours(FOREGROUND).first()) {
-            "the outer border is the one the launcher mask shows first"
+        assertEquals(FOREGROUND_STROKE_COLOURS, strokeColours(FOREGROUND)) {
+            "every stroke is either the neon border or the knockout, in that order"
+        }
+        assertEquals(
+            FOREGROUND_FILL_COLOURS,
+            pathAttributes(FOREGROUND, "fillColor").map { it.lowercase() },
+        ) { "the flame is the only filled path, and it is neon" }
+        assertEquals(FOREGROUND_STROKE_ALPHAS, pathAttributes(FOREGROUND, "strokeAlpha")) {
+            "the brand fades the inner border to 0.85 and nothing else"
         }
         assertEquals(
             listOf("android:fillColor"),
             parse(FOREGROUND).elements("aapt:attr").map { it.getAttribute("name") },
         ) { "the gradient must fill the shield, not some other attribute" }
+        val gradient = parse(FOREGROUND).elements("gradient").single()
+        assertEquals(
+            GRADIENT_GEOMETRY,
+            GRADIENT_GEOMETRY.keys.associateWith { gradient.getAttribute("android:$it") },
+        ) { "a swapped or re-typed gradient lights the slate body from the wrong end" }
         val stops =
             parse(FOREGROUND)
                 .elements("item")
                 .map { it.getAttribute("android:color").lowercase() }
         assertEquals(listOf(SLATE_TOP, SLATE_BOTTOM), stops)
+        assertEquals(
+            listOf("0", "1"),
+            parse(FOREGROUND).elements("item").map { it.getAttribute("android:offset") },
+        ) { "the two stops must span the whole body, not a band inside it" }
     }
 
     @Test
@@ -180,6 +204,9 @@ class BrandResourcesTest {
                 .filter { it.getAttribute("android:strokeColor").lowercase() == KNOCKOUT }
         assertEquals(3, knockouts.size) { "the < / > symbol is three strokes" }
         knockouts.forEach { assertEquals("2.6", it.getAttribute("android:strokeWidth")) }
+        assertEquals(KNOCKOUT_PATHS, knockouts.map { it.getAttribute("android:pathData") }) {
+            "comparing the two layers to each other cannot catch a coordinated edit"
+        }
     }
 
     @Test
@@ -239,6 +266,8 @@ class BrandResourcesTest {
         assertEquals(MONOCHROME_STROKE_WIDTHS, pathAttributes(MONOCHROME, "strokeWidth")) {
             "a layer with no fill is defined entirely by its stroke widths"
         }
+        assertEquals(CANVAS, document.documentElement.getAttribute("android:viewportWidth"))
+        assertEquals(CANVAS, document.documentElement.getAttribute("android:viewportHeight"))
     }
 
     @Test
@@ -254,8 +283,13 @@ class BrandResourcesTest {
     fun `notification icon drops the inner border and the symbol`() {
         val document = parse(NOTIFICATION)
         assertEquals(2, document.elements("path").size) { "one shield border and the flame" }
-        assertFalse(KNOCKOUT in strokeColours(NOTIFICATION)) { "the < / > does not survive 24dp" }
+        assertEquals(listOf(OPAQUE_WHITE, ""), strokeColours(NOTIFICATION)) {
+            "a small icon renders alpha only, so a faded stroke erases the silhouette " +
+                "and the knockout colour must not appear at all at 24dp"
+        }
         assertEquals(SHIELD_PATH, pathAttributes(NOTIFICATION, "pathData").first())
+        assertEquals(FLAME_PATH, pathAttributes(NOTIFICATION, "pathData").last())
+        assertEquals(FLAME_TRANSFORM, groupWrapping(NOTIFICATION) { it == FLAME_PATH }.transform())
         assertEquals("2.6", pathAttributes(NOTIFICATION, "strokeWidth").first()) {
             "below 2.6 the border thins past one device pixel at 24dp"
         }
@@ -317,8 +351,34 @@ class BrandResourcesTest {
         const val KNOCKOUT = "#0b0d0f"
 
         const val SHIELD_PATH = "M32,4 L57,13 V31 C57,47 45,56 32,60 C19,56 7,47 7,31 V13 Z"
-        const val FLAME_PREFIX = "M8,16c3.314"
         const val OPAQUE_WHITE = "#ffffff"
+        const val CANVAS = "108"
+        const val FLAME_PATH =
+            "M8,16c3.314,0 6,-2 6,-5.5 0,-1.5 -0.5,-4 -2.5,-6 0.25,1.5 -1.25,2 -1.25,2 " +
+                "C11,4 9,0.5 6,0 c0.357,2 0.5,4 -2,6 -1.25,1 -2,2.729 -2,4.5 " +
+                "C2,14 4.686,16 8,16 Z"
+
+        val KNOCKOUT_PATHS =
+            listOf(
+                "M26,37.64 L23,41.64 L26,45.64",
+                "M33.5,36.64 L30.5,46.64",
+                "M38,37.64 L41,41.64 L38,45.64",
+            )
+
+        val FOREGROUND_STROKE_WIDTHS = listOf("1.8", "2.1", "", "2.6", "2.6", "2.6")
+        val FOREGROUND_STROKE_COLOURS =
+            listOf(NEON, NEON, "", KNOCKOUT, KNOCKOUT, KNOCKOUT)
+        val FOREGROUND_FILL_COLOURS = listOf("", "", NEON, "", "", "")
+        val FOREGROUND_STROKE_ALPHAS = listOf("", "0.85", "", "", "", "")
+
+        val GRADIENT_GEOMETRY =
+            mapOf(
+                "type" to "linear",
+                "startX" to "32",
+                "startY" to "4",
+                "endX" to "32",
+                "endY" to "60",
+            )
 
         val LAYER_DRAWABLES =
             mapOf(
