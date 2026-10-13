@@ -725,3 +725,29 @@ files, the five `ci.yml` checks are green on `c92223f` and both standalone linte
 count as before this branch. One falls in a file this plan touches — `AboutScreen.kt:70`, the
 inherited `hiltViewModel` package move — at a line this plan does not modify. This plan introduces
 none.
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 2, 2026-10-12
+
+Verdict: **NOT CLEAN** — no critical findings, 1 WARNING and 6 INFO, all addressed below. The
+shipped resources, geometry, `AboutScreen` change, strings, scope and plan-file integrity were
+re-verified compliant at `c776249`, with the five `ci.yml` checks green (run `38318033159` for the
+earlier head, `38327032915` for `c776249`) and `BrandResourcesTest` reporting 15/15.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| W-R2-1 | WARNING: the PR body declared the two `Regex` objects hoisted into companion constants *"because detekt flags a literal recompiled on every call"*. Measured false — the plan's inline form is clean under both tools, exactly as with `Element.transform()` under round-1 I-1. | **Resolved by removing the deviation, not by re-wording it.** I restored the plan's inline `Regex("[A-Za-z][^A-Za-z]*")` and `Regex("(?<=\\d)-")`, deleted `COMMAND` and `NEGATIVE_SEPARATOR`, and rejoined the split assertion message (107 characters, under both limits). Measured after: ktlint 0 findings, detekt exit 0 on both source sets. Three deviations disappear |
+| I-R2-1 | INFO: the `read()` deviation was declared as *"reformatted to fit the column limit"*; the plan's form is 62 characters at its longest, so that reason is wrong. | Measured the real cause by restoring the plan's form and running ktlint: `standard:chain-method-continuation` — *"Expected newline before '.'"*. The deviation is forced; only the stated reason was wrong, and the PR body now names the rule |
+| I-R2-2 | INFO: the `PARAMETER_COUNTS` reformat (one entry per line instead of the plan's grouped rows) was not declared at all. | Measured as forced by ktlint `standard:argument-list-wrapping`, 6 findings in the plan's form. Now declared in the PR body, naming the rule |
+| I-R2-3 | INFO: the declared list of added companion constants named 4 of them and omitted the rest, and the two new helpers were never named. | Enumerated exhaustively in the PR body: **12** constants added beyond the plan's 14 and **3** helpers beyond the plan's 6, each with its reason |
+| I-R2-4 | INFO: a 28-mutation audit found **7 mutations that survived all 15 guards**. The worst is the first: the **outer** shield `pathData` — the one actually painted — was unguarded beyond syntax, so moving a shoulder to `(70,2)` (painted radius 48.4, far outside the mask) passed. The others: the mipmaps' `<monochrome>` repointed at the colour foreground; the notification border thinned below 2.6; the notification flame made transparent; the foreground outer border recoloured off-brand; the monochrome artwork deleted or re-widened; and the gradient re-attached to a different `aapt:attr` name. | **All seven closed**, inside the rows that already own each subject, so the count stays at 15 tests and no new row is invented. Added: the outer group's first child path must equal `SHIELD_PATH`; `LAYER_DRAWABLES` pins all three adaptive layers to their drawables; the monochrome layer's `pathData` list must equal the foreground's and its stroke widths must equal `MONOCHROME_STROKE_WIDTHS`; the notification shield must keep the brand outline at width `2.6` and its flame must be filled opaque; the foreground's **first** stroke colour must be the neon; the single `aapt:attr` must target `android:fillColor`. Proven by re-running the same mutations against scratch copies of the resource tree: **8 of 8 now caught, 0 survive**, and all seven new assertions hold on the shipped files |
+| I-R2-5 | INFO: the CI DoD box was ticked in `c776249`, the very commit that triggered the run, so at tick time four of the five checks were still in progress. | The claim is now true and was read with `gh`, not assumed: run `38327032915` on `c776249`, `conclusion: success`, and the downloaded `unit-test-results` artifact shows `BrandResourcesTest` 15 tests / 0 failures / 0 skipped. The sequencing is the finding and is recorded here; the correct order is to push, read CI, then tick |
+| I-R2-6 | INFO: the PR #8 checklist still showed CI unticked although the run was green. | Ticked, with the per-check table and the test-report evidence added to the PR body |
+
+**Out-of-scope observation, recorded and not acted on:** round 2 reported that the
+`testGmsDebugUnitTest` report in the `unit-test-results` artifact contains no `BrandResourcesTest`
+entry. Measured directly from the same artifact: the directory
+`testGmsDebugUnitTest/com.danielealbano.androidremotecontrolmcp.brand.BrandResourcesTest/` exists and
+its report reads 15 tests, 0 failures, 0 ignored, so the class ran under **both** variant tasks. This
+plan changes nothing about variant test wiring either way.

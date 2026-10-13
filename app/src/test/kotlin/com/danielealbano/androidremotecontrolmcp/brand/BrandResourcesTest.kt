@@ -84,7 +84,7 @@ class BrandResourcesTest {
     ) {
         assertTrue(pathData.isNotBlank()) { "$where: empty pathData" }
         assertTrue(pathData.trimStart().first() in "Mm") { "$where: must start with M or m" }
-        val commands = COMMAND.findAll(pathData).toList()
+        val commands = Regex("[A-Za-z][^A-Za-z]*").findAll(pathData).toList()
         assertTrue(commands.isNotEmpty()) { "$where: no commands" }
         commands.forEach { match ->
             val letter = match.value.first()
@@ -95,18 +95,26 @@ class BrandResourcesTest {
                 match.value
                     .drop(1)
                     .split(',', ' ', '\t', '\n')
-                    .flatMap { chunk -> NEGATIVE_SEPARATOR.split(chunk) }
+                    .flatMap { chunk -> Regex("(?<=\\d)-").split(chunk) }
                     .filter { it.isNotBlank() }
             if (expected == 0) {
                 assertTrue(parameters.isEmpty()) { "$where: '$letter' takes no parameters" }
             } else {
                 assertTrue(parameters.isNotEmpty() && parameters.size % expected == 0) {
-                    "$where: '$letter' got ${parameters.size} parameters, " +
-                        "expected a multiple of $expected"
+                    "$where: '$letter' got ${parameters.size} parameters, expected a multiple of $expected"
                 }
             }
         }
     }
+
+    /** One attribute of every `path` in the drawable, in document order. */
+    private fun pathAttributes(
+        relativePath: String,
+        attribute: String,
+    ): List<String> =
+        parse(relativePath)
+            .elements("path")
+            .map { it.getAttribute("android:$attribute") }
 
     private fun strokeColours(relativePath: String): List<String> =
         parse(relativePath)
@@ -130,6 +138,10 @@ class BrandResourcesTest {
         assertEquals(SAFE_ZONE_TRANSFORM, outer.transform()) {
             "the mark must map to 22..86 of the 108 canvas (painted radius 32.30 <= 33)"
         }
+        assertEquals(SHIELD_PATH, outer.childPaths().first().getAttribute("android:pathData")) {
+            "the painted outline sets the radius as much as the transform does: a shoulder " +
+                "moved outwards clips under the circular mask however the group is scaled"
+        }
     }
 
     @Test
@@ -146,7 +158,13 @@ class BrandResourcesTest {
 
     @Test
     fun `launcher foreground carries the brand colours`() {
-        assertTrue(NEON in strokeColours(FOREGROUND)) { "the neon border colour is missing" }
+        assertEquals(NEON, strokeColours(FOREGROUND).first()) {
+            "the outer border is the one the launcher mask shows first"
+        }
+        assertEquals(
+            listOf("android:fillColor"),
+            parse(FOREGROUND).elements("aapt:attr").map { it.getAttribute("name") },
+        ) { "the gradient must fill the shield, not some other attribute" }
         val stops =
             parse(FOREGROUND)
                 .elements("item")
@@ -190,8 +208,12 @@ class BrandResourcesTest {
     fun `both adaptive icons declare the same three layers`() {
         listOf(LAUNCHER, LAUNCHER_ROUND).forEach { icon ->
             val document = parse(icon)
-            listOf("background", "foreground", "monochrome").forEach { layer ->
-                assertEquals(1, document.elements(layer).size) { "$icon must declare one <$layer>" }
+            LAYER_DRAWABLES.forEach { (layer, drawable) ->
+                val layers = document.elements(layer)
+                assertEquals(1, layers.size) { "$icon must declare one <$layer>" }
+                assertEquals(drawable, layers.single().getAttribute("android:drawable")) {
+                    "$icon: <$layer> must point at $drawable"
+                }
             }
         }
         assertEquals(read(LAUNCHER), read(LAUNCHER_ROUND)) {
@@ -210,6 +232,13 @@ class BrandResourcesTest {
             parse(FOREGROUND).elements("group").first().transform(),
             document.elements("group").first().transform(),
         ) { "the monochrome layer must use the foreground's safe-zone transform" }
+        assertEquals(
+            pathAttributes(FOREGROUND, "pathData"),
+            pathAttributes(MONOCHROME, "pathData"),
+        ) { "the tinted layer must draw the same artwork, path for path" }
+        assertEquals(MONOCHROME_STROKE_WIDTHS, pathAttributes(MONOCHROME, "strokeWidth")) {
+            "a layer with no fill is defined entirely by its stroke widths"
+        }
     }
 
     @Test
@@ -226,6 +255,14 @@ class BrandResourcesTest {
         val document = parse(NOTIFICATION)
         assertEquals(2, document.elements("path").size) { "one shield border and the flame" }
         assertFalse(KNOCKOUT in strokeColours(NOTIFICATION)) { "the < / > does not survive 24dp" }
+        assertEquals(SHIELD_PATH, pathAttributes(NOTIFICATION, "pathData").first())
+        assertEquals("2.6", pathAttributes(NOTIFICATION, "strokeWidth").first()) {
+            "below 2.6 the border thins past one device pixel at 24dp"
+        }
+        assertEquals(
+            listOf("", OPAQUE_WHITE),
+            pathAttributes(NOTIFICATION, "fillColor").map { it.lowercase() },
+        ) { "the shield is stroked and the flame is filled opaque" }
         assertEquals(
             "?attr/colorControlNormal",
             document.documentElement.getAttribute("android:tint"),
@@ -281,6 +318,16 @@ class BrandResourcesTest {
 
         const val SHIELD_PATH = "M32,4 L57,13 V31 C57,47 45,56 32,60 C19,56 7,47 7,31 V13 Z"
         const val FLAME_PREFIX = "M8,16c3.314"
+        const val OPAQUE_WHITE = "#ffffff"
+
+        val LAYER_DRAWABLES =
+            mapOf(
+                "background" to "@color/ic_launcher_background",
+                "foreground" to "@drawable/ic_launcher_foreground",
+                "monochrome" to "@drawable/ic_launcher_monochrome",
+            )
+
+        val MONOCHROME_STROKE_WIDTHS = listOf("1.8", "2.1", "0.9", "2.6", "2.6", "2.6")
 
         val DRAWABLES = listOf(FOREGROUND, MONOCHROME, NOTIFICATION)
 
@@ -328,8 +375,5 @@ class BrandResourcesTest {
                 'A' to 7,
                 'Z' to 0,
             )
-
-        val COMMAND = Regex("[A-Za-z][^A-Za-z]*")
-        val NEGATIVE_SEPARATOR = Regex("(?<=\\d)-")
     }
 }
