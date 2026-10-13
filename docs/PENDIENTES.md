@@ -332,7 +332,9 @@ Pedido del humano el 2026-10-13, al ver ARTEMIS: «sí, un artemis.md».
   - `tools/list` puede dar menos tools que las registradas: las demás están apagadas en los permisos del
     teléfono, y eso no es un error;
   - cada llamada cuesta unos 0,7 s ida y vuelta por internet (92 % es red): agrupar lecturas.
-- Decide el humano: cómo llega al agente. Las opciones: un archivo en el repo que el usuario instala en
-  su Claude Code, como ARTEMIS; o que el propio servidor MCP lo mande en el campo `instructions` de la
-  respuesta a `initialize` (lo prevé el protocolo MCP), y así le llega a cualquier cliente sin instalar
-  nada. Propuesta: las dos, con un único texto como fuente.
+- **Decidido por el humano el 2026-10-13: lo inyecta el propio servidor MCP** («nosotros también
+  inyectaremos el prompt user-manual»): el manual de uso viaja en el campo `instructions` de la respuesta a
+  `initialize` (lo prevé el protocolo MCP), así le llega a cualquier cliente sin instalar nada. No es un
+  archivo que cada usuario instala, como hace ARTEMIS.
+- **Postura del humano, 2026-10-13:** «nos quedamos mejorando lo que ya tenemos, y si algo de ARTEMIS nos
+  sirve lo aprovechamos». ARTEMIS es fuente de ideas, no un reemplazo ni una dependencia.
