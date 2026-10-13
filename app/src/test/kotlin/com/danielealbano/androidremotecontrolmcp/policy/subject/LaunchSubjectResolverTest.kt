@@ -2,7 +2,6 @@ package com.danielealbano.androidremotecontrolmcp.policy.subject
 
 import android.content.Intent
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
-import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicySubject
 import com.danielealbano.androidremotecontrolmcp.policy.model.PolicyActionType
 import com.danielealbano.androidremotecontrolmcp.policy.subject.SubjectFixtures.BANK
 import com.danielealbano.androidremotecontrolmcp.policy.subject.SubjectFixtures.OWN_PACKAGE
@@ -41,8 +40,7 @@ class LaunchSubjectResolverTest {
         build: JsonObjectBuilder.() -> Unit,
     ): SubjectResolution = resolve(ToolPolicyClass.SEND_INTENT, "send_intent", buildJsonObject(build), profiled)
 
-    private fun subjectOf(resolution: SubjectResolution): PolicySubject =
-        (resolution as SubjectResolution.Resolved).subject
+    private fun subjectOf(resolution: SubjectResolution) = (resolution as SubjectResolution.Resolved).subject
 
     @Test
     fun `open_app and close_app resolve NAVIGATE on package_id`() =

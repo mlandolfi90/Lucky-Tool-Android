@@ -112,8 +112,10 @@ class ApprovalProfileRepositoryImplTest {
         packageName: String,
         template: ProfileTemplate,
         maxAmount: String?,
-    ): ProfileSaveResult =
-        updateSettings(packageName, template, ProfileTemplates.rulesFor(template), maxAmount, emptyList())
+    ): ProfileSaveResult {
+        val rules = ProfileTemplates.rulesFor(template)
+        return updateSettings(packageName, template, rules, maxAmount, emptyList())
+    }
 
     private fun failingStore(): DataStore<Preferences> = mockk()
 
@@ -257,8 +259,18 @@ class ApprovalProfileRepositoryImplTest {
             assertTrue(result is ProfileSaveResult.Saved && !result.created)
             val snapshot = repository.current()
             assertTrue(snapshot.unreadable.isEmpty())
-            assertTrue(snapshot.profiles.getValue(bankPackage).notAmountFields.isEmpty())
-            assertTrue(snapshot.profiles.getValue(bankPackage).notActionButtons.isEmpty())
+            assertTrue(
+                snapshot.profiles
+                    .getValue(bankPackage)
+                    .notAmountFields
+                    .isEmpty(),
+            )
+            assertTrue(
+                snapshot.profiles
+                    .getValue(bankPackage)
+                    .notActionButtons
+                    .isEmpty(),
+            )
         }
 
     @Test
@@ -453,7 +465,14 @@ class ApprovalProfileRepositoryImplTest {
 
             assertEquals(ProfileSaveResult.Invalid(listOf(ProfileValidationError.EXCEPTION_SELECTOR_INVALID)), result)
             assertTrue(stored(bankPackage)!!.notAmountFields.isEmpty())
-            assertTrue(newRepository().current().profiles.getValue(bankPackage).notAmountFields.isEmpty())
+            assertTrue(
+                newRepository()
+                    .current()
+                    .profiles
+                    .getValue(bankPackage)
+                    .notAmountFields
+                    .isEmpty(),
+            )
         }
 
     @Test

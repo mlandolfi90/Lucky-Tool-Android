@@ -65,8 +65,10 @@ class ApprovalGateIntegrationTest {
         return deps
     }
 
-    private suspend fun Client.tap(): CallToolResult =
-        callTool(name = "android_tap", arguments = mapOf("x" to 500, "y" to 800))
+    private suspend fun Client.tap(): CallToolResult {
+        val arguments = mapOf("x" to 500, "y" to 800)
+        return callTool(name = "android_tap", arguments = arguments)
+    }
 
     private suspend fun Client.status(
         approvalId: String,
@@ -82,8 +84,10 @@ class ApprovalGateIntegrationTest {
 
     private fun textOf(result: CallToolResult): String = (result.content[0] as TextContent).text
 
-    private fun jsonOf(result: CallToolResult): JsonObject =
-        Json.parseToJsonElement(textOf(result).lines().last()).jsonObject
+    private fun jsonOf(result: CallToolResult): JsonObject {
+        val json = textOf(result).lines().last()
+        return Json.parseToJsonElement(json).jsonObject
+    }
 
     private fun field(
         result: CallToolResult,
@@ -91,7 +95,10 @@ class ApprovalGateIntegrationTest {
     ): String? = jsonOf(result)[key]?.jsonPrimitive?.content
 
     private fun toolCallMessages(deps: MockDependencies): List<String> =
-        deps.serverLog.ofType(ServerLogEntry.Type.TOOL_CALL).filter { it.toolName == "tap" }.map { it.message }
+        deps.serverLog
+            .ofType(ServerLogEntry.Type.TOOL_CALL)
+            .filter { it.toolName == "tap" }
+            .map { it.message }
 
     private fun approvalMessages(deps: MockDependencies): List<String> =
         deps.serverLog.ofType(ServerLogEntry.Type.APPROVAL).map { it.message }
@@ -366,7 +373,12 @@ class ApprovalGateIntegrationTest {
                 deps.policy.coordinator.stateOf(ids.last(), deps.policy.nowMs())
                 coroutineScope {
                     val call = async { client.tap() }
-                    deps.policy.coordinator.deny(deps.policy.awaitPending().id.also { ids += it })
+                    deps.policy.coordinator.deny(
+                        deps.policy
+                            .awaitPending()
+                            .id
+                            .also { ids += it },
+                    )
                     call.await()
                 }
             }

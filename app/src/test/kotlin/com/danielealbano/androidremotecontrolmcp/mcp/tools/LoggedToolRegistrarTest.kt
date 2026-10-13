@@ -74,8 +74,11 @@ class LoggedToolRegistrarTest {
         CallToolResult(content = listOf(TextContent(text = "ok")))
     }
 
-    private fun request(arguments: JsonObject): CallToolRequest =
-        mockk<CallToolRequest>().also { every { it.arguments } returns arguments }
+    private fun request(arguments: JsonObject): CallToolRequest {
+        val request = mockk<CallToolRequest>()
+        every { request.arguments } returns arguments
+        return request
+    }
 
     private fun emptyRequest(): CallToolRequest = request(JsonObject(emptyMap()))
 

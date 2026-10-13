@@ -64,8 +64,7 @@ class ApprovalProfileEditorViewModelTest {
     @AfterEach
     fun tearDown() = Dispatchers.resetMain()
 
-    private fun profileEvent(outcome: ApprovalLogOutcome): ApprovalLogRecord =
-        ApprovalLogRecord(outcome, packageName = BANK_PACKAGE)
+    private fun profileEvent(outcome: ApprovalLogOutcome) = ApprovalLogRecord(outcome, packageName = BANK_PACKAGE)
 
     private fun assertNothingPersisted() {
         coVerify(exactly = 0) { repository.upsert(any()) }
@@ -206,10 +205,24 @@ class ApprovalProfileEditorViewModelTest {
                 viewModel.load(BANK_PACKAGE, ProfileTemplate.MONEY_APP)
 
                 viewModel.addTier()
-                assertEquals(RuleMode.ASK_IN_CHAT, expectMostRecentItem().draft?.tiers?.single()?.mode)
+                assertEquals(
+                    RuleMode.ASK_IN_CHAT,
+                    expectMostRecentItem()
+                        .draft
+                        ?.tiers
+                        ?.single()
+                        ?.mode,
+                )
                 viewModel.setTier(0, TierDraft("", RuleMode.NOTIFY))
                 viewModel.addTier()
-                assertEquals(RuleMode.NOTIFY, expectMostRecentItem().draft?.tiers?.last()?.mode)
+                assertEquals(
+                    RuleMode.NOTIFY,
+                    expectMostRecentItem()
+                        .draft
+                        ?.tiers
+                        ?.last()
+                        ?.mode,
+                )
                 repeat(5) { viewModel.addTier() }
                 assertEquals(5, expectMostRecentItem().draft?.tiers?.size)
             }

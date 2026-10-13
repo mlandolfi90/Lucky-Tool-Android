@@ -1,7 +1,6 @@
 package com.danielealbano.androidremotecontrolmcp.policy.subject
 
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
-import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicySubject
 import com.danielealbano.androidremotecontrolmcp.policy.model.PolicyActionType
 import com.danielealbano.androidremotecontrolmcp.policy.subject.SubjectFixtures.BANK
 import com.danielealbano.androidremotecontrolmcp.policy.subject.SubjectFixtures.FULL_SCREEN
@@ -55,8 +54,7 @@ class WindowSubjectResolverTest {
         return resolve(ToolPolicyClass.CLIPBOARD_WRITE, "set_clipboard", arguments, profiled)
     }
 
-    private fun subjectOf(resolution: SubjectResolution): PolicySubject =
-        (resolution as SubjectResolution.Resolved).subject
+    private fun subjectOf(resolution: SubjectResolution) = (resolution as SubjectResolution.Resolved).subject
 
     private val readBlocked =
         SubjectResolution.Blocked(null, PolicyActionType.READ, BlockCause.TARGET_UNRESOLVED)

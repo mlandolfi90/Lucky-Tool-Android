@@ -72,8 +72,7 @@ class PolicyApprovalViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): PolicyApprovalViewModel =
-        PolicyApprovalViewModel(coordinator, reevaluator, appIconCache, events, dispatcher)
+    private fun viewModel() = PolicyApprovalViewModel(coordinator, reevaluator, appIconCache, events, dispatcher)
 
     private fun pendingWith(
         reason: DecisionReason = DecisionReason.RULE,
@@ -179,7 +178,12 @@ class PolicyApprovalViewModelTest {
         val viewModel = viewModel()
         viewModel.requestException("id-1", PolicyExceptionKind.NOT_AMOUNT_FIELD)
 
-        val texts = listOf(viewModel.card().toString(), viewModel.uiState.value.confirmation.toString())
+        val texts =
+            listOf(
+                viewModel.card().toString(),
+                viewModel.uiState.value.confirmation
+                    .toString(),
+            )
 
         texts.forEach { text -> listOf("1500", "Amount", "id-1").forEach { assertFalse(text.contains(it), it) } }
     }

@@ -50,7 +50,9 @@ class AmountParserTest {
         ): Arguments = Arguments.of(input, max, ambiguous, exceedsLimits)
 
         @JvmStatic
-        fun rows(): List<Arguments> =
+        fun rows(): List<Arguments> = groupingRows() + notationRows()
+
+        private fun groupingRows(): List<Arguments> =
             listOf(
                 row("", null),
                 row("Pagar ahora", null),
@@ -71,6 +73,10 @@ class AmountParserTest {
                 row("1.234.567,89", "1234567.89"),
                 row("1,234,567.89", "1234567.89"),
                 row("1.234,567.89", "123456789"),
+            )
+
+        private fun notationRows(): List<Arguments> =
+            listOf(
                 row("1'000.50", "1000.50"),
                 row("1’000", "1000"),
                 row("1 500", "1500"),
@@ -114,7 +120,13 @@ class AmountParserTest {
                 row("1e", "1"),
                 row("1e-", "1"),
                 row("3em", "3"),
-                row("9".repeat(10_000), BigDecimal.TEN.pow(10_000).subtract(BigDecimal.ONE).toPlainString()),
+                row(
+                    "9".repeat(10_000),
+                    BigDecimal.TEN
+                        .pow(10_000)
+                        .subtract(BigDecimal.ONE)
+                        .toPlainString(),
+                ),
                 row("9".repeat(10_001), null, exceedsLimits = true),
                 row("ﷺ".repeat(3_000), null, exceedsLimits = true),
             )

@@ -1,7 +1,6 @@
 package com.danielealbano.androidremotecontrolmcp.policy.subject
 
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
-import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicySubject
 import com.danielealbano.androidremotecontrolmcp.policy.model.PolicyActionType
 import com.danielealbano.androidremotecontrolmcp.policy.subject.SubjectFixtures.BANK
 import com.danielealbano.androidremotecontrolmcp.policy.subject.SubjectFixtures.SHOP
@@ -68,8 +67,7 @@ class NotificationSubjectResolverTest {
         profiled: Set<String> = emptySet(),
     ): SubjectResolution = resolver.resolve(policyClass, request(toolName, arguments, profiled))
 
-    private fun subjectOf(resolution: SubjectResolution): PolicySubject =
-        (resolution as SubjectResolution.Resolved).subject
+    private fun subjectOf(resolution: SubjectResolution) = (resolution as SubjectResolution.Resolved).subject
 
     private fun notificationId(id: String): JsonObject = buildJsonObject { put("notification_id", id) }
 

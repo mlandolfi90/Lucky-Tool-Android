@@ -86,7 +86,11 @@ class ToolPolicyCatalogTest {
 
     @Test
     fun `every ToolPolicyClass is used by at least one tool`() {
-        assertTrue(ToolPolicyCatalog.classes.values.toSet().containsAll(ToolPolicyClass.entries))
+        assertTrue(
+            ToolPolicyCatalog.classes.values
+                .toSet()
+                .containsAll(ToolPolicyClass.entries),
+        )
     }
 
     @Test

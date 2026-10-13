@@ -89,7 +89,7 @@ class ApprovalProfilesViewModel
                     }
 
                     ProfileDeleteResult.NOT_FOUND -> {
-                        Unit
+                        // No key was stored for the package: nothing was deleted, nothing to log.
                     }
 
                     ProfileDeleteResult.STORE_UNAVAILABLE -> {

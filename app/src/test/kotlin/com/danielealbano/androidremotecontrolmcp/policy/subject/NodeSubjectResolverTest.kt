@@ -3,7 +3,6 @@ package com.danielealbano.androidremotecontrolmcp.policy.subject
 import android.util.Log
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.NodeSelectorResolver
-import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicySubject
 import com.danielealbano.androidremotecontrolmcp.policy.model.PolicyActionType
 import com.danielealbano.androidremotecontrolmcp.policy.subject.SubjectFixtures.BANK
 import com.danielealbano.androidremotecontrolmcp.policy.subject.SubjectFixtures.FULL_SCREEN
@@ -25,11 +24,11 @@ import com.danielealbano.androidremotecontrolmcp.testutil.PrivacyToolTestDoubles
 import io.mockk.mockkStatic
 import io.mockk.unmockkStatic
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.add
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import kotlinx.serialization.json.putJsonArray
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -101,8 +100,7 @@ class NodeSubjectResolverTest {
         profiled: Set<String> = emptySet(),
     ): SubjectResolution = resolve("click_node", ToolPolicyClass.NODE_CLICK, arguments, profiled)
 
-    private fun subjectOf(resolution: SubjectResolution): PolicySubject =
-        (resolution as SubjectResolution.Resolved).subject
+    private fun subjectOf(resolution: SubjectResolution) = (resolution as SubjectResolution.Resolved).subject
 
     @Test
     fun `click_node by node_id resolves a classified ACTION_BUTTON on the node's window package`() =
@@ -224,8 +222,10 @@ class NodeSubjectResolverTest {
             assertFalse(subject.classifyTarget)
         }
 
-    private fun nodeIds(vararg ids: String): JsonObject =
-        buildJsonObject { putJsonArray("node_ids") { ids.forEach { add(it) } } }
+    private fun nodeIds(vararg ids: String): JsonObject {
+        val list = JsonArray(ids.map { JsonPrimitive(it) })
+        return buildJsonObject { put("node_ids", list) }
+    }
 
     @Test
     fun `get_node_details reads only the windows of the requested ids`() =

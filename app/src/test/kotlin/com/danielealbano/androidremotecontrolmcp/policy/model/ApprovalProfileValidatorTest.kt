@@ -21,7 +21,9 @@ class ApprovalProfileValidatorTest {
         count: Int,
         value: String = "com.example.bank:id/field",
     ): List<PolicyException> =
-        List(count) { index -> PolicyException(PolicySelector(SelectorKind.RESOURCE_ID, "$value$index"), 0L) }
+        List(count) { index ->
+            PolicyException(PolicySelector(SelectorKind.RESOURCE_ID, "$value$index"), 0L)
+        }
 
     @Test
     fun `valid money profile has no errors`() {

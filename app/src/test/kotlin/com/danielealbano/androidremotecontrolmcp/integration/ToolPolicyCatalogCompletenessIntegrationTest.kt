@@ -23,7 +23,12 @@ class ToolPolicyCatalogCompletenessIntegrationTest {
         val prefix = McpToolUtils.buildToolNamePrefix("")
         var names = emptySet<String>()
         McpIntegrationTestHelper.withTestApplication { client, _ ->
-            names = client.listTools().tools.map { it.name.removePrefix(prefix) }.toSet()
+            names =
+                client
+                    .listTools()
+                    .tools
+                    .map { it.name.removePrefix(prefix) }
+                    .toSet()
         }
         return names
     }
