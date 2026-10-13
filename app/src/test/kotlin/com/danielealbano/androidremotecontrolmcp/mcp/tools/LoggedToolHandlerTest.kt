@@ -208,4 +208,43 @@ class LoggedToolHandlerTest {
 
             assertTrue(recorder.ofType(ServerLogEntry.Type.TOOL_CALL).isEmpty())
         }
+
+    @Test
+    fun `gate marker replaces failed for an isError result`() =
+        runTest {
+            val recorder = RecordingServerLogRepository()
+            val handler =
+                loggedToolHandler(recorder, "tap") {
+                    markToolCall(ToolCallMarker.DENIED)
+                    CallToolResult(content = listOf(TextContent(text = "denied")), isError = true)
+                }
+
+            handler(request)
+
+            assertEquals(ToolCallMarker.DENIED, recorder.ofType(ServerLogEntry.Type.TOOL_CALL).single().message)
+        }
+
+    @Test
+    fun `gate marker is logged for a non-error result`() =
+        runTest {
+            val recorder = RecordingServerLogRepository()
+            val handler =
+                loggedToolHandler(recorder, "tap") {
+                    markToolCall(ToolCallMarker.AWAITING_APPROVAL)
+                    CallToolResult(content = listOf(TextContent(text = "awaiting")))
+                }
+
+            handler(request)
+
+            assertEquals(
+                ToolCallMarker.AWAITING_APPROVAL,
+                recorder.ofType(ServerLogEntry.Type.TOOL_CALL).single().message,
+            )
+        }
+
+    @Test
+    fun `markToolCall outside the logged wrapper is a no-op`() =
+        runTest {
+            markToolCall(ToolCallMarker.FORBIDDEN)
+        }
 }

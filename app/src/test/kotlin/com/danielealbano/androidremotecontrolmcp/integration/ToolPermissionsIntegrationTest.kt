@@ -97,6 +97,19 @@ class ToolPermissionsIntegrationTest {
         }
 
     @Test
+    fun `approval tools ignore tool permissions`() =
+        runTest {
+            val perms =
+                ToolPermissionsConfig(disabledTools = setOf("get_approval_status", "confirm_human_approval"))
+
+            McpIntegrationTestHelper.withTestApplication(perms = perms) { client, _ ->
+                val names = client.listTools().tools.map { it.name }
+                assertTrue("android_get_approval_status" in names)
+                assertTrue("android_confirm_human_approval" in names)
+            }
+        }
+
+    @Test
     fun `include_screenshot absent from schema when disabled`() =
         runTest {
             val perms =
