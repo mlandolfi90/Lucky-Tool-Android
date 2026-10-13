@@ -29,9 +29,10 @@ internal class GateAuthorizer(
         }
 
     /**
-     * Waits up to [waitMs] (0: no wait) for the owner, then reads the entry once; APPROVED consumes the grant. After
-     * a wait, an approval is used only once the approval screen has closed: while it still covers the app (the
-     * owner has more requests open), the call returns `awaiting_approval` and the grant stays for the repeat.
+     * Waits up to [waitMs] (0: no wait) for the owner, then reads the entry once. APPROVED returns
+     * [Verdict.Proceed] WITHOUT consuming the grant: the caller consumes it with [consumeOwnerGrant] right before
+     * executing. After a wait, an approval is used only once the approval screen has closed: while it still covers
+     * the app (the owner has more requests open), the call returns `awaiting_approval` and the grant stays.
      */
     suspend fun awaitOwner(
         call: GateCall,
@@ -47,12 +48,8 @@ internal class GateAuthorizer(
             ApprovalState.APPROVED -> {
                 if (waitMs > 0L && !screen.awaitHidden(SCREEN_CLOSE_WAIT_MS)) {
                     Verdict.Halt(outcomes.awaiting(call, decision, awaiting.pending))
-                } else if (coordinator.consumeGrant(assessment.fingerprint, RuleMode.NOTIFY, nowMs())) {
-                    outcomes.approved(call, decision)
-                    Verdict.Proceed(RuleMode.NOTIFY)
                 } else {
-                    // An identical joined call already used the single-use grant.
-                    Verdict.Halt(outcomes.expired(call, decision))
+                    Verdict.Proceed(RuleMode.NOTIFY)
                 }
             }
 
@@ -69,6 +66,18 @@ internal class GateAuthorizer(
             }
         }
     }
+
+    /** Consumes the owner's NOTIFY grant for [assessment]; an identical joined call may have used it already. */
+    suspend fun consumeOwnerGrant(
+        call: GateCall,
+        assessment: Assessment.Evaluated,
+    ): Verdict =
+        if (coordinator.consumeGrant(assessment.fingerprint, RuleMode.NOTIFY, nowMs())) {
+            outcomes.approved(call, assessment.decision)
+            Verdict.Proceed(RuleMode.NOTIFY)
+        } else {
+            Verdict.Halt(outcomes.expired(call, assessment.decision))
+        }
 
     private suspend fun authorizeDecision(
         call: GateCall,

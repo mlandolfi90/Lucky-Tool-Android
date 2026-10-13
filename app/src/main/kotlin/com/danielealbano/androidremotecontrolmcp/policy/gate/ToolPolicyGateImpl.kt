@@ -111,18 +111,28 @@ class ToolPolicyGateImpl internal constructor(
     ): CallToolResult =
         when (val verdict = authorizer.awaitOwner(call, awaiting, timing.notifyWaitMs)) {
             is Verdict.Halt -> verdict.result
-            is Verdict.Proceed -> runAuthorized(call, awaiting.assessment, verdict.mode, execute)
+            is Verdict.Proceed -> runAuthorized(call, awaiting.assessment, verdict.mode, execute, ownerGrant = true)
         }
 
-    /** A mutating call while profiles apply re-checks under the lock before executing; any other call executes. */
+    /**
+     * A mutating call while profiles apply re-checks under the lock before executing; any other call executes. With
+     * [ownerGrant] the owner's single-use grant is consumed only right before executing, so a re-check that fails
+     * (the target app is not on screen yet) leaves it for the repeat.
+     */
     private suspend fun runAuthorized(
         call: GateCall,
         first: Assessment,
         authorizedMode: RuleMode,
         execute: suspend () -> CallToolResult,
+        ownerGrant: Boolean = false,
     ): CallToolResult =
         if (first is Assessment.Evaluated && first.mutatesUnderProfiles) {
-            mutationMutex.withLock { recheckAndExecute(call, first, authorizedMode, execute) }
+            mutationMutex.withLock { recheckAndExecute(call, first, authorizedMode, execute, ownerGrant) }
+        } else if (ownerGrant && first is Assessment.Evaluated) {
+            when (val verdict = authorizer.consumeOwnerGrant(call, first)) {
+                is Verdict.Proceed -> execute()
+                is Verdict.Halt -> verdict.result
+            }
         } else {
             execute()
         }
@@ -132,6 +142,7 @@ class ToolPolicyGateImpl internal constructor(
         first: Assessment.Evaluated,
         authorizedMode: RuleMode,
         execute: suspend () -> CallToolResult,
+        ownerGrant: Boolean,
     ): CallToolResult {
         val second = assessor.assess(call)
         val carried =
@@ -140,10 +151,10 @@ class ToolPolicyGateImpl internal constructor(
                 !second.decision.mode.isStricterThan(authorizedMode)
         val verdict =
             if (carried) {
-                Verdict.Proceed(authorizedMode)
+                if (ownerGrant) authorizer.consumeOwnerGrant(call, first) else Verdict.Proceed(authorizedMode)
             } else {
                 when (val again = authorizer.authorize(call, second)) {
-                    is Authorization.AwaitOwner -> authorizer.awaitOwner(call, again, NO_WAIT_MS)
+                    is Authorization.AwaitOwner -> afterImmediateOwnerCheck(call, again)
                     is Verdict -> again
                 }
             }
@@ -152,6 +163,16 @@ class ToolPolicyGateImpl internal constructor(
             is Verdict.Halt -> verdict.result
         }
     }
+
+    /** A changed call that joined an entry: reads the owner's answer without waiting and consumes an approval. */
+    private suspend fun afterImmediateOwnerCheck(
+        call: GateCall,
+        awaiting: Authorization.AwaitOwner,
+    ): Verdict =
+        when (val verdict = authorizer.awaitOwner(call, awaiting, NO_WAIT_MS)) {
+            is Verdict.Halt -> verdict
+            is Verdict.Proceed -> authorizer.consumeOwnerGrant(call, awaiting.assessment)
+        }
 
     private companion object {
         const val NO_WAIT_MS = 0L
