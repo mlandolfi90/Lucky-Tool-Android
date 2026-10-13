@@ -16,7 +16,7 @@ import kotlinx.serialization.json.putJsonObject
 
 private const val PARAM_APPROVAL_ID = "approval_id"
 private const val PARAM_WAIT_MS = "wait_ms"
-private const val MAX_STATUS_WAIT_MS = 60_000L
+private const val MAX_STATUS_WAIT_MS = 25_000L
 private const val KEY_APPROVAL_ID = "approval_id"
 private const val KEY_STATUS = "status"
 private const val KEY_EXPIRES_AT_MS = "expires_at_ms"
@@ -108,7 +108,7 @@ class GetApprovalStatusTool(
             description =
                 "Returns the status (pending, approved, denied or expired) of an approval request returned as " +
                     "needs_human_confirmation or awaiting_approval by a call on an app with an approval profile. " +
-                    "With wait_ms (0-60000) it waits until the request is decided, expires or wait_ms runs " +
+                    "With wait_ms (0-25000) it waits until the request is decided, expires or wait_ms runs " +
                     "out. Once approved, repeat the original call exactly, within 2 minutes; the approval is " +
                     "single use.",
             inputSchema =
@@ -124,7 +124,7 @@ class GetApprovalStatusTool(
                             }
                             putJsonObject(PARAM_WAIT_MS) {
                                 put("type", "integer")
-                                put("description", "Long-poll up to this many milliseconds (0-60000, default 0)")
+                                put("description", "Long-poll up to this many milliseconds (0-25000, default 0)")
                             }
                         },
                     required = listOf(PARAM_APPROVAL_ID),

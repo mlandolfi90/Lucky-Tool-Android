@@ -7,7 +7,7 @@ class GateTiming(
 ) {
     companion object {
         /** How long a NOTIFY call waits for the owner before returning `awaiting_approval`. */
-        const val NOTIFY_WAIT_MS = 60_000L
+        const val NOTIFY_WAIT_MS = 25_000L
 
         val PRODUCTION = GateTiming(NOTIFY_WAIT_MS) { System.currentTimeMillis() }
     }

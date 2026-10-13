@@ -197,7 +197,7 @@ graph TB
 - `McpServer.running`: `AtomicBoolean`
 - Accessibility node access: Must be on main thread (Android requirement)
 - `ActionApprovalCoordinator`: in-memory state guarded by one `Mutex` (same pattern as `OAuthApprovalCoordinatorImpl`); no critical section suspends
-- `ToolPolicyGate` mutation lock: while at least one approval profile is stored (or the profile store is unreadable), every call of a tool class that is not read-only is resolved, evaluated and, when authorized, run under a single `Mutex`, one call at a time; a long mutating call (`type`, about 250 ms per character) queues the others. The `NOTIFY` wait (up to 60 s, a suspended request coroutine) releases the lock; after the owner approves, the call re-checks under the lock before it runs.
+- `ToolPolicyGate` mutation lock: while at least one approval profile is stored (or the profile store is unreadable), every call of a tool class that is not read-only is resolved, evaluated and, when authorized, run under a single `Mutex`, one call at a time; a long mutating call (`type`, about 250 ms per character) queues the others. The `NOTIFY` wait (up to 25 s, a suspended request coroutine) releases the lock; after the owner approves, the call re-checks under the lock before it runs.
 - `ApprovalProfileRepository`: in-memory `ProfilesSnapshot`, replaced only after the DataStore write succeeds; writes are serialized by the repository `Mutex`
 
 ---
@@ -267,7 +267,7 @@ flowchart TB
     Mode -->|"ASK_IN_CHAT or NOTIFY"| Grant{"Unused grant for this<br/>fingerprint that satisfies the mode?"}
     Grant -->|"yes, consume it"| Held
     Grant -->|"no, ASK_IN_CHAT"| Ask["create or join pending entry"]
-    Grant -->|"no, NOTIFY"| Notify["create or join pending entry<br/>release the lock, notify the owner<br/>wait up to 60 s"]
+    Grant -->|"no, NOTIFY"| Notify["create or join pending entry<br/>release the lock, notify the owner<br/>wait up to 25 s"]
     Ask -->|"new entry"| NeedsConfirm["needs_human_confirmation"]
     Ask -->|"joined an entry waiting for the owner"| Awaiting["awaiting_approval"]
     Ask -->|"10 entries already pending"| TooMany["too_many_pending<br/>isError=true"]
@@ -310,14 +310,14 @@ sequenceDiagram
     A->>G: tools/call (action button in a profiled app)
     G->>C: createOrJoin(request, nowMs)
     C->>O: heads-up notification via PolicyApprovalNotifier (no action buttons)
-    G->>C: awaitDecision(approval_id, 60 s)
-    alt owner approves within 60 s
+    G->>C: awaitDecision(approval_id, 25 s)
+    alt owner approves within 25 s
         O->>C: tap the notification, then Approve in PolicyApprovalActivity
         G->>C: consumeGrant(fingerprint, NOTIFY, nowMs)
         G->>G: take the mutation Mutex again<br/>re-resolve + re-evaluate, no waiting
         G->>T: execute()
         T-->>A: tool result
-    else still pending after 60 s
+    else still pending after 25 s
         G-->>A: awaiting_approval + approval_id
         A->>C: android_get_approval_status(approval_id, wait_ms)<br/>statusOf(id, nowMs), awaitDecision(id, budget)
         O->>C: tap the notification, then Approve

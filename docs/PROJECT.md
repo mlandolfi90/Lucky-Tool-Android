@@ -398,12 +398,12 @@ The MCP server exposes 59 tools across 15 categories. For full JSON-RPC schemas,
 
 | Tool | Description | Required Params | Optional Params |
 |------|-------------|-----------------|-----------------|
-| `android_get_approval_status` | State of an approval request (`pending` / `approved` / `denied` / `expired`), with an optional long-poll that returns when the request is decided or expires | `approval_id` (string) | `wait_ms` (integer, 0-60000, default 0) |
+| `android_get_approval_status` | State of an approval request (`pending` / `approved` / `denied` / `expired`), with an optional long-poll that returns when the request is decided or expires | `approval_id` (string) | `wait_ms` (integer, 0-25000, default 0) |
 | `android_confirm_human_approval` | Record the human's agreement in the conversation for an `ASK_IN_CHAT` request. Creates a single-use 2-minute grant for the identical call. | `approval_id` (string) | — |
 
 **Not app-scoped and always registered**: profiles never gate these tools, and the per-tool permissions cannot disable them (otherwise an approval request could never finish). Results are server-generated, with no untrusted-content warning: `textResult` on success, `errorTextResult` on error. `android_get_approval_status` reads state and expiry in one `ActionApprovalCoordinator.statusOf` call and long-polls at most `min(wait_ms, expires_at_ms - now)`. An unknown `approval_id` reads `expired`.
 
-**Errors**: `McpToolException.InvalidParams` for a missing or empty `approval_id`, or `wait_ms` outside 0-60000. `android_confirm_human_approval` returns `isError=true` with one of:
+**Errors**: `McpToolException.InvalidParams` for a missing or empty `approval_id`, or `wait_ms` outside 0-25000. `android_confirm_human_approval` returns `isError=true` with one of:
 - `{"status":"not_confirmable"}` for a `NOTIFY` request;
 - `{"status":"denied"}` for a denied request;
 - `{"status":"expired"}` for an expired or unknown id.
@@ -817,7 +817,7 @@ The owner can attach an approval profile to an app (package) in **Settings → A
 - A request stays pending for at most 5 minutes; at most 10 requests can be pending (a new one beyond that is refused with `too_many_pending`; joins never count).
 - A grant lasts 2 minutes and is single use. A grant approved by the owner on the device satisfies `ASK_IN_CHAT` and `NOTIFY`; a grant confirmed through `android_confirm_human_approval` satisfies only `ASK_IN_CHAT`.
 - Fingerprint: SHA-256 over the tool name, the canonical JSON arguments, the target package and the selector. Identical calls join the same pending entry; a stricter call upgrades it in place. A grant runs only the identical call.
-- `NOTIFY` waits up to 60 s inside the call, then returns `awaiting_approval`.
+- `NOTIFY` waits up to 25 s inside the call, then returns `awaiting_approval`.
 - When `McpServerService` stops, the approval notification and its observer are cancelled, then every pending request becomes `DENIED` and every grant is dropped (`clearAll()`, before and again after the Ktor server stops).
 
 **Concurrency** (`ToolPolicyGateImpl`):
@@ -924,8 +924,8 @@ Without it, an agent could approve its own requests.
 
 - **Approval window**: 300 000 ms (5 minutes)
 - **Approval grant TTL**: 120 000 ms (2 minutes, single use)
-- **`NOTIFY` wait inside the call**: 60 000 ms
-- **`android_get_approval_status` `wait_ms`**: 0 (range 0-60000)
+- **`NOTIFY` wait inside the call**: 25 000 ms (below the MCP client's request timeout, which cut 60 s waits on 2026-10-13)
+- **`android_get_approval_status` `wait_ms`**: 0 (range 0-25000)
 - **Max pending approvals**: 10
 - **Max profiles**: 100; at most 5 amount tiers and 100 entries per exception list per profile
 - **Amount limits**: plain decimal `> 0`, `.` as the only decimal mark, at most 8 decimals, no thousands separators

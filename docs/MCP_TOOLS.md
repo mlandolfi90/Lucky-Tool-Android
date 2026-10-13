@@ -222,7 +222,7 @@ Each profile has one mode per action type.
 |------|--------------------|
 | `RUN` | Runs the call. |
 | `ASK_IN_CHAT` | Does not run the call. Returns `needs_human_confirmation` with an `approval_id`. |
-| `NOTIFY` | Does not run the call yet. Notifies the owner on the device and waits up to 60 seconds. Runs the call if the owner approves in that time; otherwise returns `awaiting_approval`, `denied` or `expired`. |
+| `NOTIFY` | Does not run the call yet. Notifies the owner on the device and waits up to 25 seconds. Runs the call if the owner approves in that time; otherwise returns `awaiting_approval`, `denied` or `expired`. |
 | `FORBIDDEN` | Never runs the call. Returns `forbidden`. |
 
 **Strictest wins**: `RUN` < `ASK_IN_CHAT` < `NOTIFY` < `FORBIDDEN`. This applies:
@@ -264,7 +264,7 @@ When the gate does not run the call, the result text is a JSON object with a `st
 |----------|-----------|---------|---------------------|
 | `forbidden` | `true` | The profile, the own-package guard or a fail-closed check does not allow this action. | Stop. Do not retry, rephrase, or reach the same result another way. Tell the human what was blocked and why (`reason`). |
 | `needs_human_confirmation` | `false` | The profile requires the human's agreement in the conversation. | Describe the action to the human and ask. If they clearly agree, call `android_confirm_human_approval` with the `approval_id`, then repeat the **exact same call**. If they decline or do not answer, do not confirm. |
-| `awaiting_approval` | `false` | The owner was notified on the device and has not decided within 60 seconds. | Call `android_get_approval_status` (use `wait_ms` to long-poll) until the status is `approved`, then repeat the **exact same call**. Stop on `denied` or `expired`. |
+| `awaiting_approval` | `false` | The owner was notified on the device and has not decided within 25 seconds. | Call `android_get_approval_status` (use `wait_ms` to long-poll) until the status is `approved`, then repeat the **exact same call**. Stop on `denied` or `expired`. |
 | `denied` | `true` | The owner denied the request on the device, the profile forbids it after an exception the owner added, or the server stopped while it was pending. | Stop. Do not retry. Tell the human. |
 | `expired` | `true` | The request was not decided within 5 minutes, an identical call already used the single-use grant, or an exception the owner added means it no longer needs approval. | Repeat the original call once: it is checked again from scratch and either runs or starts a new approval request. |
 | `too_many_pending` | `true` | 10 approval requests are already pending. | Wait for pending requests to be decided or to expire. Do not loop. |
@@ -3826,7 +3826,7 @@ Returns the state of an approval request. With `wait_ms` above 0 it long-polls: 
 | Parameter | Type | Required | Default | Description |
 |-----------|------|----------|---------|-------------|
 | `approval_id` | string | Yes | - | The `approval_id` from a `needs_human_confirmation` or `awaiting_approval` result |
-| `wait_ms` | integer | No | 0 | Long-poll up to this many milliseconds (0-60000) |
+| `wait_ms` | integer | No | 0 | Long-poll up to this many milliseconds (0-25000) |
 
 **Input Schema**:
 ```json
@@ -3834,7 +3834,7 @@ Returns the state of an approval request. With `wait_ms` above 0 it long-polls: 
   "type": "object",
   "properties": {
     "approval_id": { "type": "string", "description": "Approval id from a needs_human_confirmation or awaiting_approval result" },
-    "wait_ms": { "type": "integer", "description": "Long-poll up to this many milliseconds (0-60000, default 0)" }
+    "wait_ms": { "type": "integer", "description": "Long-poll up to this many milliseconds (0-25000, default 0)" }
   },
   "required": ["approval_id"]
 }
@@ -3866,7 +3866,7 @@ curl -X POST http://localhost:8080/mcp \
 ```
 
 **Error Cases** (returned as `CallToolResult(isError = true)`):
-- **Invalid params**: missing or empty `approval_id`; `wait_ms` not an integer or outside 0-60000
+- **Invalid params**: missing or empty `approval_id`; `wait_ms` not an integer or outside 0-25000
 
 ---
 

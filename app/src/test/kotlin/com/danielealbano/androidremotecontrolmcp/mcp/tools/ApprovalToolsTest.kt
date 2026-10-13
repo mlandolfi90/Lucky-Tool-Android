@@ -103,7 +103,7 @@ class ApprovalToolsTest {
     @Test
     fun `wait_ms is capped at the request's expiry`() =
         runTest {
-            statusTool.execute(args(waitMs = 60_000L))
+            statusTool.execute(args(waitMs = 25_000L))
 
             coVerify { coordinator.awaitDecision(ID, EXPIRES_AT_MS - NOW_MS) }
         }
@@ -132,7 +132,7 @@ class ApprovalToolsTest {
     @Test
     fun `wait_ms out of range is invalid`() =
         runTest {
-            listOf(-1L, 60_001L).forEach { waitMs ->
+            listOf(-1L, 25_001L).forEach { waitMs ->
                 assertThrows<McpToolException.InvalidParams> { statusTool.execute(args(waitMs = waitMs)) }
             }
         }
@@ -192,7 +192,7 @@ class ApprovalToolsTest {
             val pending = realCoordinator.createOrJoin(PendingActionFixtures.aRequest(), 0L)
             advanceTimeBy(ActionApprovalPolicy.APPROVAL_WINDOW_MS - 1_000L)
 
-            val result = tool.execute(args(approvalId = pending.id, waitMs = 60_000L))
+            val result = tool.execute(args(approvalId = pending.id, waitMs = 25_000L))
 
             assertEquals("""{"approval_id":"${pending.id}","status":"expired"}""", textOf(result))
             assertEquals(ActionApprovalPolicy.APPROVAL_WINDOW_MS, testScheduler.currentTime)
