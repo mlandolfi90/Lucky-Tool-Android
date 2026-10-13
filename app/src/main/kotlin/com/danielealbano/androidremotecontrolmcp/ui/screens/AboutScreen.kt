@@ -100,7 +100,7 @@ fun AboutScreen(
                     Image(
                         painter = painterResource(id = R.drawable.ic_launcher_foreground),
                         contentDescription = stringResource(R.string.app_name),
-                        modifier = Modifier.size(72.dp),
+                        modifier = Modifier.size(108.dp),
                     )
                 }
                 Spacer(Modifier.height(12.dp))
