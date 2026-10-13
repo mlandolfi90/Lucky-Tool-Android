@@ -92,9 +92,19 @@ class McpApplication :
                 description = "Notification when a newer app version is available"
             }
 
+        val policyApprovalChannel =
+            NotificationChannel(
+                POLICY_APPROVAL_CHANNEL_ID,
+                getString(R.string.notification_channel_policy_approval_name),
+                NotificationManager.IMPORTANCE_HIGH,
+            ).apply {
+                description = getString(R.string.notification_channel_policy_approval_description)
+            }
+
         notificationManager.createNotificationChannel(mcpServerChannel)
         notificationManager.createNotificationChannel(oauthApprovalChannel)
         notificationManager.createNotificationChannel(updateChannel)
+        notificationManager.createNotificationChannel(policyApprovalChannel)
     }
 
     companion object {
@@ -102,5 +112,6 @@ class McpApplication :
         const val MCP_SERVER_CHANNEL_ID = "mcp_server_channel"
         const val OAUTH_APPROVAL_CHANNEL_ID = "oauth_approval_channel"
         const val UPDATE_CHANNEL_ID = "update_channel"
+        const val POLICY_APPROVAL_CHANNEL_ID = "policy_approvals"
     }
 }
