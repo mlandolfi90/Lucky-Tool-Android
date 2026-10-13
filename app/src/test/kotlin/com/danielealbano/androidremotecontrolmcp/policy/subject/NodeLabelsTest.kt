@@ -32,6 +32,27 @@ class NodeLabelsTest {
     }
 
     @Test
+    fun `interactiveLabel ignores case and spacing when one node repeats a part`() {
+        val node = SubjectFixtures.button("b", bounds, "Pagar").copy(contentDescription = " PAGAR ")
+
+        assertEquals("Pagar", NodeLabels.interactiveLabel(node))
+    }
+
+    @Test
+    fun `interactiveLabel keeps a part repeated by a different node`() {
+        val node = SubjectFixtures.button("b", bounds, "Pagar").copy(children = listOf(text("t", "Pagar")))
+
+        assertEquals("Pagar Pagar", NodeLabels.interactiveLabel(node))
+    }
+
+    @Test
+    fun `fieldLabel shows a hint repeated by the description once`() {
+        val node = SubjectFixtures.field("f", bounds, text = "1500", hint = "Monto").copy(contentDescription = "Monto")
+
+        assertEquals("Monto", NodeLabels.fieldLabel(node))
+    }
+
+    @Test
     fun `interactiveLabel of an editable node excludes its value`() {
         val node = SubjectFixtures.field("f", bounds, text = "1500", hint = "Monto")
 

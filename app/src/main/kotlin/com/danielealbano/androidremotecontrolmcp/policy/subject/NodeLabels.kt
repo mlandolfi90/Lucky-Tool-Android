@@ -12,10 +12,7 @@ internal object NodeLabels {
     private const val PART_SEPARATOR = " "
     private val WHITESPACE = Regex("\\s+")
 
-    /**
-     * Tap/click label: own + descendants' text (breadth-first, capped, each distinct part once, so a button whose
-     * text and description are both "7" reads "7"); an editable node uses [fieldLabel].
-     */
+    /** Tap/click label: own + descendants' text (breadth-first, capped); an editable node uses [fieldLabel]. */
     fun interactiveLabel(node: AccessibilityNodeData): String? =
         if (node.editable) {
             fieldLabel(node)
@@ -41,22 +38,20 @@ internal object NodeLabels {
         if (node.editable) {
             fieldParts(node)
         } else {
-            listOfNotNull(node.text, node.contentDescription, node.hintText, node.labeledByText)
+            distinctParts(listOfNotNull(node.text, node.contentDescription, node.hintText, node.labeledByText))
         }
 
     private fun fieldParts(node: AccessibilityNodeData): List<String> =
-        listOfNotNull(node.hintText, node.labeledByText, node.contentDescription)
+        distinctParts(listOfNotNull(node.hintText, node.labeledByText, node.contentDescription))
+
+    /** One node's parts, each once (case and spacing ignored): a button with text and description "7" reads "7". */
+    private fun distinctParts(parts: List<String>): List<String> =
+        parts.filter { it.isNotBlank() }.distinctBy { WHITESPACE.replace(it.trim(), PART_SEPARATOR).lowercase() }
 
     private fun join(parts: List<String>): String? =
         WHITESPACE
-            .replace(
-                parts
-                    .map { it.trim() }
-                    .filter { it.isNotEmpty() }
-                    .distinct()
-                    .joinToString(PART_SEPARATOR),
-                PART_SEPARATOR,
-            ).trim()
+            .replace(parts.filter { it.isNotBlank() }.joinToString(PART_SEPARATOR), PART_SEPARATOR)
+            .trim()
             .take(MAX_LABEL_LENGTH)
             .ifEmpty { null }
 }
