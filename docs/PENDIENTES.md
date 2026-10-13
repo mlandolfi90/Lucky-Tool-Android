@@ -26,16 +26,15 @@ Pedido del humano el 2026-10-11: «idioma español».
 - Propuesta: las descripciones de las tools MCP quedan en inglés, porque las lee el agente y no la
   persona.
 - Decide el humano: español cuando el teléfono está en español, o siempre.
+- **Decidido por el humano el 2026-10-13: se pospone.** Mientras tanto, todo lo nuevo se construye listo
+  para cambiar de idioma: los textos que ve una persona van en `strings.xml`, nunca escritos en el código.
+  No se crea `values-es` todavía.
 
 ## 2. Un ícono que se entienda
 
-Pedido del humano el 2026-10-11: «icono visual entendible».
-
-- Hoy: ícono adaptativo (`app/src/main/res/drawable/ic_launcher_foreground.xml` sobre
-  `@color/ic_launcher_background`), ícono de la barra de notificaciones en
-  `app/src/main/res/drawable/ic_notification.xml`, y el nombre bajo el ícono (`app_name`) es
-  «Android Remote Control MCP», de 26 caracteres.
-- Decide el humano: qué muestra el ícono y si la app cambia de nombre.
+**Hecho** el 2026-10-12/13: ícono Lucky y nombre `lucky-mcp-android`. Registro en el plan 68
+(`docs/plans/68_lucky_brand_icon_and_name_20261012180915.md`) y en el PR #8. Quedan declaradas y sin tomar
+las verificaciones manuales MB1–MB4 (mirar el ícono en el teléfono).
 
 ## 3. Encender y desbloquear la pantalla para trabajar solo
 
@@ -60,6 +59,33 @@ otros programas ya usan (entrada automática).
     (nunca en el repo, en un log ni fuera del teléfono), apagado por defecto y encendido con un
     ajuste a propósito.
 - Falta que el humano describa el método de desbloqueo (el «truco»).
+- **El «truco», confirmado el 2026-10-13:** la app enciende la pantalla, Android muestra el teclado del
+  PIN (o el patrón) y la app lo teclea con el servicio de accesibilidad, como hace AutoInput de Tasker.
+- **Decidido por el humano el 2026-10-13:**
+  - la pantalla se enciende **sólo cuando la tool la necesita** (mirar o tocar una app); notificaciones,
+    archivos, wifi, ubicación y datos del teléfono trabajan con la pantalla apagada;
+  - **desbloquear es una tool aparte** (`unlock_screen`), con su propio permiso en los permisos de tools;
+    ninguna otra llamada desbloquea;
+  - si una tool que necesita la pantalla llega con el teléfono bloqueado, devuelve un error claro que dice
+    que la pantalla está bloqueada y que se use `unlock_screen`.
+- Tomado por defecto, ajustable: la pantalla queda encendida 60 s después de la última llamada; si fue la
+  app la que desbloqueó, vuelve a bloquear; un solo intento por desbloqueo y, si falla, la función se
+  apaga sola.
+- Investigado el 2026-10-13 (código y AOSP, **sin medir en el teléfono**):
+  - mantener encendida: una ventana `TYPE_ACCESSIBILITY_OVERLAY` de 1×1 con `FLAG_KEEP_SCREEN_ON`, sin APIs
+    deprecadas y sin `WAKE_LOCK`;
+  - `click_node` y `set_text` usan `performAction`, que **no** cuenta como actividad del usuario: por eso
+    el teléfono se bloqueaba a los segundos. Los gestos (`tap`, `swipe`) sí cuentan;
+  - encender: una Activity transparente con `setTurnScreenOn` y `setShowWhenLocked`, lanzada desde el
+    servicio de accesibilidad; mostrar el teclado con `requestDismissKeyguard`;
+  - el PIN se guarda cifrado con una clave del Android Keystore **no** atada a autenticación (si no, no se
+    puede usar con el teléfono bloqueado), en un DataStore propio, fuera del log de ajustes;
+  - **imposible para cualquier app:** desbloquear después de un reinicio, antes del primer desbloqueo.
+- Falta medir en el teléfono (Samsung, Android 16) antes de planificar: la ventana 1×1 retiene la
+  pantalla; `tap` contra `click_node` en el contador de apagado; encender desde el servicio; si el
+  teclado del PIN de Samsung se ve y se toca por accesibilidad; el patrón por gesto; qué aparece primero
+  con huella registrada; StrongBox y descifrado con el teléfono bloqueado; el borrado automático por
+  intentos fallidos de Samsung. Y medir, tool por tool, cuáles andan con el teléfono bloqueado.
 
 ## 4. Grabar tareas comunes y repetirlas en una llamada
 
@@ -97,6 +123,25 @@ en cada pedido.
   2026-10-11).
 - Cada ejecución deja su rastro en el log de la app, como las tools (ver punto 5).
 - Decide el humano: los niveles de criticidad y qué camino de aprobación lleva cada uno.
+- **Decidido por el humano el 2026-10-13: no hay niveles fijos, hay perfiles granulares.**
+  - El perfil se pega a **la app**: todo lo que pase dentro de la app del banco usa el perfil «Banco»,
+    venga de una tarea o de un agente.
+  - Vale **para todo**, también para un agente que usa las tools sueltas, no sólo para las tareas
+    grabadas.
+  - Por tipo de acción: leer, navegar, escribir, botón de acción (vender, pagar, enviar). Cada una puede
+    ser corre sola, Confirmar (pantalla de la app), Huella, Parar (la persona toca el botón real) o
+    Prohibido. El humano lo edita en la app.
+  - **Monto máximo** por tramos dentro del perfil (por ejemplo: hasta X corre solo, más arriba Confirmar,
+    más arriba Huella, más arriba Prohibido).
+- Abierto: con tools sueltas la app no sabe si un número escrito es un monto. Propuesta: en una app con
+  perfil, todo número escrito cuenta como monto (por lo seguro), o el monto máximo vale sólo en tareas
+  grabadas, donde el parámetro se marca como monto. Decide el humano.
+- Tomado por defecto: si una tarea espera aprobación, la llamada espera hasta 60 s y después devuelve
+  «esperando aprobación» con un id para consultar (el relay corta a los ~100 s). En el primer plan, el
+  agente guarda la tarea mandando pasos explícitos; el botón «Grabar» del teléfono va en un plan posterior.
+- Investigado el 2026-10-13: el ejecutor puede llamar a las tools dentro de la app, sin HTTP; las tareas se
+  guardan en un DataStore propio con JSON, como los clientes OAuth (sin dependencias nuevas); la aprobación
+  copia el esquema de `OAuthApprovalCoordinator`; la huella usa el `BiometricPrompt` del sistema.
 
 ## 5. Logs: mantener la disciplina y mejorarla
 
@@ -123,60 +168,16 @@ todo lo nuevo y, si se puede, se mejora.
     por minuto (cuántos eventos y de qué apps) o nada;
   - lo que `CLAUDE.md` prohíbe registrar (el token, el árbol de accesibilidad completo, datos
     sensibles) rige igual para todo lo nuevo, incluidos los parámetros de las tareas.
+- **Decidido por el humano el 2026-10-13:** con la depuración apagada **no se escribe nada** (ni resumen
+  por minuto): las llamadas a tools ya quedan en la pantalla Logs de la app.
 
 ## 6. Las advertencias del compilador Kotlin
 
-Surgido el 2026-10-12 al cerrar el plan 67: su portón de calidad pide que ningún archivo que el plan
-toca tenga una línea `w: file:///...`, y dos de los suyos la tienen. Decidido por el humano ese día:
-el plan 67 cierra declarando que no introduce ninguna, y las heredadas se atacan acá, con su propio
-plan.
-
-**Corrección del 2026-10-12, medida:** la primera versión de este punto decía «272 líneas `w:` en 29
-archivos». Las 272 son líneas de log, no advertencias: el mismo archivo se compila para los dos
-sabores y para `main`, `test` y `testDebug`, así que cada advertencia aparece unas seis veces.
-**Distintas hay 43, en 29 archivos.** El trabajo es seis veces más chico de lo que parecía.
-
-- Medido el 2026-10-12 sobre la ejecución verde de CI 38207816721 (rama del plan 67), deduplicando
-  por `archivo:línea:columna` y mensaje. Ninguna rompe el build; `CLAUDE.md` sí pide que no haya
-  advertencias.
-- **24 — Hilt movió `hiltViewModel` de paquete** a `androidx.hilt.lifecycle.viewmodel.compose`. Es un
-  cambio de `import` por archivo, mecánico, en 24 pantallas de Compose. Es el grupo más grande y el
-  más barato.
-- **6 — API de Java obsoleta**, y acá cada una es distinta:
-  - `geo/CountryDisplay.kt:24` — el constructor `Locale(String, String)`. Reemplazo: `Locale.Builder()`
-    (o `Locale.of`, según el nivel de Java del toolchain; hay que mirarlo, no suponerlo).
-  - `services/accessibility/AccessibilityTreeParser.kt:226` y su test (`:738`, `:745`, `:753`) —
-    `labeledBy`. **Es la que bloqueó el portón del plan 67.** El compilador no ofrece reemplazo en el
-    mensaje, así que primero hay que averiguar con qué se lee la etiqueta sin perderla. Si no existe
-    reemplazo soportado, hay un conflicto real con la regla de `CLAUDE.md` que prohíbe silenciar
-    advertencias, y lo decide el humano: no se silencia por nuestra cuenta.
-  - `services/notifications/NotificationProviderImpl.kt:185` —
-    `MODE_BACKGROUND_ACTIVITY_START_ALLOWED`. Hay que verificar el reemplazo vigente.
-- **4 — llamada segura (`?.`) innecesaria** sobre un receptor que no es nulo:
-  `mcp/oauth/OAuthTokenGrants.kt:106`, `services/apps/AppIconCache.kt:136`,
-  `services/channel/EventChannelService.kt:66`, `ui/screens/LogsScreen.kt:199`.
-- **3 — `!!` innecesario**: `mcp/oauth/OAuthRoutes.kt:133`, `:134`, `:135`.
-- **3 — el portapapeles viejo** (`LocalClipboardManager`): `ui/screens/ServerScreen.kt:76`,
-  `ui/screens/settings/ChannelSettingsScreen.kt:63`,
-  `ui/screens/settings/TunnelSettingsScreen.kt:527`. Ojo: **no es un cambio de nombre**. El
-  reemplazo (`LocalClipboard`) es una API `suspend`, así que los tres lugares necesitan un ámbito de
-  corrutina. Es el grupo más caro de los barato-aparentes.
-- **2 — condición que siempre da lo mismo**: `mcp/oauth/OAuthAccessValidator.kt:31` (siempre `true`)
-  y `mcp/oauth/OAuthTokenGrants.kt:96` (siempre `false`). **Leídas el 2026-10-12: NO son errores de
-  lógica.** En las dos, el autor repitió un chequeo de nulo que ya estaba contenido en la condición
-  anterior, para conseguir el *smart cast* de Kotlin; el compilador hoy lo deduce solo. El arreglo es
-  quitar la repetición, y el riesgo es perder el smart cast, así que se verifica compilando.
-- **1 — receptor que puede ser nulo sin `?.` ni `!!`**:
-  `app/src/testDebug/.../E2EConfigReceiverTest.kt:52`.
-- Dónde se concentran: `ui/screens/ServerScreen.kt` (5), y 3 cada uno en `mcp/oauth/OAuthRoutes.kt` y
-  en el test del parser de accesibilidad. Las demás son una o dos por archivo.
-- Propuesta: atacarlas **por tipo y no por archivo**, en este orden —primero los 24 imports de Hilt,
-  después los `?.` y `!!` innecesarios y el receptor nulable, después las dos condiciones
-  redundantes, después el portapapeles (que pide corrutinas), y al final las 6 de Java, porque dos de
-  ellas requieren averiguar el reemplazo antes de tocar nada. `CLAUDE.md` prohíbe silenciarlas con
-  `@Suppress`, así que cada grupo se arregla en la raíz.
-- Decide el humano: si el objetivo es llegar a cero advertencias y si el portón de CI pasa a fallar
-  cuando aparezca una nueva.
+**Hecho** el 2026-10-13: las 43 advertencias, a cero, y el build falla ante cualquier advertencia nueva
+(`allWarningsAsErrors` en los cinco módulos). Una sola supresión, aprobada por el humano, en
+`MODE_BACKGROUND_ACTIVITY_START_ALLOWED` hasta que el mínimo sea Android 16. Registro en el plan 69
+(`docs/plans/69_kotlin_warnings_zero_20261013011443.md`) y en el PR #9; el portón se probó con un PR de prueba
+(#10) que CI frenó.
 
 ## 7. Despertar al agente con el canal de eventos
 
@@ -220,3 +221,5 @@ chanel». Surgió al preguntar qué es el canal y cómo se hace que un agente se
     apps de dinero incluidas, hacia el VPS. Pide filtro por app y pasar por Privacy Mode.
 - Decide el humano: qué eventos salen del teléfono, con qué filtro, y si la reacción tiene que ser
   en segundos o alcanza con que el agente pregunte cada tanto.
+- Decidido por el humano el 2026-10-13: va **después** del punto 4.
+
