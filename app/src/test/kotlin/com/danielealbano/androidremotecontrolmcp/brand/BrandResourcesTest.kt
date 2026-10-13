@@ -45,7 +45,34 @@ class BrandResourcesTest {
     }
 
     /** The transform attributes of one group, as a map of the six names this plan sets. */
-    private fun Element.transform() = TRANSFORM_ATTRIBUTES.associateWith { getAttribute("android:$it") }
+    private fun Element.transform(): Map<String, String> =
+        listOf("pivotX", "pivotY", "scaleX", "scaleY", "translateX", "translateY")
+            .associateWith { getAttribute("android:$it") }
+
+    /** The `path` elements that are direct children of this element, not descendants. */
+    private fun Element.childPaths(): List<Element> =
+        (0 until childNodes.length)
+            .mapNotNull { childNodes.item(it) as? Element }
+            .filter { it.tagName == "path" }
+
+    /**
+     * The one group in [relativePath] whose single direct path child satisfies [pathData].
+     *
+     * Selecting a group by the path it wraps — rather than by the transform the test then asserts —
+     * keeps the assertion honest and makes deleting the wrapped path a failure.
+     */
+    private fun groupWrapping(
+        relativePath: String,
+        pathData: (String) -> Boolean,
+    ): Element {
+        val matches =
+            parse(relativePath).elements("group").filter { group ->
+                val paths = group.childPaths()
+                paths.size == 1 && pathData(paths.single().getAttribute("android:pathData"))
+            }
+        assertEquals(1, matches.size) { "expected one group wrapping exactly that path" }
+        return matches.single()
+    }
 
     /**
      * Asserts that [pathData] is a structurally valid SVG path for Android's parser: it starts with
@@ -107,17 +134,13 @@ class BrandResourcesTest {
 
     @Test
     fun `launcher foreground scales the inner border about the mark centre`() {
-        val groups = parse(FOREGROUND).elements("group")
-        val inner = groups.first { it.transform()["pivotX"] == "32" }
-        assertEquals("32", inner.transform()["pivotY"])
-        assertEquals("0.86", inner.transform()["scaleX"])
-        assertEquals("0.86", inner.transform()["scaleY"])
+        val inner = groupWrapping(FOREGROUND) { it == SHIELD_PATH }
+        assertEquals(INNER_BORDER_TRANSFORM, inner.transform())
     }
 
     @Test
     fun `launcher foreground places the flame by the brand transform`() {
-        val groups = parse(FOREGROUND).elements("group")
-        val flame = groups.first { it.transform()["scaleX"] == "2.2" }
+        val flame = groupWrapping(FOREGROUND) { it.startsWith(FLAME_PREFIX) }
         assertEquals(FLAME_TRANSFORM, flame.transform())
     }
 
@@ -180,10 +203,8 @@ class BrandResourcesTest {
     fun `monochrome layer is strokes only`() {
         val document = parse(MONOCHROME)
         assertTrue(document.elements("gradient").isEmpty()) { "a tinted layer needs no gradient" }
-        document.elements("path").forEach {
-            assertFalse(it.hasAttribute("android:fillColor")) {
-                "launchers tint the monochrome layer, so it carries strokes only"
-            }
+        assertFalse("android:fillColor" in read(MONOCHROME)) {
+            "launchers tint the monochrome layer, so it carries strokes only"
         }
         assertEquals(
             parse(FOREGROUND).elements("group").first().transform(),
@@ -258,10 +279,10 @@ class BrandResourcesTest {
         const val SLATE_BOTTOM = "#1c1f26"
         const val KNOCKOUT = "#0b0d0f"
 
-        val DRAWABLES = listOf(FOREGROUND, MONOCHROME, NOTIFICATION)
+        const val SHIELD_PATH = "M32,4 L57,13 V31 C57,47 45,56 32,60 C19,56 7,47 7,31 V13 Z"
+        const val FLAME_PREFIX = "M8,16c3.314"
 
-        val TRANSFORM_ATTRIBUTES =
-            listOf("pivotX", "pivotY", "scaleX", "scaleY", "translateX", "translateY")
+        val DRAWABLES = listOf(FOREGROUND, MONOCHROME, NOTIFICATION)
 
         val SAFE_ZONE_TRANSFORM =
             mapOf(
@@ -271,6 +292,16 @@ class BrandResourcesTest {
                 "scaleY" to "1.0",
                 "translateX" to "22",
                 "translateY" to "22",
+            )
+
+        val INNER_BORDER_TRANSFORM =
+            mapOf(
+                "pivotX" to "32",
+                "pivotY" to "32",
+                "scaleX" to "0.86",
+                "scaleY" to "0.86",
+                "translateX" to "",
+                "translateY" to "",
             )
 
         val FLAME_TRANSFORM =

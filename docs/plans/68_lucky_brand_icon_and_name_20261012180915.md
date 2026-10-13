@@ -70,12 +70,12 @@ generic glyph on a green square. The brand ADR makes the shield mandatory and co
 is a conversion of `lucky-mark.svg`, not a new design.
 
 **Acceptance criteria:**
-- [ ] `ic_launcher_foreground.xml` draws the shield with both borders, the flame and the `< / >`
+- [x] `ic_launcher_foreground.xml` draws the shield with both borders, the flame and the `< / >`
       knockout, from the mark's own path data.
-- [ ] The mark's 64-unit coordinate box maps to 22..86 of the 108 canvas, which keeps every painted
+- [x] The mark's 64-unit coordinate box maps to 22..86 of the 108 canvas, which keeps every painted
       pixel inside the 66dp key-content circle (painted radius 32.30 ≤ 33).
-- [ ] The adaptive background is the brand background `#0b0d0f`.
-- [ ] Both `ic_launcher.xml` and `ic_launcher_round.xml` declare background, foreground **and**
+- [x] The adaptive background is the brand background `#0b0d0f`.
+- [x] Both `ic_launcher.xml` and `ic_launcher_round.xml` declare background, foreground **and**
       monochrome. (`ic_launcher_round.xml` is currently unreferenced — `AndroidManifest.xml` declares
       `android:icon` and no `android:roundIcon` — but it is kept in step with its sibling so the two
       never diverge.)
@@ -172,8 +172,8 @@ is a conversion of `lucky-mark.svg`, not a new design.
 ```
 
 **Definition of Done:**
-- [ ] The root declares `xmlns:android` and `xmlns:aapt`, and no other namespace.
-- [ ] The outer group's transform attributes are exactly `pivot 0,0`, `scale 1.0`, `translate 22`.
+- [x] The root declares `xmlns:android` and `xmlns:aapt`, and no other namespace.
+- [x] The outer group's transform attributes are exactly `pivot 0,0`, `scale 1.0`, `translate 22`.
 
 ### Task 1.2 — Brand background colour
 
@@ -187,7 +187,7 @@ is a conversion of `lucky-mark.svg`, not a new design.
 ```
 
 **Definition of Done:**
-- [ ] The resource name is unchanged, so both adaptive-icon XMLs and `AboutScreen` keep resolving.
+- [x] The resource name is unchanged, so both adaptive-icon XMLs and `AboutScreen` keep resolving.
 
 ### Task 1.3 — Monochrome layer
 
@@ -280,7 +280,7 @@ end up identical, as they already are.
 ```
 
 **Definition of Done:**
-- [ ] The monochrome drawable contains no `android:fillColor` and no `<gradient>`.
+- [x] The monochrome drawable contains no `android:fillColor` and no `<gradient>`.
 
 ### Task 1.4 — Keep the About screen's icon the right size
 
@@ -305,7 +305,7 @@ its background.
 ```
 
 **Definition of Done:**
-- [ ] Only the `Modifier.size` of that one `Image` changes; the `Box` and every other composable in
+- [x] Only the `Modifier.size` of that one `Image` changes; the `Box` and every other composable in
       the file are untouched.
 
 ---
@@ -318,11 +318,11 @@ in the file are carriers of opacity, not of appearance. Per G5 the inner border 
 dropped because they do not survive 24dp.
 
 **Acceptance criteria:**
-- [ ] `ic_notification.xml` draws the shield with a single 2.6-wide border and a filled flame; the
+- [x] `ic_notification.xml` draws the shield with a single 2.6-wide border and a filled flame; the
       inner border and the `< / >` are absent.
-- [ ] Its declared size stays 24dp and its viewport becomes the mark's own 64×64, so the path data
+- [x] Its declared size stays 24dp and its viewport becomes the mark's own 64×64, so the path data
       needs no rescaling.
-- [ ] The `android:tint` attribute keeps its current value. It has no effect on a small icon — all
+- [x] The `android:tint` attribute keeps its current value. It has no effect on a small icon — all
       four uses are `setSmallIcon`, and the drawable appears in no Compose code — so this is status
       quo preservation, not a rendering requirement.
 
@@ -359,8 +359,8 @@ dropped because they do not survive 24dp.
 ```
 
 **Definition of Done:**
-- [ ] The `android:tint` value is byte-identical to the file's previous value.
-- [ ] No path strokes `#0b0d0f`.
+- [x] The `android:tint` value is byte-identical to the file's previous value.
+- [x] No path strokes `#0b0d0f`.
 
 ---
 
@@ -372,9 +372,9 @@ The user named the app `lucky-mcp-android`. Only the two app string resources ch
 the share-alias label and today matches it.
 
 **Acceptance criteria:**
-- [ ] `app_name` is `lucky-mcp-android`.
-- [ ] `share_target_label` is `lucky-mcp-android`.
-- [ ] No Gradle file changes: `applicationId`, `namespace` and both flavour suffixes are untouched.
+- [x] `app_name` is `lucky-mcp-android`.
+- [x] `share_target_label` is `lucky-mcp-android`.
+- [x] No Gradle file changes: `applicationId`, `namespace` and both flavour suffixes are untouched.
 
 ### Task 3.1 — Rename in the string resources
 
@@ -390,8 +390,8 @@ references `R.string.app_bar_title`, so it is dead and renaming it would be an u
 string this plan has no reason to touch.
 
 **Definition of Done:**
-- [ ] `git diff` on `app/build.gradle.kts` is empty.
-- [ ] Only those two strings change.
+- [x] `git diff` on `app/build.gradle.kts` is empty.
+- [x] Only those two strings change.
 
 ---
 
@@ -406,10 +406,10 @@ group transform, and the brand values.
 **What they cannot do:** judge whether the result *looks* right at 48dp. That is MB1-MB4.
 
 **Acceptance criteria:**
-- [ ] Every brand drawable parses, and every `pathData` is structurally valid — starts with a move
+- [x] Every brand drawable parses, and every `pathData` is structurally valid — starts with a move
       command and gives each command a legal number of parameters.
-- [ ] All three group transforms of the foreground are asserted, not only the outer one.
-- [ ] The brand colours, the adaptive layers, the notification geometry, both app-name strings and the
+- [x] All three group transforms of the foreground are asserted, not only the outer one.
+- [x] The brand colours, the adaptive layers, the notification geometry, both app-name strings and the
       unchanged `applicationId` are asserted.
 
 ### Task 4.1 — Brand resource guards
@@ -559,8 +559,8 @@ cosmetic case change must not break a guard.
 | `about screen renders the icon large enough to fill its circle` | `AboutScreen.kt` contains `Modifier.size(108.dp)` on the `painterResource(id = R.drawable.ic_launcher_foreground)` image. **Setup**: read as text; assert the substring `Modifier.size(108.dp)` occurs after the `ic_launcher_foreground` reference |
 
 **Definition of Done:**
-- [ ] The file exists with 15 test methods and the shared infrastructure above.
-- [ ] No `@Suppress` anywhere in the file.
+- [x] The file exists with 15 test methods and the shared infrastructure above.
+- [x] No `@Suppress` anywhere in the file.
 
 ---
 
@@ -660,11 +660,11 @@ MB1 and MB2 are also the only judges of G8 (brand stroke widths kept, not thicke
 in the PR body; if any is not taken, say so, and never present an estimate as an observation.
 
 **Definition of Done:**
-- [ ] Local pre-checks clean; the five CI checks green, read with `gh`; no Kotlin `w: ` warning
+- [x] Local pre-checks clean; the five CI checks green, read with `gh`; no Kotlin `w: ` warning
       introduced by this plan.
-- [ ] Every reversion row observed failing and restored, or declared as not executed.
+- [x] Every reversion row observed failing and restored, or declared as not executed.
 - [ ] `code-reviewer` plan-compliance pass clean and recorded.
-- [ ] MB1-MB4 reported in the PR body, taken or declared; PR URL reported.
+- [x] MB1-MB4 reported in the PR body, taken or declared; PR URL reported.
 
 ---
 
@@ -701,3 +701,27 @@ what the audit found and how each item was resolved.
 | I11 | INFO: both launcher layers are hairline line art, and the W2 fix thins every stroke by a further 11 %. | New gate G8 records the decision to keep the brand's widths and names MB1/MB2 as the judges |
 | I12 | INFO: the test framework was never named for the new class. | US4 names JUnit 5 with `@DisplayName`, no mocks, no Robolectric |
 | I13 | INFO: no architecture, performance or security findings — a resources-and-strings change with no service, DI, coroutine, secret, logging or input surface. | Nothing to do; recorded |
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 1, 2026-10-12
+
+No critical findings. The four resource files are byte-identical to the plan's XML blocks, the
+geometry is the chosen `pivot 0,0 / scale 1.0 / translate 22`, the scope is exactly the ten permitted
+files, the five `ci.yml` checks are green on `c92223f` and both standalone linters are clean.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| W-1 | WARNING: the plan (US1 AC4 and finding I6) and the PR body both state that `ic_launcher_round.xml` is unreferenced because the manifest declares no `android:roundIcon`. It does: `app/src/main/AndroidManifest.xml:54`, since the repository's first commit. | **The claim was false and is withdrawn here.** Verified: line 54 declares `android:roundIcon="@mipmap/ic_launcher_round"`, and this branch does not touch the manifest. The round icon is therefore **live**, which makes AC4's "kept in step with its sibling" mandatory rather than merely tidy — and both files were in fact updated identically, so the shipped result is correct either way. The AC text itself is sacred and stays; this row is the correction, and the PR body was fixed |
+| W-2 | WARNING: the inner-border row selected its group by `pivotX == "32"` and then asserted `pivotX` — self-fulfilling — and would still pass if the wrapped `<path>` were deleted and the empty group kept. | Fixed. New `childPaths()` and `groupWrapping()` helpers select a group by the path it wraps; the row now asserts the whole transform map against `INNER_BORDER_TRANSFORM`. Verified by mutation: with the wrapped path removed, no group matches and the row fails |
+| W-3 | WARNING: the flame row had the same gap, so the flame's presence in the foreground was not guarded at all. | Fixed the same way, selecting on the flame's `pathData` prefix. Verified by mutation on a scratch copy: deleting the flame path leaves zero matches, so the row now fails where it previously passed |
+| I-1 | INFO: the dropped return type on `Element.transform()` was attributed to a ktlint/detekt conflict, but the conflict only existed because the attribute list had been hoisted into a companion constant — the plan's own inline form is clean under both tools. | The plan's exact form was restored (explicit return type, inline `listOf`, `.associateWith` on its own line) and `TRANSFORM_ATTRIBUTES` removed, so the deviation disappears instead of being declared. Re-verified: ktlint 0 findings, detekt exit 0, no line over 120 |
+| I-2 | INFO: other semantics-preserving deviations from the "in full" infrastructure block were undeclared — a reformatted `read()` chain, hoisted `Regex` constants, a split assertion message, the extra `strokeColours()` helper and several extra companion constants. | Declared in the PR body. Each is required by a plan row or neutral to it; the hoisted `Regex` constants exist because detekt flags recompiled literals, and the extra constants carry the expected transform maps the rows compare against |
+| I-3 | INFO: the monochrome row checked `android:fillColor` only on `<path>` elements, while the plan's row says the drawable has none at all. | Widened to a text-wide scan of the drawable, matching the row's wording exactly |
+| I-4 | INFO: no plan checkbox had been ticked and this review section was missing. | Both done in this commit. Only the `code-reviewer` DoD item stays open until round 2 reports clean |
+| I-5 | INFO: the working tree carries an untracked `.lifecycle/`, unrelated to this plan. | Pre-existing and never staged; noted so it is not staged by accident |
+
+**Kotlin compiler warnings, measured on the green run 38318033159:** 43 distinct warnings, the same
+count as before this branch. One falls in a file this plan touches — `AboutScreen.kt:70`, the
+inherited `hiltViewModel` package move — at a line this plan does not modify. This plan introduces
+none.
