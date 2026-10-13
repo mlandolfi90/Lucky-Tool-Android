@@ -9,6 +9,7 @@ private const val TYPE_ID_AUTH: Byte = 4
 private const val TYPE_ID_CHANNEL: Byte = 5
 private const val TYPE_ID_SETTINGS: Byte = 6
 private const val TYPE_ID_PRIVACY: Byte = 7
+private const val TYPE_ID_APPROVAL: Byte = 8
 
 /**
  * Represents a single log entry from the MCP server, displayed in the
@@ -17,8 +18,10 @@ private const val TYPE_ID_PRIVACY: Byte = 7
  * @property timestamp The epoch milliseconds when the event occurred.
  * @property type The category of this log entry.
  * @property message A human-readable message describing the event.
- * @property toolName The MCP tool name (only for [Type.TOOL_CALL] entries).
- * @property durationMs The request processing duration in milliseconds (only for [Type.TOOL_CALL]).
+ * @property toolName The MCP tool name ([Type.TOOL_CALL]; [Type.APPROVAL] for the policy gate's decisions and
+ *   re-evaluations of a call).
+ * @property durationMs The request processing duration in milliseconds ([Type.TOOL_CALL]; [Type.APPROVAL] when the
+ *   policy gate decided a call).
  */
 data class ServerLogEntry(
     val timestamp: Long,
@@ -31,7 +34,7 @@ data class ServerLogEntry(
     enum class Type(
         val id: Byte,
     ) {
-        /** An MCP tool call (has toolName, durationMs; message holds a failure marker or is empty). */
+        /** An MCP tool call (has toolName, durationMs; message holds a constant marker or is empty). */
         TOOL_CALL(TYPE_ID_TOOL_CALL),
 
         /** A tunnel lifecycle event (connecting, connected, stopped, error). */
@@ -54,6 +57,9 @@ data class ServerLogEntry(
 
         /** A Privacy Mode lifecycle event (self-check result at server start). */
         PRIVACY(TYPE_ID_PRIVACY),
+
+        /** An approval-profile decision or approval lifecycle event (codes and package only, never values). */
+        APPROVAL(TYPE_ID_APPROVAL),
 
         ;
 
