@@ -18,6 +18,7 @@ import com.danielealbano.androidremotecontrolmcp.services.sharing.SharedContentI
 import com.danielealbano.androidremotecontrolmcp.services.sharing.SharedItem
 import com.danielealbano.androidremotecontrolmcp.services.storage.FileBytesResult
 import com.danielealbano.androidremotecontrolmcp.services.storage.FileOperationProvider
+import com.danielealbano.androidremotecontrolmcp.testutil.PolicyTestDoubles
 import com.danielealbano.androidremotecontrolmcp.testutil.PrivacyToolTestDoubles
 import com.danielealbano.androidremotecontrolmcp.testutil.RecordingServerLogRepository
 import io.ktor.client.request.get
@@ -450,7 +451,7 @@ class SharingIntegrationTest {
     ) {
         val server = newServer()
         registerSharingTools(
-            LoggedToolRegistrar(server, RecordingServerLogRepository()),
+            LoggedToolRegistrar(server, RecordingServerLogRepository(), PolicyTestDoubles.passthroughGate()),
             inbox,
             linkService,
             config.fileOperationProvider,

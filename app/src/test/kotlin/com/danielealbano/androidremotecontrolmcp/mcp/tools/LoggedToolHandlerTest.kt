@@ -61,7 +61,7 @@ class LoggedToolHandlerTest {
         runTest {
             val indicator = RecordingToolCallIndicator()
             val handler =
-                loggedToolHandler(RecordingServerLogRepository(), "tap", indicator) {
+                indicatedToolHandler("tap", indicator) {
                     assertEquals(listOf("started:tap"), indicator.events)
                     CallToolResult(content = listOf(TextContent(text = "ok")))
                 }
@@ -76,7 +76,7 @@ class LoggedToolHandlerTest {
         runTest {
             val indicator = RecordingToolCallIndicator()
             val handler =
-                loggedToolHandler(RecordingServerLogRepository(), "tap", indicator) {
+                indicatedToolHandler("tap", indicator) {
                     throw McpToolException.InvalidParams("boom")
                 }
 
@@ -143,10 +143,14 @@ class LoggedToolHandlerTest {
                     override fun onToolCallFinished(toolName: String) = error("finish failed")
                 }
             val handler =
-                loggedToolHandler(recorder, "tap", throwingIndicator) {
-                    executed = true
-                    CallToolResult(content = listOf(TextContent(text = "ok")))
-                }
+                loggedToolHandler(
+                    recorder,
+                    "tap",
+                    indicatedToolHandler("tap", throwingIndicator) {
+                        executed = true
+                        CallToolResult(content = listOf(TextContent(text = "ok")))
+                    },
+                )
 
             val result = handler(request)
 

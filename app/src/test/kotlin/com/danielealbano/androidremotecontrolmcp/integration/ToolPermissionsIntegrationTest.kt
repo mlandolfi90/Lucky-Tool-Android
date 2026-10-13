@@ -82,16 +82,16 @@ class ToolPermissionsIntegrationTest {
         }
 
     @Test
-    fun `all tools disabled returns empty tool list`() =
+    fun `all tools disabled leaves only the approval tools`() =
         runTest {
             val perms = ToolPermissionsConfig(disabledTools = ALL_TOOL_NAMES)
 
             McpIntegrationTestHelper.withTestApplication(perms = perms) { client, _ ->
                 val result = client.listTools()
                 assertEquals(
-                    0,
-                    result.tools.size,
-                    "All tools disabled should result in empty tool list",
+                    setOf("android_get_approval_status", "android_confirm_human_approval"),
+                    result.tools.map { it.name }.toSet(),
+                    "Only the always-on approval tools should remain when every tool is disabled",
                 )
             }
         }
