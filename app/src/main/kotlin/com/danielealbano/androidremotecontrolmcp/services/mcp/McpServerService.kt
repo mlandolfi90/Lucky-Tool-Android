@@ -44,6 +44,7 @@ import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerSystemActionT
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerTextInputTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerTouchActionTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerUtilityTools
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
 import com.danielealbano.androidremotecontrolmcp.privacy.PlaceholderSubstitutor
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyModeManager
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyModeStatus
@@ -166,6 +167,8 @@ class McpServerService : Service() {
     @Inject lateinit var authorizationCodeStore: AuthorizationCodeStore
 
     @Inject lateinit var approvalCoordinator: OAuthApprovalCoordinator
+
+    @Inject lateinit var actionApprovalCoordinator: ActionApprovalCoordinator
 
     @Inject lateinit var geoIpResolver: GeoIpResolver
 
@@ -576,6 +579,9 @@ class McpServerService : Service() {
         approvalObserverJob = null
         OAuthApprovalNotifier.cancel(this)
 
+        // Deny every pending action approval (waking calls still waiting) and drop unused grants.
+        runBlocking { actionApprovalCoordinator.clearAll() }
+
         // Stop tunnel first (with ANR-safe timeout).
         // Worst-case blocking time: TUNNEL_STOP_TIMEOUT_MS (3s) + SHUTDOWN_GRACE_PERIOD_MS (1s)
         // + SHUTDOWN_TIMEOUT_MS (5s) = ~9s total. This is well within the Android service
@@ -605,6 +611,9 @@ class McpServerService : Service() {
         }
         mcpServer = null
         serverActive.set(false)
+
+        // Deny any action approval a request created while the server was stopping.
+        runBlocking { actionApprovalCoordinator.clearAll() }
 
         // Cancel coroutine scope
         coroutineScope.cancel()
