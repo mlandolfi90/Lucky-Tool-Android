@@ -28,7 +28,7 @@ class OAuthAccessValidator(
         val claims = tokenService.verifyAccessToken(token) ?: return false
         val client = clientRepository.getClient(claims.clientId)
         val valid = OAuthPolicy.resourceMatches(claims.audience, canonicalResource) && client != null
-        if (valid && client != null) {
+        if (valid) {
             val now = nowMs()
             var wonDebounce = false
             lastTouched.compute(claims.clientId) { _, previous ->
