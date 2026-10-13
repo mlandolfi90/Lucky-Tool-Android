@@ -139,6 +139,24 @@ en cada pedido.
   monto», que excluye ese campo para siempre en esa app. Un monto que no se escribe (deslizador, botones
   «+1000») no lo ve el límite: la red real es la columna botón de acción, que en apps de dinero nunca va
   en «corre sola».
+- **Cómo se aprueba, decidido por el humano el 2026-10-13** (usa modelos de confianza y no quiere sumar
+  complejidad): cada casilla del perfil (por tipo de acción y por tramo de monto) toma uno de estos valores:
+  - **corre sola**;
+  - **preguntar en el chat**, para casos de riesgo bajo: la tool devuelve «confirmá con el humano» y el
+    agente tiene que volver a llamar diciendo que el humano dijo que sí. La app no puede verificarlo:
+    descansa en el modelo;
+  - **notificación**: llega una notificación con Aprobar / Rechazar;
+  - **prohibido**: límite duro; por encima del monto máximo, no se hace;
+  - **extras que el humano activa si quiere**: huella, «Parar» (la persona toca el botón real) y la
+    pantalla de aprobación.
+  - El riesgo que esto cubre no es un modelo malo sino uno **engañado** (un texto en pantalla o una
+    notificación que le da órdenes): los límites duros y la notificación lo frenan aunque el modelo caiga.
+- **No es opcional:** el agente nunca puede tocar la propia app Lucky (aprobaciones, perfiles, ajustes);
+  si no, podría aprobarse solo o aflojar sus límites.
+- **Plan 71, decidido el 2026-10-13:** si el agente corrige una tarea ya aprobada, los cambios menores
+  (otra forma de encontrar el mismo elemento, una espera, una nota) se aceptan solos, con aviso y con
+  opción de deshacer; si cambia algo que escribe o un botón de acción, la tarea vuelve a pausa hasta que el
+  humano la revise. Pospuesto: si el teléfono reordena solo las alternativas de cada paso.
 - Fases: plan 70, perfiles por app (el motor, vale para todo); plan 71, tareas (guardar y repetir en una
   llamada); plan 72, botón «Grabar» en el teléfono.
 - Tomado por defecto: si una tarea espera aprobación, la llamada espera hasta 60 s y después devuelve
