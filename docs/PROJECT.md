@@ -120,7 +120,8 @@ The typical startup flow: User opens app → enables Accessibility Service in An
 
 - **Gradle 8.x**: Build system (Kotlin DSL)
 - **Makefile**: Development workflow automation
-- **ktlint** and **detekt**: Kotlin linting
+- **ktlint** and **detekt**: Kotlin linting. detekt runs its default rules plus `config/detekt/detekt.yml`, whose
+  only override exempts `@Composable` functions from `FunctionNaming` (Compose requires PascalCase).
 
 ---
 

@@ -199,6 +199,11 @@ ktlint {
     version.set("1.8.0")
 }
 
+detekt {
+    buildUponDefaultConfig.set(true)
+    config.setFrom(rootProject.file("config/detekt/detekt.yml"))
+}
+
 // ktlint-cli 1.8.0 (the latest release) bundles logback 1.3.16, which trips CVE alerts. logback is
 // used only for ktlint's own build-time console logging and never ships in the APK. Force the patched
 // logback onto ktlint's resolvable configurations. Compatible: logback 1.5.x keeps the slf4j 2.0.x

@@ -1,0 +1,6 @@
+# Only differences from detekt's default configuration (buildUponDefaultConfig = true).
+naming:
+  FunctionNaming:
+    # Compose requires PascalCase @Composable functions.
+    ignoreAnnotated:
+      - Composable
