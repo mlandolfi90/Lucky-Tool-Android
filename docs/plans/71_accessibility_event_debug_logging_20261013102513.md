@@ -18,7 +18,7 @@ nothing is merged). The plan document itself is committed by the planning run.
 origin/feat/approval-profiles`, then check all three; if any fails, plan 70's code is not there yet: stop and ask the
 owner.
 - `config/detekt/detekt.yml` exists (plan 70 US6);
-- line 1 of `M/ui/screens/settings/GeneralSettingsScreen.kt` is `@file:Suppress("LongMethod")` (plan 70 US6);
+- `M/ui/screens/settings/SettingsIndexScreen.kt` contains `private fun ApprovalProfilesEntry` (plan 70 US8);
 - `R/values/strings.xml` contains `<!-- Plan 70 · US8 -->`.
 
 **Paths**: `M/` = `app/src/main/kotlin/com/danielealbano/androidremotecontrolmcp/`,
@@ -40,25 +40,29 @@ owner.
 - Logging rules of `CLAUDE.md` apply: the gated line keeps its current content (package name only); no node text, no
   tree, no token is added to any line.
 - No tests or linters during implementation; one pass at the end (US5).
+- Git: at the end of each of US1–US4, commit that story's files (named files only, never `git add -A`/`.`) and
+  `git push -u origin feat/accessibility-debug-logging`. US5 commits only its own fixes.
 
-**Review budget**: one `plan-reviewer` round before implementation; `code-reviewer` compliance rounds per D8.
+**Review budget**: one `plan-reviewer` round before the owner decisions and one after them (both recorded at the
+end); one `code-reviewer` plan-compliance round (D8).
 
 ---
 
-## Decisions pending (owner)
+## Decisions (owner, 2026-10-13)
 
-The plan body already uses each proposal; approve or change them before implementation starts.
+All eight were decided by the owner on 2026-10-13; the plan body implements them. The two supporting texts named
+in D2 are the planner's proposal and need the owner's OK before Task 2.1.
 
-| ID | Question | Proposal | Reason |
-|----|----------|----------|--------|
-| D1 | Where does the toggle live in the UI? | Settings → General, last row, under a new "Debugging" heading (US2). | General already holds the app-wide switches (tool-call indicator, hide from recents); one row does not justify a new settings entry. |
-| D2 | Texts of the heading, label and description? | Heading "Debugging"; label "Log accessibility events"; description "Writes a logcat line every time any app changes what is on screen (app package only). Turn it on only while debugging; it fills logcat quickly." Settings-change log entry: "Accessibility event logging enabled/disabled". | States what is written, what is not, and why it is off. |
+| ID | Question | Decision (owner, 2026-10-13) | Reason |
+|----|----------|------------------------------|--------|
+| D1 | Where does the toggle live in the UI? | On its own screen: a new last entry "Developer mode" in the Settings index opens `DeveloperModeSettingsScreen` (route `settings/developer_mode`), which holds the toggle (US2). Not a row in General. | Owner's choice: debugging aids stay apart from the server settings, which are locked while the server runs. |
+| D2 | Texts? | Screen title and index entry "Developer mode"; label "Log accessibility events"; description "Writes a logcat line every time any app changes what is on screen (app package only). Turn it on only while debugging; it fills logcat quickly."; settings-change log entry "Accessibility event logging enabled" / "Accessibility event logging disabled". The proposed "Debugging" heading is dropped: the screen title replaces it. Planner proposal, pending the owner's OK (not part of the owner's answer): index subtitle "Accessibility event logging" (every index entry has one) and back-button description "Back" (as plan 70's `approval_profiles_back`). | Accepted as proposed, with the D1 screen title. |
 | D3 | Are other per-event logcat lines gated too? | No. Only `Window content changed` (TYPE_WINDOW_CONTENT_CHANGED). `Window state changed: package=…, activity=…` and `Windows changed (e.g. soft-keyboard show/hide)` stay as today. | The measured noise is the content-change line; the other two fire on app/screen/keyboard transitions only and help read a trace. The owner scoped "any other log change" out. |
-| D4 | Does the setting turn itself off (timer, reboot, server stop)? | No. It stays as set (persisted in DataStore) until the owner turns it off. | The owner turns it on on purpose. Forgetting it costs logcat space and a small privacy cost (an app-usage timeline in logcat, readable over adb or in a bug report), comparable to the existing unconditional window-state line. |
+| D4 | Does the setting turn itself off (timer, reboot, server stop)? | No, never. It stays as set (persisted in DataStore) until the owner turns it off. | The owner turns it on on purpose. Forgetting it costs logcat space and a small privacy cost (an app-usage timeline in logcat, readable over adb or in a bug report), comparable to the existing unconditional window-state line. |
 | D5 | Is the toggle usable while the MCP server runs, and when does it take effect? | Always usable; takes effect immediately without restarting anything (the accessibility service observes the setting). | It changes logging only, not the server; a restart to debug would disturb the state being debugged. |
-| D6 | Can it also be set over adb? | Yes: `--ez accessibility_event_logging <bool>` on the existing `ADB_CONFIGURE` broadcast (US3, a separate story; Actions 4.1.4 and 4.2.x go with it). | Whoever reads logcat already has adb attached; no need to unlock the phone and open the app. |
-| D7 | `PENDIENTES.md` calls the recorded-tasks plan "plan 71" and the «Grabar» button "plan 72", but the `CLAUDE.md` ID counter gave 71 to this file. | Keep 71 here (counter rule); the tasks plan and the record plan take the next free IDs when written (72 and 73 if nothing else comes first). | The counter is the repository rule; renumbering a written plan would break references. |
-| D8 | `CLAUDE.md` says the plan-compliance `code-reviewer` repeats "until clean"; plan 70 ran under the owner's order of 2026-10-13 of one round per plan. Which applies here? | One round, as plan 70: every finding fixed or brought to the owner with a one-line reason (Task 5.1). | Same owner, same day, same workflow; the change is small. |
+| D6 | Can it also be set over adb? | Yes: `--ez accessibility_event_logging <bool>` on the existing `ADB_CONFIGURE` broadcast (US3). | Whoever reads logcat already has adb attached; no need to unlock the phone and open the app. |
+| D7 | `PENDIENTES.md` calls the recorded-tasks plan "plan 71" and the «Grabar» button "plan 72", but the `CLAUDE.md` ID counter gave 71 to this file. | Keep 71 here (counter rule). 72 is the agent user manual plan (already written); the recorded-tasks plan takes 73 and the «Grabar» button plan 74. | The counter is the repository rule; renumbering a written plan would break references. The owner left the numbers to the planner. |
+| D8 | `CLAUDE.md` says the plan-compliance `code-reviewer` repeats "until clean"; plan 70 ran under the owner's order of 2026-10-13 of one round per plan. Which applies here? | One `code-reviewer` round at the end, as plan 70: every finding fixed or brought to the owner with a one-line reason (Task 5.1). | Same owner, same day, same workflow; the change is small. |
 
 ---
 
@@ -183,7 +187,7 @@ class DebugSettingsImpl
 Context: the mapping line is in the top-level `mapPreferencesToServerConfig` (already under
 `@Suppress("CyclomaticComplexMethod")`), outside the class; the class grows by 2 lines (measured within `LargeClass`).
 
-**Action 1.1.6** — `M/di/AppModule.kt` — modify (`RepositoryModule`: 8 functions after plan 70 → 9, under
+**Action 1.1.6** — `M/di/AppModule.kt` — modify (`RepositoryModule`: 9 functions after plan 70 → 10, under
 `TooManyFunctions` 11)
 
 ```diff
@@ -211,7 +215,7 @@ Context: the mapping line is in the top-level `mapPreferencesToServerConfig` (al
 | `TG/data/repository/GeofenceConfigRepositoryTest.kt` | `DebugSettingsImpl(dataStore, changeLogger),` |
 
 **DoD**
-- [ ] Key string `accessibility_event_logging_enabled` defined once (`DebugSettingsImpl.kt`); `grep -rn "SettingsRepositoryImpl(" app/src` lists only the production class and the 6 updated sites.
+- [ ] Key string `accessibility_event_logging_enabled` defined once (`DebugSettingsImpl.kt`); `grep -rn "SettingsRepositoryImpl(" app/src` lists exactly the 6 updated test sites.
 - [ ] No other `SettingsRepository` / `DebugSettings` implementation exists in `app/src` (tests use MockK mocks).
 
 ### Task 1.2 — Switch and gated line
@@ -223,7 +227,6 @@ package com.danielealbano.androidremotecontrolmcp.services.accessibility
 
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
@@ -247,7 +250,7 @@ internal class AccessibilityEventLogSwitch(
     fun observe(
         scope: CoroutineScope,
         dispatcher: CoroutineDispatcher,
-    ): Job =
+    ) {
         scope.launch(dispatcher) {
             enabledFlow
                 .catch { error ->
@@ -255,6 +258,7 @@ internal class AccessibilityEventLogSwitch(
                     onReadFailure(error)
                 }.collect { isEnabled = it }
         }
+    }
 }
 ```
 
@@ -406,8 +410,8 @@ end of each test.
 | `read failure turns it off and reports once` | `flow { emit(true); throw IOException("boom") }` → `isEnabled == false`, `failures` = that one exception |
 | `stops following when its scope is cancelled` | `observeScope.cancel()`, set the flow to `true`, `runCurrent()` → still `false` |
 
-**Action 1.3.6** — `T/services/accessibility/McpAccessibilityServiceTest.kt` — modify: add a `@Nested`
-`contentChangedLogLine` class.
+**Action 1.3.6** — `T/services/accessibility/McpAccessibilityServiceTest.kt` — modify: add
+`@Nested @DisplayName("contentChangedLogLine") inner class ContentChangedLogLine` (the file's pattern).
 
 | Test | Verifies |
 |------|----------|
@@ -417,20 +421,24 @@ end of each test.
 | `keeps the current text for a null package` | `contentChangedLogLine(true, null)` == `Window content changed: package=null` |
 
 **DoD**
+- [ ] The service wiring (start in `onServiceConnected`, drop in `onDestroy`) cannot run in a JVM test (the service is
+  not instantiable there); Manual QA M5.1–M5.4 verify it.
 - [ ] Reversal check (US5): replace `loggingEnabled == true` with `loggingEnabled != false` and `returns null when the switch is unavailable` fails; drop `.catch { … }` and `read failure turns it off and reports once` fails.
 
 ---
 
-## US2 — The toggle in Settings → General (D1, D2, D5)
+## US2 — "Developer mode" settings screen with the toggle (D1, D2, D5)
 
-The owner turns the logging on and off from the phone; the switch is live (D5), so unlike its neighbours it is not
-disabled while the server runs.
+The owner turns the logging on and off from the phone, on a screen of its own reached from a new last entry of the
+Settings index (D1). The switch is live (D5), so unlike the server settings it is never disabled while the server runs.
 
 **Acceptance criteria**
-- [ ] General settings ends with a "Debugging" heading (heading semantics) and one toggle row bound to `serverConfig.accessibilityEventLoggingEnabled`.
-- [ ] The whole row is one toggleable control (`Role.Switch`) labelled by its texts: one TalkBack stop, a full-width touch target ≥ 48 dp.
-- [ ] Enabled whatever the server status.
-- [ ] All three texts in `strings.xml` under `<!-- Plan 71 · US2 -->`; only `MaterialTheme` colours and typography.
+- [ ] The Settings index ends with a "Developer mode" entry (icon `Icons.Default.DeveloperMode`, subtitle "Accessibility event logging") that opens route `settings/developer_mode`.
+- [ ] `DeveloperModeSettingsScreen` shows a `TopAppBar` titled "Developer mode" (heading semantics) whose back button, described "Back", returns to the index, and one toggle row bound to `serverConfig.accessibilityEventLoggingEnabled`.
+- [ ] The whole row is one toggleable control (`Role.Switch`) labelled by its texts: one TalkBack stop, full width, at least 48 dp high.
+- [ ] The row is enabled whatever the server status.
+- [ ] Every new text is in `strings.xml` under `<!-- Plan 71 · US2 -->`; only `MaterialTheme` colours and typography (dark and light theme).
+- [ ] `GeneralSettingsScreen.kt` is not changed.
 
 ### Task 2.1 — Strings
 
@@ -439,18 +447,30 @@ disabled while the server runs.
 
 ```diff
 +    <!-- Plan 71 · US2 -->
-+    <string name="config_debugging_title">Debugging</string>
++    <string name="settings_developer_mode_title">Developer mode</string>
++    <string name="settings_developer_mode_subtitle">Accessibility event logging</string>
++    <string name="developer_mode_back">Back</string>
 +    <string name="config_accessibility_event_logging_label">Log accessibility events</string>
 +    <string name="config_accessibility_event_logging_description">Writes a logcat line every time any app changes what is on screen (app package only). Turn it on only while debugging; it fills logcat quickly.</string>
  </resources>
 ```
 
 **DoD**
-- [ ] The three names are new in `strings.xml` and each is referenced by Action 2.2.2.
+- [ ] The five names are new in `strings.xml`; each is referenced by Action 2.3.1 or 2.4.2.
 
-### Task 2.2 — ViewModel and screen
+### Task 2.2 — Route and ViewModel
 
-**Action 2.2.1** — `M/ui/viewmodels/MainViewModel.kt` — modify
+**Action 2.2.1** — `M/ui/navigation/Routes.kt` — modify
+
+```diff
+     data object WifiMonitor : SettingsRoute("settings/channel/wifi_monitor")
+ 
++    data object DeveloperMode : SettingsRoute("settings/developer_mode")
++
+     data object ApprovalProfiles : SettingsRoute("settings/approval_profiles")
+```
+
+**Action 2.2.2** — `M/ui/viewmodels/MainViewModel.kt` — modify
 
 ```diff
          fun updateToolCallIndicatorEnabled(enabled: Boolean) {
@@ -467,83 +487,188 @@ disabled while the server runs.
 +
 ```
 
-**Action 2.2.2** — `M/ui/screens/settings/GeneralSettingsScreen.kt` — modify (line 1 is already
-`@file:Suppress("LongMethod")` after plan 70 US6; unchanged here)
+**DoD**
+- [ ] `settings/developer_mode` is used by no other `SettingsRoute`.
+
+### Task 2.3 — Screen
+
+**Action 2.3.1** — `M/ui/screens/settings/DeveloperModeSettingsScreen.kt` — create
+
+```kotlin
+package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
+
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.danielealbano.androidremotecontrolmcp.R
+import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.MainViewModel
+
+/** Settings → Developer mode. Its controls apply live, so none is disabled while the server runs. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DeveloperModeSettingsScreen(
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+    viewModel: MainViewModel = hiltViewModel(),
+) {
+    val serverConfig by viewModel.serverConfig.collectAsStateWithLifecycle()
+
+    Column(modifier = modifier.fillMaxSize()) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = stringResource(R.string.settings_developer_mode_title),
+                    modifier = Modifier.semantics { heading() },
+                )
+            },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.developer_mode_back),
+                    )
+                }
+            },
+            windowInsets = WindowInsets(0),
+        )
+        Column(
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp),
+        ) {
+            AccessibilityEventLoggingRow(
+                checked = serverConfig.accessibilityEventLoggingEnabled,
+                onCheckedChange = viewModel::updateAccessibilityEventLoggingEnabled,
+            )
+        }
+    }
+}
+
+/** The whole row is one switch for TalkBack: label, description and state are read as one stop. */
+@Composable
+private fun AccessibilityEventLoggingRow(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = stringResource(R.string.config_accessibility_event_logging_label),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                text = stringResource(R.string.config_accessibility_event_logging_description),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = checked, onCheckedChange = null)
+    }
+}
+```
+
+Context: same shape as `GeneralSettingsScreen` / `SecuritySettingsScreen` (`onBack`, `modifier`, `MainViewModel`
+passed in by `SettingsScreen`); the back-button description follows plan 70's `ApprovalProfilesScreen`.
+`onCheckedChange = null` makes the `Switch` purely visual (the row owns the toggle and the semantics);
+`heightIn(min = 48.dp)` keeps the target when the description fits on one line. No `@file:Suppress`: ktlint 1.8.0
+and detekt 2.0.0-alpha.5 (plan 70's `detekt.yml`) report nothing on this file (checked on a scratch copy).
+
+**DoD**
+- [ ] No `enabled` argument on the screen (never disabled); no hardcoded text in it.
+
+### Task 2.4 — Navigation wiring
+
+**Action 2.4.1** — `M/ui/screens/SettingsScreen.kt` — modify (file already under `@file:Suppress("LongMethod", …)`;
+unchanged)
 
 ```diff
- import androidx.compose.foundation.rememberScrollState
-+import androidx.compose.foundation.selection.toggleable
- import androidx.compose.foundation.text.KeyboardOptions
+ import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.ChannelSettingsScreen
++import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.DeveloperModeSettingsScreen
+ import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.GeneralSettingsScreen
 @@
- import androidx.compose.ui.res.stringResource
-+import androidx.compose.ui.semantics.Role
-+import androidx.compose.ui.semantics.heading
-+import androidx.compose.ui.semantics.semantics
- import androidx.compose.ui.text.input.KeyboardType
++        composable(SettingsRoute.DeveloperMode.route) {
++            DeveloperModeSettingsScreen(onBack = { navController.popBackStack() }, viewModel = viewModel)
++        }
+         geofenceDestinations(navController)
+         approvalProfileDestinations(navController)
+```
+
+**Action 2.4.2** — `M/ui/screens/settings/SettingsIndexScreen.kt` — modify
+
+```diff
+ import androidx.compose.material.icons.filled.Cloud
++import androidx.compose.material.icons.filled.DeveloperMode
+ import androidx.compose.material.icons.filled.Folder
 @@
-                 Switch(
-                     checked = serverConfig.hideFromRecents,
-                     onCheckedChange = viewModel::updateHideFromRecents,
-                     enabled = isEnabled,
-                 )
-             }
-+
-+            Spacer(modifier = Modifier.height(24.dp))
-+
-+            AccessibilityEventLoggingSection(
-+                checked = serverConfig.accessibilityEventLoggingEnabled,
-+                onCheckedChange = viewModel::updateAccessibilityEventLoggingEnabled,
-+            )
-         }
+             onClick = { onNavigate(SettingsRoute.ChannelSettings.route) },
+         )
++        DeveloperModeEntry(onNavigate = onNavigate)
      }
  }
+@@
+         onClick = { onNavigate(SettingsRoute.ApprovalProfiles.route) },
+     )
+ }
 +
-+/** "Debugging" heading plus the live accessibility-event-logging toggle; never disabled (no restart needed). */
 +@Composable
-+private fun AccessibilityEventLoggingSection(
-+    checked: Boolean,
-+    onCheckedChange: (Boolean) -> Unit,
-+    modifier: Modifier = Modifier,
-+) {
-+    Column(modifier = modifier.fillMaxWidth()) {
-+        Text(
-+            text = stringResource(R.string.config_debugging_title),
-+            style = MaterialTheme.typography.labelLarge,
-+            modifier = Modifier.semantics { heading() },
-+        )
-+        Spacer(modifier = Modifier.height(4.dp))
-+        Row(
-+            modifier =
-+                Modifier
-+                    .fillMaxWidth()
-+                    .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
-+            verticalAlignment = Alignment.CenterVertically,
-+        ) {
-+            Column(modifier = Modifier.weight(1f)) {
-+                Text(
-+                    text = stringResource(R.string.config_accessibility_event_logging_label),
-+                    style = MaterialTheme.typography.bodyLarge,
-+                )
-+                Text(
-+                    text = stringResource(R.string.config_accessibility_event_logging_description),
-+                    style = MaterialTheme.typography.bodySmall,
-+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-+                )
-+            }
-+            Switch(checked = checked, onCheckedChange = null)
-+        }
-+    }
++private fun DeveloperModeEntry(onNavigate: (String) -> Unit) {
++    SettingsEntry(
++        icon = Icons.Default.DeveloperMode,
++        title = stringResource(R.string.settings_developer_mode_title),
++        subtitle = stringResource(R.string.settings_developer_mode_subtitle),
++        onClick = { onNavigate(SettingsRoute.DeveloperMode.route) },
++    )
 +}
 ```
 
-Context: `onCheckedChange = null` makes the `Switch` purely visual; the row owns the toggle and the semantics.
+Context: the entry is its own composable, like plan 70's `ApprovalProfilesEntry`, so `SettingsEntriesColumn` grows by
+one line and stays under detekt `LongMethod` (checked on a scratch copy of the three changed navigation files).
+`Icons.Filled.DeveloperMode` ships in `material-icons-extended`, already a dependency (checked in its 1.7.8 sources
+jar). The icon stays decorative (`contentDescription = null`, as on every entry): TalkBack reads title and subtitle.
 
 **DoD**
-- [ ] The new section passes no `enabled` argument (never disabled); no hardcoded text in it.
+- [ ] The existing entries are unchanged (including the hardcoded "Event Channel" title, out of scope).
 
-### Task 2.3 — Tests
+### Task 2.5 — Tests
 
-**Action 2.3.1** — `T/ui/viewmodels/MainViewModelTest.kt` — modify
+**Action 2.5.1** — `T/ui/viewmodels/MainViewModelTest.kt` — modify
 
 | Test | Verifies |
 |------|----------|
@@ -551,21 +676,23 @@ Context: `onCheckedChange = null` makes the `Switch` purely visual; the row owns
 
 **DoD**
 - [ ] Same shape as `updateHideFromRecents calls repository`.
+- [ ] The module has no Compose UI test dependency (`grep -rl createComposeRule app/src` is empty), so the screen, the route and the index entry are verified by the build (US5) and Manual QA M2.1–M2.4.
 
 ### Manual QA (owner + phone, debug build, dark and light theme)
 
 | ID | Step | Expected |
 |----|------|----------|
-| M2.1 | Settings → General, scroll to the end | "Debugging" heading, "Log accessibility events" row, switch off |
-| M2.2 | Start the MCP server, return to General | The logging row is still enabled; the rows above it are disabled as before |
-| M2.3 | TalkBack on: heading navigation, then focus the row | "Debugging" is reachable as a heading; the row is one stop reading label, description and "switch, off"; double-tap turns it on |
+| M2.1 | Open Settings, scroll to the end | Last entry "Developer mode", subtitle "Accessibility event logging"; tapping it opens the "Developer mode" screen with "Log accessibility events" off |
+| M2.2 | Start the MCP server, open Settings → Developer mode, flip the switch on and off | The row stays enabled and the switch follows each tap |
+| M2.3 | TalkBack on: the index entry, then on the screen the back button, heading navigation and the row | The entry is one stop reading title and subtitle; the back button reads "Back"; "Developer mode" is reachable as a heading; the row is one stop reading label, description and "switch, off"; double-tap turns it on |
+| M2.4 | Both themes: open the screen, then press the back button | Texts readable in dark and light theme; back returns to the Settings index |
 
 ---
 
 ## US3 — `accessibility_event_logging` extra on the adb configure broadcast (D6)
 
 Debugging is done with adb attached; one more optional boolean extra on the existing `ADB_CONFIGURE` broadcast lets
-the owner flip the setting from the computer. Dropping this story drops Actions 4.1.4, 4.2.1 and 4.2.2 with it.
+the owner flip the setting from the computer (D6).
 
 **Acceptance criteria**
 - [ ] `--ez accessibility_event_logging true|false` calls `updateAccessibilityEventLoggingEnabled` with that value and logs `Accessibility event logging updated to <value>` at info under `MCP:AdbConfigHandler`; without the extra nothing is called.
@@ -609,11 +736,12 @@ the owner flip the setting from the computer. Dropping this story drops Actions 
 ### Task 3.2 — Tests
 
 **Action 3.2.1** — `T/services/mcp/AdbConfigHandlerTest.kt` — modify: three tests in `ConfigureBasicTests`, beside the
-`hide_from_recents` tests, same fixtures.
+`hide_from_recents` tests, same fixtures. Table names are the `@DisplayName` values; functions
+`accessibilityEventLoggingTrue`, `accessibilityEventLoggingFalse`, `accessibilityEventLoggingAbsent`.
 
 | Test | Verifies |
 |------|----------|
-| `accessibility_event_logging true enables the setting` | `coVerify { settingsRepository.updateAccessibilityEventLoggingEnabled(true) }` |
+| `accessibility_event_logging true enables the setting` | `coVerify { settingsRepository.updateAccessibilityEventLoggingEnabled(true) }`; `verify { Log.i("MCP:AdbConfigHandler", "Accessibility event logging updated to true") }` (the `setUp()` already mocks `Log`) |
 | `accessibility_event_logging false disables the setting` | `coVerify { settingsRepository.updateAccessibilityEventLoggingEnabled(false) }` |
 | `accessibility_event_logging is not applied when extra is absent` | `coVerify(exactly = 0) { settingsRepository.updateAccessibilityEventLoggingEnabled(any()) }` |
 
@@ -627,23 +755,23 @@ the owner flip the setting from the computer. Dropping this story drops Actions 
 Defaults belong in PROJECT.md (`CLAUDE.md` §6), and ARCHITECTURE.md currently says every setting needs a restart.
 
 **Acceptance criteria**
-- [ ] `docs/PROJECT.md`, `docs/ARCHITECTURE.md` and (with US3) `README.md` state the setting, its default, that it applies live and (with US3) the adb extra; no Mermaid block is added or changed.
+- [ ] `docs/PROJECT.md`, `docs/ARCHITECTURE.md` and `README.md` state the setting, its default, where it is (Settings → Developer mode), that it applies live and (PROJECT.md, README.md) the adb extra; no Mermaid block is added or changed.
 
 ### Task 4.1 — `docs/PROJECT.md`
 
-**Action 4.1.1** — modify, Folder Structure: insert after the `services/accessibility/` and `data/repository/` lines
-(plan 70 adds no line after either)
+**Action 4.1.1** — modify, Folder Structure: insert after the `services/accessibility/` line and after plan 70's
+`ui/screens/settings/` (approval profiles) and `data/repository/` (approval profiles) lines
 
 ```diff
    - `services/accessibility/` — `McpAccessibilityService.kt`, `AccessibilityTreeParser.kt`, `ElementFinder.kt`, `ActionExecutor.kt`, `ActionExecutorImpl.kt`, `AccessibilityServiceProvider.kt`, `AccessibilityServiceProviderImpl.kt`, `TypeInputController.kt`, `TypeInputControllerImpl.kt`, `ScreenInfo.kt`, `CompactTreeFormatter.kt`, `CompactFormatOptions.kt`, `AccessibilityNodeCache.kt`, `AccessibilityNodeCacheImpl.kt`
 +  - `services/accessibility/` (event debug logging) — `AccessibilityEventLogSwitch.kt`
 @@
-   - `data/repository/` — `SettingsRepository.kt`, `SettingsRepositoryImpl.kt`, `RelaySettings.kt`, `RelaySettingsImpl.kt`
+   - `ui/screens/settings/` (approval profiles) — `ApprovalProfilesScreen.kt`, `ApprovalProfileAddScreen.kt`, `ApprovalProfileEditorScreen.kt`, `ApprovalProfileAmountSection.kt`, `ApprovalProfileExceptionsSection.kt`, `ApprovalProfileComponents.kt`, `ApprovalProfileEditorActions.kt`, `ApprovalProfileUiText.kt`, `ApprovalProfileDestinations.kt`
++  - `ui/screens/settings/` (event debug logging) — `DeveloperModeSettingsScreen.kt`
+@@
+   - `data/repository/` (approval profiles) — `ApprovalProfileRepository.kt`, `ApprovalProfileRepositoryImpl.kt`, `ApprovalProfileResults.kt`, `ProfileStoreStatus.kt`
 +  - `data/repository/` (event debug logging) — `DebugSettings.kt`, `DebugSettingsImpl.kt`
 ```
-
-Context: plan 70 inserts its `data/repository/` (approval profiles) line directly after the same anchor; put this
-line after plan 70's.
 
 **Action 4.1.2** — modify, Android-Specific Conventions → AccessibilityService Best Practices: insert after
 `- Keep \`onAccessibilityEvent()\` fast, offload heavy work to coroutines`
@@ -657,22 +785,15 @@ line after plan 70's.
 `### Approval Profile Defaults` stays below it)
 
 ```markdown
-- **Event debug logging** (`accessibility_event_logging_enabled`): Disabled. Settings → General → Debugging; applies immediately, no restart.
-```
-
-**Action 4.1.4** — (only with US3) modify the line of Action 4.1.3
-
-```diff
--- **Event debug logging** (`accessibility_event_logging_enabled`): Disabled. Settings → General → Debugging; applies immediately, no restart.
-+- **Event debug logging** (`accessibility_event_logging_enabled`): Disabled. Settings → General → Debugging, or `--ez accessibility_event_logging true` over adb; applies immediately, no restart.
+- **Event debug logging** (`accessibility_event_logging_enabled`): Disabled. Settings → Developer mode, or `--ez accessibility_event_logging true` over adb; applies immediately, no restart.
 ```
 
 **DoD**
 - [ ] Every name in the new lines matches the code of US1–US3.
 
-### Task 4.2 — `README.md` (adb configuration section; only with US3)
+### Task 4.2 — `README.md`
 
-**Action 4.2.1** — modify the `ADB_CONFIGURE` example block
+**Action 4.2.1** — modify the `ADB_CONFIGURE` example block (adb configuration section)
 
 ```diff
    --ez hide_from_recents false \
@@ -688,18 +809,27 @@ line after plan 70's.
  | `https_enabled` | boolean | Enable HTTPS with TLS |
 ```
 
+**Action 4.2.3** — modify the Server Settings table (Configuration section)
+
+```diff
+ | Approval Profiles | None | Per-app rules for what any connected AI may do in that app (Settings > Approval profiles). See [Approval Profiles](#approval-profiles). |
++| Accessibility Event Logging | Disabled | One logcat line per window-content change of any app (package name only); a debugging aid that applies immediately, also while the server runs (Settings > Developer mode, or the `accessibility_event_logging` adb extra). |
+```
+
 **DoD**
-- [ ] The extra name matches `AdbConfigHandler.EXTRA_ACCESSIBILITY_EVENT_LOGGING`.
+- [ ] The extra name matches `AdbConfigHandler.EXTRA_ACCESSIBILITY_EVENT_LOGGING`; the screen name matches `R.string.settings_developer_mode_title`.
 
 ### Task 4.3 — `docs/ARCHITECTURE.md`
 
-**Action 4.3.1** — modify, Configuration Flow (text under the diagram; the Mermaid block is unchanged)
+**Action 4.3.1** — modify, Configuration Flow (text under the diagram, after plan 70's approval-profiles paragraph;
+the Mermaid block is unchanged)
 
 ```diff
- Settings are read at server start time. Changing settings while the server is
- running requires a restart (UI disables config editing when server is running).
-+Exception: `accessibility_event_logging_enabled` is observed live by `McpAccessibilityService`
-+and stays editable while the server runs.
+ Approval profiles are the exception. They live in their own DataStore (`approval_profiles`) behind
+ `ApprovalProfileRepository`, can be edited while the server runs, and apply to the next tool call.
++
++Accessibility event logging (`accessibility_event_logging_enabled`, default off, Settings → Developer mode) is a
++second exception: `McpAccessibilityService` observes it live, and its toggle stays editable while the server runs.
 ```
 
 **DoD**
@@ -712,17 +842,21 @@ line after plan 70's.
 Same gates as plan 70 US10: tests and linters run only here, CI is the full-suite and `./gradlew build` gate (the
 local machine runs only this plan's JVM tests), CI read once per pushed fix.
 
+**Acceptance criteria**
+- [ ] Local lint and the listed JVM tests are green; reversal checks done; one `code-reviewer` round handled (D8).
+- [ ] PR open against `feat/approval-profiles`; its CI run read once and green.
+
 ### Task 5.1 — Local gates and review (the only lint and test pass of the plan)
 
 - [ ] `ktlint --format`, then `ktlint`, and `detekt` with `--config config/detekt/detekt.yml --build-upon-default-config`, from `~/.lint-tools/` on `app/src/main`, `app/src/test`, `app/src/testDebug`, `app/src/gms`, `app/src/testGms`: zero findings beyond the recorded `testGms` baseline (in particular no `LargeClass` on `SettingsRepositoryImpl`).
 - [ ] The new and changed JVM tests (`ServerConfigTest`, `SettingsRepositoryImplTest`, `SettingsRepositoryLoggingTest`, `SettingsRepositoryServerRunningTest`, `SettingsRepositoryUpdateCheckTest`, `EventChannelSettingsTest`, `GeofenceConfigRepositoryTest`, `DebugSettingsImplTest`, `AccessibilityEventLogSwitchTest`, `McpAccessibilityServiceTest`, `MainViewModelTest`, `AdbConfigHandlerTest`) run once locally with `~/.lint-tools/jvm-test/run_jvm_test.py`; failures fixed at the root cause.
 - [ ] Grep: no `TODO`, no new `@Suppress`, no hardcoded UI text in the changed Kotlin files, no AI attribution.
 - [ ] Reversal checks of Task 1.3 done by hand once (change the guard, see the test fail, restore).
-- [ ] `code-reviewer` in plan-compliance mode per D8 (proposal: one round). Every finding is either fixed or brought to the owner with a one-line reason; none is dropped silently.
+- [ ] One `code-reviewer` round in plan-compliance mode (D8). Every finding is either fixed or brought to the owner with a one-line reason; none is dropped silently.
 
 ### Task 5.2 — Publish and read CI
 
-- [ ] Commits in order, staging named files only: US1 → US2 → US3 → US4; push after each story with `git push -u origin feat/accessibility-debug-logging`.
+- [ ] US1–US4 were committed and pushed story by story (Constraints); the fixes of Task 5.1 are committed (named files only) and pushed.
 - [ ] PR `feat/accessibility-debug-logging` → `feat/approval-profiles` (`gh pr create --repo mlandolfi90/Lucky-Tool-Android --base feat/approval-profiles`), title `Plan 71: Accessibility event debug logging`, body per TOOLS.md, Manual QA steps of US2 and US5 listed as declared and not taken if the phone is offline.
 - [ ] Read the CI run once with `gh run view`: all jobs green, `0` lines matching `w: file:///`, the new test classes listed as passed. If a job fails: fix the root cause, push, and read the new run once.
 
@@ -730,17 +864,18 @@ local machine runs only this plan's JVM tests), CI read once per pushed fix.
 
 `COUNT` = `adb shell "logcat -d | grep -c 'Window content changed: package='"` (no `-s` filter: the tag contains a
 colon, which logcat would read as `tag:priority`; the grep runs on the device, so it works from a Windows host too).
+`LINES` = `adb shell "logcat -d | grep 'Window content changed: package=' | head"`.
 
 | ID | Step | Expected |
 |----|------|----------|
 | M5.1 | Setting off; `adb logcat -c`; use two apps for one minute; `COUNT` | `0` |
-| M5.2 | Turn the setting on (UI or US3 extra) without restarting anything; `adb logcat -c`; repeat the minute; `COUNT` | > 0; each matching line is `Window content changed: package=<pkg>` with no other field |
-| M5.3 | Turn it off again; `adb logcat -c`; repeat the minute; `COUNT` | `0` |
+| M5.2 | Turn the setting on in Settings → Developer mode without restarting anything; `adb logcat -c`; repeat the minute; `COUNT`, then `LINES` | `COUNT` > 0; each `LINES` line ends in `Window content changed: package=<pkg>` with no other field |
+| M5.3 | Turn it off over adb: `adb shell am broadcast -a com.danielealbano.androidremotecontrolmcp.ADB_CONFIGURE -n <app-id>/com.danielealbano.androidremotecontrolmcp.services.mcp.AdbConfigReceiver --ez accessibility_event_logging false` (`<app-id>` of the installed debug build, as in README); `adb logcat -c`; repeat the minute; `COUNT` | `0`; the Developer mode switch shows off |
 | M5.4 | Setting on; force-stop the app, re-enable the accessibility service if Android asks; `adb logcat -c`; repeat the minute; `COUNT` | > 0 (persisted) |
 
 ---
 
-## Review findings — plan-reviewer, round 1 of 1 (2026-10-13)
+## Review findings — plan-reviewer, round 1 of 2, before the owner decisions (2026-10-13)
 
 The reviewer ran ktlint 1.8.0 and detekt 2.0.0-alpha.5 (with plan 70's `detekt.yml` and the repo `.editorconfig`) on
 scratch copies of the 8 changed main files with every diff applied; all diff anchors applied cleanly
@@ -769,3 +904,32 @@ entry point, Compose toggle semantics, nothing new reaching logcat, owner decisi
 | R17 | INFO (OWNER) | D4 reason understated the privacy cost | D4 reason reworded (app-usage timeline, comparable to the existing window-state line) |
 | R18 | INFO (OWNER) | D7 omitted that the record plan shifts too | D7 names both shifts |
 | R19 | INFO | CRLF claim wrong here; plan file untracked; full suite only in CI | "Preserve each file's existing line endings"; the planning run commits the plan; US5 states CI is the full-suite and build gate |
+
+---
+
+## Review findings — plan-reviewer, round 2 of 2, after the owner decisions (2026-10-13)
+
+The reviewer applied every Kotlin diff of US1–US3 to scratch copies of the files at `origin/feat/approval-profiles`
+(e6c1ea5) with a script that fails on a missing or repeated anchor: every anchor matched once. ktlint 1.8.0 on the 15
+changed main files: 0 findings. detekt 2.0.0-alpha.5 (plan 70's `detekt.yml`): only `InvalidPackageDeclaration` from
+the scratch layout (no `LargeClass`, `TooManyFunctions`, `LongMethod` or `MaxLineLength`). Verified OK: header and
+order, preconditions, decision table vs body, Compose/Kotlin APIs (`toggleable`, `heightIn`, `heading()`,
+`Icons.Default.DeveloperMode`), Hilt/DataStore wiring, threading, privacy (package name only), test feasibility. 0
+CRITICAL, 4 WARNING, 10 INFO.
+
+| ID | Class | Finding | Resolution |
+|----|-------|---------|------------|
+| S1 | WARNING | D2 presented the index subtitle and the "Back" description as owner decisions; the planner added them | D2 and the line above the table mark them as a planner proposal pending the owner's OK before Task 2.1 |
+| S2 | WARNING | US4 AC requires ARCHITECTURE.md to state the default; Action 4.3.1 did not | Action 4.3.1 says "default off" |
+| S3 | WARNING | US3 AC's info log line had no test | `accessibility_event_logging true enables the setting` also verifies the `Log.i` call (Action 3.2.1) |
+| S4 | WARNING | All commits sat in US5, after the gates; `CLAUDE.md` asks to commit and push per story | Constraints: commit and push at the end of each of US1–US4; Task 5.2 commits only the Task 5.1 fixes |
+| S5 | INFO | Action 4.1.1 third hunk anchored on the base `data/repository/` line while its note said "after plan 70's line" | Hunk context is plan 70's `data/repository/` (approval profiles) line; note removed |
+| S6 | INFO | `RepositoryModule` has 9 functions after plan 70, not 8 | Action 1.1.6: 9 → 10 (detekt clean) |
+| S7 | INFO | `grep "SettingsRepositoryImpl("` does not match the production class declaration | Task 1.1 DoD: "exactly the 6 updated test sites" |
+| S8 | INFO | Lowercase `@Nested` class name (Action 1.3.6); `AdbConfigHandlerTest` uses camelCase functions plus `@DisplayName` | `@DisplayName("contentChangedLogLine") inner class ContentChangedLogLine`; Action 3.2.1 names the functions and states the table shows `@DisplayName` values |
+| S9 | INFO | Round 1 header said "1 of 1"; its R4 and R10 resolutions are stale | Round 1 retitled "1 of 2"; R4 is superseded by D6 (US3 is not droppable, adb clause in Action 4.1.3, Action 4.1.4 removed) and R10 by D8 (one round, decided) |
+| S10 | INFO | US5 had no acceptance criteria | Two AC added to US5 |
+| S11 | INFO | M5.2 could not show the line content with a count; the adb path could go untested | `LINES` command added; M5.2 turns it on from the UI, M5.3 turns it off with the full adb broadcast |
+| S12 | INFO | US1 AC on the service wiring had no stated verification | Task 1.3 DoD: Manual QA M5.1–M5.4 verify it (service not instantiable in a JVM test) |
+| S13 | INFO | `observe` returned a `Job` nobody used | `observe` returns `Unit`; `Job` import removed (Action 1.2.1) |
+| S14 | INFO | Two Constraints bullets restate `CLAUDE.md` rules | Not applied: no correctness or acceptance impact; the bullets carry plan-specific parts (package-name-only line, owner's tests-at-the-end order) |
