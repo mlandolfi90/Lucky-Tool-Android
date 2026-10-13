@@ -3,6 +3,7 @@ package com.danielealbano.androidremotecontrolmcp.services.accessibility
 import android.graphics.Rect
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
@@ -729,32 +730,152 @@ class AccessibilityTreeParserTest {
             assertNull(parser.parseTree(emptyHint).hintText)
         }
 
+        /**
+         * Stubs [AccessibilityNodeInfoCompat.wrap] for [node] so that its compat wrapper reports
+         * [labels] (in order) as its label list. Requires `mockkStatic(AccessibilityNodeInfoCompat::class)`.
+         * Returns the compat wrapper so a test can override its stubs.
+         */
+        private fun stubLabeledByList(
+            node: AccessibilityNodeInfo,
+            vararg labels: AccessibilityNodeInfo,
+        ): AccessibilityNodeInfoCompat {
+            val compatLabels =
+                labels.map { label ->
+                    mockk<AccessibilityNodeInfoCompat> { every { unwrap() } returns label }
+                }
+            val compatNode = mockk<AccessibilityNodeInfoCompat>()
+            every { compatNode.labeledByList } returns compatLabels
+            every { AccessibilityNodeInfoCompat.wrap(node) } returns compatNode
+            return compatNode
+        }
+
         @Test
         @DisplayName("parseNode resolves labeledBy text with contentDescription fallback")
         fun parseNodeResolvesLabeledByWithFallback() {
-            val labelWithText = mockk<AccessibilityNodeInfo>(relaxed = true)
-            every { labelWithText.text } returns "Card number"
-            val nodeWithTextLabel = createMockNode()
-            every { nodeWithTextLabel.labeledBy } returns labelWithText
-            assertEquals("Card number", parser.parseTree(nodeWithTextLabel).labeledByText)
+            mockkStatic(AccessibilityNodeInfoCompat::class)
+            try {
+                // Arrange
+                val labelWithText = mockk<AccessibilityNodeInfo>(relaxed = true)
+                every { labelWithText.text } returns "Card number"
+                val nodeWithTextLabel = createMockNode()
+                stubLabeledByList(nodeWithTextLabel, labelWithText)
 
-            val labelWithDesc = mockk<AccessibilityNodeInfo>(relaxed = true)
-            every { labelWithDesc.text } returns null
-            every { labelWithDesc.contentDescription } returns "Email address"
-            val nodeWithDescLabel = createMockNode()
-            every { nodeWithDescLabel.labeledBy } returns labelWithDesc
-            assertEquals("Email address", parser.parseTree(nodeWithDescLabel).labeledByText)
+                val labelWithDesc = mockk<AccessibilityNodeInfo>(relaxed = true)
+                every { labelWithDesc.text } returns null
+                every { labelWithDesc.contentDescription } returns "Email address"
+                val nodeWithDescLabel = createMockNode()
+                stubLabeledByList(nodeWithDescLabel, labelWithDesc)
+
+                // Act
+                val textResult = parser.parseTree(nodeWithTextLabel)
+                val descResult = parser.parseTree(nodeWithDescLabel)
+
+                // Assert
+                assertEquals("Card number", textResult.labeledByText)
+                assertEquals("Email address", descResult.labeledByText)
+            } finally {
+                unmockkStatic(AccessibilityNodeInfoCompat::class)
+            }
         }
 
         @Test
         @DisplayName("parseNode labeledBy failure yields null")
         fun parseNodeLabeledByFailureYieldsNull() {
-            val node = createMockNode()
-            every { node.labeledBy } throws IllegalStateException("stale node")
+            mockkStatic(AccessibilityNodeInfoCompat::class)
+            try {
+                // Arrange
+                val node = createMockNode()
+                val compatNode = stubLabeledByList(node)
+                every { compatNode.labeledByList } throws IllegalStateException("stale node")
 
+                // Act
+                val result = parser.parseTree(node)
+
+                // Assert
+                assertNull(result.labeledByText)
+            } finally {
+                unmockkStatic(AccessibilityNodeInfoCompat::class)
+            }
+        }
+
+        @Test
+        @DisplayName("parseNode labeledBy uses the most recently added label")
+        fun parseNodeLabeledByUsesMostRecentlyAddedLabel() {
+            mockkStatic(AccessibilityNodeInfoCompat::class)
+            try {
+                // Arrange
+                val olderLabel = mockk<AccessibilityNodeInfo>(relaxed = true)
+                every { olderLabel.text } returns "Old label"
+                val newerLabel = mockk<AccessibilityNodeInfo>(relaxed = true)
+                every { newerLabel.text } returns "New label"
+                val node = createMockNode()
+                stubLabeledByList(node, olderLabel, newerLabel)
+
+                // Act
+                val result = parser.parseTree(node)
+
+                // Assert
+                assertEquals("New label", result.labeledByText)
+            } finally {
+                unmockkStatic(AccessibilityNodeInfoCompat::class)
+            }
+        }
+
+        @Test
+        @DisplayName("parseNode labeledBy without labels yields null")
+        fun parseNodeLabeledByWithoutLabelsYieldsNull() {
+            mockkStatic(AccessibilityNodeInfoCompat::class)
+            try {
+                // Arrange
+                val node = createMockNode()
+                stubLabeledByList(node)
+
+                // Act
+                val result = parser.parseTree(node)
+
+                // Assert
+                assertNull(result.labeledByText)
+            } finally {
+                unmockkStatic(AccessibilityNodeInfoCompat::class)
+            }
+        }
+
+        @Test
+        @DisplayName("parseNode labeledBy ignores empty label text")
+        fun parseNodeLabeledByIgnoresEmptyLabelText() {
+            mockkStatic(AccessibilityNodeInfoCompat::class)
+            try {
+                // Arrange
+                val emptyLabel = mockk<AccessibilityNodeInfo>(relaxed = true)
+                every { emptyLabel.text } returns ""
+                every { emptyLabel.contentDescription } returns null
+                val node = createMockNode()
+                stubLabeledByList(node, emptyLabel)
+
+                // Act
+                val result = parser.parseTree(node)
+
+                // Assert
+                assertNull(result.labeledByText)
+            } finally {
+                unmockkStatic(AccessibilityNodeInfoCompat::class)
+            }
+        }
+
+        @Test
+        @DisplayName("parseNode labeledBy below API 36 reads the platform single-label getter")
+        fun parseNodeLabeledByBelowApi36ReadsPlatformSingleLabelGetter() {
+            // Arrange
+            val label = mockk<AccessibilityNodeInfo>(relaxed = true)
+            every { label.text } returns "Username"
+            val node = createMockNode()
+            every { node invoke "getLabeledBy" withArguments listOf<Any>() } returns label
+
+            // Act
             val result = parser.parseTree(node)
 
-            assertNull(result.labeledByText)
+            // Assert
+            assertEquals("Username", result.labeledByText)
         }
     }
 }

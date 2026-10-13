@@ -4,6 +4,7 @@ import android.graphics.Rect
 import android.util.Log
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import androidx.core.view.accessibility.AccessibilityNodeInfoCompat
 import javax.inject.Inject
 
 /**
@@ -216,14 +217,15 @@ class AccessibilityTreeParser
         fun isNodeVisible(node: AccessibilityNodeInfo): Boolean = node.isVisibleToUser
 
         /**
-         * Resolves the text of the node's label association ([AccessibilityNodeInfo.getLabeledBy]),
+         * Resolves the text of the node's label association ([AccessibilityNodeInfoCompat.getLabeledByList]),
          * preferring the label's text and falling back to its content description. Returns null when
-         * there is no label or it has no text. [getLabeledBy] can throw [IllegalStateException] on
+         * there is no label or it has no text. The last label is taken because the platform's single-label
+         * getter returns the most recently added one. Label lookups can throw [IllegalStateException] on
          * stale nodes, so failures are swallowed to null.
          */
         private fun readLabeledByText(node: AccessibilityNodeInfo): String? =
             runCatching {
-                node.labeledBy?.let { label ->
+                AccessibilityNodeInfoCompat.wrap(node).labeledByList.lastOrNull()?.unwrap()?.let { label ->
                     (label.text?.toString() ?: label.contentDescription?.toString())?.takeIf { it.isNotEmpty() }
                 }
             }.getOrNull()

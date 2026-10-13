@@ -130,9 +130,9 @@ private suspend fun ApplicationCall.handleAuthorize(
         return
     }
     // redirectValid guarantees the following are non-null.
-    val safeClient = client!!
-    val safeClientId = clientId!!
-    val safeRedirectUri = redirectUri!!
+    val safeClient = client
+    val safeClientId = clientId
+    val safeRedirectUri = redirectUri
     val canonical = canonicalResource(effectiveBaseUrl(this, deps.publicUrlOverride))
     val state = params["state"].orEmpty()
     val paramError = authorizeParamError(params, canonical)

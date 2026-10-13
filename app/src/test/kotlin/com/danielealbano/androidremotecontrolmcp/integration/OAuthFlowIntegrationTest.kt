@@ -1,25 +1,18 @@
 package com.danielealbano.androidremotecontrolmcp.integration
 
-import io.ktor.client.HttpClient
 import io.ktor.client.request.forms.FormDataContent
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
-import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.Parameters
 import io.ktor.http.Url
 import io.ktor.http.contentType
-import io.ktor.serialization.kotlinx.json.json
-import io.ktor.server.testing.ApplicationTestBuilder
 import io.mockk.coEvery
 import io.mockk.coVerify
-import io.modelcontextprotocol.kotlin.sdk.client.Client
-import io.modelcontextprotocol.kotlin.sdk.client.StreamableHttpClientTransport
-import io.modelcontextprotocol.kotlin.sdk.types.Implementation
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -301,6 +294,64 @@ class OAuthFlowIntegrationTest {
         }
 
     @Test
+    @DisplayName("refresh rejects invalid refresh token")
+    fun refreshRejectsInvalidRefreshToken() =
+        runTest {
+            McpIntegrationTestHelper.withOAuthTestApplication(publicUrlOverride = OVERRIDE) { _ ->
+                val clientId = register(client)
+                val resp = refreshRequest(client, clientId, "not-a-valid-refresh-token")
+                assertEquals(HttpStatusCode.BadRequest, resp.status)
+                assertTrue(resp.bodyAsText().contains("invalid_grant"))
+            }
+        }
+
+    @Test
+    @DisplayName("refresh rejects client_id mismatch")
+    fun refreshRejectsClientIdMismatch() =
+        runTest {
+            McpIntegrationTestHelper.withOAuthTestApplication(publicUrlOverride = OVERRIDE) { ctx ->
+                val clientId = register(client)
+                val tokens = danceToTokens(ctx, clientId, includeResource = true)
+                val mismatched = refreshRequest(client, "arc-other", tokens.refresh)
+                assertEquals(HttpStatusCode.BadRequest, mismatched.status)
+                assertTrue(mismatched.bodyAsText().contains("invalid_grant"))
+                // The rejection did not rotate the jti: the same refresh token still works with the right client_id.
+                val accepted = refreshRequest(client, clientId, tokens.refresh)
+                assertEquals(HttpStatusCode.OK, accepted.status)
+            }
+        }
+
+    @Test
+    @DisplayName("refresh rejects revoked client")
+    fun refreshRejectsRevokedClient() =
+        runTest {
+            McpIntegrationTestHelper.withOAuthTestApplication(publicUrlOverride = OVERRIDE) { ctx ->
+                val clientId = register(client)
+                val tokens = danceToTokens(ctx, clientId, includeResource = true)
+                ctx.clientRepository.revoke(clientId)
+                val resp = refreshRequest(client, clientId, tokens.refresh)
+                assertEquals(HttpStatusCode.BadRequest, resp.status)
+                assertTrue(resp.bodyAsText().contains("invalid_grant"))
+            }
+        }
+
+    @Test
+    @DisplayName("refresh accepts omitted client_id")
+    fun refreshAcceptsOmittedClientId() =
+        runTest {
+            McpIntegrationTestHelper.withOAuthTestApplication(publicUrlOverride = OVERRIDE) { ctx ->
+                val clientId = register(client)
+                val tokens = danceToTokens(ctx, clientId, includeResource = true)
+                val resp = refreshRequest(client, null, tokens.refresh)
+                assertEquals(HttpStatusCode.OK, resp.status)
+                val obj = Json.parseToJsonElement(resp.bodyAsText()).jsonObject
+                assertNotNull(obj["access_token"])
+                assertNotNull(obj["refresh_token"])
+                assertNotEquals(tokens.refresh, obj["refresh_token"]!!.jsonPrimitive.content)
+            }
+        }
+
+    @Test
     @DisplayName("revoked client token rejected on /mcp")
     fun revokedClientRejected() =
         runTest {
@@ -437,6 +488,33 @@ class OAuthFlowIntegrationTest {
         }
 
     @Test
+    @DisplayName("authorize with unknown or missing client_id returns 400 HTML without Location")
+    fun authorizeUnknownOrMissingClientId400() =
+        runTest {
+            McpIntegrationTestHelper.withOAuthTestApplication(publicUrlOverride = OVERRIDE) { _ ->
+                val noRedirect = createNoRedirectClient()
+                val unknown = authorize(noRedirect, "arc-unknown")
+                val missing =
+                    noRedirect.get("/authorize") {
+                        url {
+                            parameters.append("response_type", "code")
+                            parameters.append("redirect_uri", REDIRECT)
+                            parameters.append("code_challenge", CHALLENGE)
+                            parameters.append("code_challenge_method", "S256")
+                            parameters.append("state", "xyz")
+                            parameters.append("scope", "mcp")
+                            parameters.append("resource", CANONICAL)
+                        }
+                    }
+                for (resp in listOf(unknown, missing)) {
+                    assertEquals(HttpStatusCode.BadRequest, resp.status)
+                    assertNull(resp.headers["Location"])
+                    assertTrue(resp.headers["Content-Type"]?.contains("html") == true)
+                }
+            }
+        }
+
+    @Test
     @DisplayName("last-used updated once then throttled across two /mcp calls")
     fun lastUsedDebounced() =
         runTest {
@@ -477,181 +555,4 @@ class OAuthFlowIntegrationTest {
                 assertEquals(rawState, Url(redirect).parameters["state"])
             }
         }
-
-    // ── helpers ─────────────────────────────────────────────────────────────
-
-    private data class Tokens(
-        val access: String,
-        val refresh: String,
-    )
-
-    private suspend fun register(
-        client: HttpClient,
-        redirectUri: String = REDIRECT,
-    ): String {
-        val resp =
-            client.post("/register") {
-                contentType(ContentType.Application.Json)
-                setBody(
-                    """{"redirect_uris":["$redirectUri"],"token_endpoint_auth_method":"none",""" +
-                        """"grant_types":["authorization_code","refresh_token"],"response_types":["code"],""" +
-                        """"scope":"mcp","client_name":"Claude","application_type":"web"}""",
-                )
-            }
-        return Json
-            .parseToJsonElement(resp.bodyAsText())
-            .jsonObject["client_id"]!!
-            .jsonPrimitive.content
-    }
-
-    private data class AuthorizeOptions(
-        val redirectUri: String = REDIRECT,
-        val challengeMethod: String = "S256",
-        val resourceOverride: String? = null,
-        val includeResource: Boolean = true,
-        val state: String = "xyz",
-    )
-
-    private suspend fun authorize(
-        client: HttpClient,
-        clientId: String,
-        options: AuthorizeOptions = AuthorizeOptions(),
-    ): HttpResponse =
-        client.get("/authorize") {
-            url {
-                parameters.append("response_type", "code")
-                parameters.append("client_id", clientId)
-                parameters.append("redirect_uri", options.redirectUri)
-                parameters.append("code_challenge", CHALLENGE)
-                parameters.append("code_challenge_method", options.challengeMethod)
-                parameters.append("state", options.state)
-                parameters.append("scope", "mcp")
-                if (options.resourceOverride != null) {
-                    parameters.append("resource", options.resourceOverride)
-                } else if (options.includeResource) {
-                    parameters.append("resource", CANONICAL)
-                }
-            }
-        }
-
-    private suspend fun danceToCode(
-        ctx: McpIntegrationTestHelper.OAuthTestContext,
-        clientId: String,
-        includeResource: Boolean,
-    ): String {
-        authorize(ctx.httpClient, clientId, AuthorizeOptions(includeResource = includeResource))
-        val approval =
-            ctx.approvalCoordinator
-                .observePending()
-                .value
-                .single()
-        ctx.approvalCoordinator.approve(approval.id, System.currentTimeMillis())
-        val status = ctx.httpClient.get("/authorize/status?id=${approval.id}")
-        val redirect =
-            Json
-                .parseToJsonElement(status.bodyAsText())
-                .jsonObject["redirect"]!!
-                .jsonPrimitive.content
-        return Url(redirect).parameters["code"]!!
-    }
-
-    private suspend fun danceToTokens(
-        ctx: McpIntegrationTestHelper.OAuthTestContext,
-        clientId: String,
-        includeResource: Boolean,
-    ): Tokens {
-        val code = danceToCode(ctx, clientId, includeResource)
-        val resp = tokenRequest(ctx.httpClient, clientId, code, verifier = VERIFIER, includeResource = includeResource)
-        assertEquals(HttpStatusCode.OK, resp.status)
-        val obj = Json.parseToJsonElement(resp.bodyAsText()).jsonObject
-        return Tokens(obj["access_token"]!!.jsonPrimitive.content, obj["refresh_token"]!!.jsonPrimitive.content)
-    }
-
-    private suspend fun tokenRequest(
-        client: HttpClient,
-        clientId: String,
-        code: String,
-        verifier: String,
-        includeResource: Boolean,
-    ): HttpResponse =
-        client.post("/token") {
-            setBody(
-                FormDataContent(
-                    Parameters.build {
-                        append("grant_type", "authorization_code")
-                        append("code", code)
-                        append("redirect_uri", REDIRECT)
-                        append("client_id", clientId)
-                        append("code_verifier", verifier)
-                        if (includeResource) append("resource", CANONICAL)
-                    },
-                ),
-            )
-        }
-
-    private suspend fun refreshRequest(
-        client: HttpClient,
-        clientId: String,
-        refreshToken: String,
-    ): HttpResponse =
-        client.post("/token") {
-            setBody(
-                FormDataContent(
-                    Parameters.build {
-                        append("grant_type", "refresh_token")
-                        append("refresh_token", refreshToken)
-                        append("client_id", clientId)
-                    },
-                ),
-            )
-        }
-
-    private suspend fun ApplicationTestBuilder.connectMcp(accessToken: String): Client {
-        val httpClient =
-            createClient {
-                install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
-                    json(io.modelcontextprotocol.kotlin.sdk.types.McpJson)
-                }
-                install(io.ktor.client.plugins.sse.SSE)
-            }
-        val transport =
-            StreamableHttpClientTransport(
-                client = httpClient,
-                url = "/mcp",
-                requestBuilder = { header("Authorization", "Bearer $accessToken") },
-            )
-        val mcpClient = Client(clientInfo = Implementation(name = "oauth-test-client", version = "1.0.0"))
-        mcpClient.connect(transport)
-        return mcpClient
-    }
-
-    private fun ApplicationTestBuilder.createNoRedirectClient(): HttpClient =
-        createClient {
-            followRedirects = false
-            install(io.ktor.client.plugins.contentnegotiation.ContentNegotiation) {
-                json(io.modelcontextprotocol.kotlin.sdk.types.McpJson)
-            }
-        }
-
-    private fun io.ktor.client.request.HttpRequestBuilder.mcpInitializeBody() {
-        header("Accept", "application/json")
-        contentType(ContentType.Application.Json)
-        setBody(
-            """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18",""" +
-                """"capabilities":{},"clientInfo":{"name":"t","version":"1"}}}""",
-        )
-    }
-
-    private fun kotlinx.serialization.json.JsonElement.jsonObjectArray(): List<String> =
-        (this as kotlinx.serialization.json.JsonArray).map { it.jsonPrimitive.content }
-
-    private companion object {
-        const val REDIRECT = "https://claude.ai/api/mcp/auth_callback"
-        const val OVERRIDE = "https://test.host"
-        const val CANONICAL = "https://test.host/mcp"
-
-        // RFC 7636 Appendix B PKCE test vector.
-        const val VERIFIER = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
-        const val CHALLENGE = "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM"
-    }
 }

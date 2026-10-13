@@ -71,6 +71,25 @@ class OAuthAccessValidatorTest {
         }
 
     @Test
+    @DisplayName("rejected token never touches last-used")
+    fun rejectedNeverTouchesLastUsed() =
+        runTest {
+            coEvery { tokenService.verifyAccessToken("wrong-aud") } returns
+                AccessTokenClaims("c1", "https://other/mcp")
+            coEvery { clientRepository.getClient("c1") } returns client("c1")
+            coEvery { tokenService.verifyAccessToken("revoked") } returns AccessTokenClaims("c2", resource)
+            coEvery { clientRepository.getClient("c2") } returns null
+            val validator = OAuthAccessValidator(tokenService, clientRepository, serverLog)
+
+            val wrongAudResult = validator.validate("wrong-aud", resource)
+            val revokedResult = validator.validate("revoked", resource)
+
+            assertFalse(wrongAudResult)
+            assertFalse(revokedResult)
+            coVerify(exactly = 0) { clientRepository.touchLastUsed(any(), any()) }
+        }
+
+    @Test
     @DisplayName("touchLastUsed called once then throttled within window")
     fun touchDebounced() =
         runTest {

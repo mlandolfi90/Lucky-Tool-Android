@@ -305,6 +305,8 @@ android {
 kotlin {
     compilerOptions {
         jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        // Zero-warning gate: any Kotlin compiler warning fails the build (every variant and test source set).
+        allWarningsAsErrors.set(true)
     }
 }
 
@@ -422,6 +424,7 @@ dependencies {
     // Hilt
     implementation(libs.hilt.android)
     implementation(libs.hilt.navigation.compose)
+    implementation(libs.androidx.hilt.lifecycle.viewmodel.compose)
     ksp(libs.hilt.compiler)
 
     // WorkManager + Hilt integration (periodic in-app update check)

@@ -37,24 +37,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.data.model.CloudflareTunnelMode
 import com.danielealbano.androidremotecontrolmcp.data.model.ServerStatus
 import com.danielealbano.androidremotecontrolmcp.data.model.TunnelProviderType
 import com.danielealbano.androidremotecontrolmcp.data.model.TunnelStatus
+import com.danielealbano.androidremotecontrolmcp.ui.components.setPlainText
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.MainViewModel
+import kotlinx.coroutines.launch
 
 private const val STATUS_INDICATOR_SIZE_DP = 16
 
@@ -524,7 +526,8 @@ private fun CloudflareTokenFields(
     onTokenChange: (String) -> Unit,
 ) {
     var showToken by remember { mutableStateOf(false) }
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
 
     Column {
         Text(
@@ -578,7 +581,7 @@ private fun CloudflareTokenFields(
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = { clipboardManager.setText(AnnotatedString(serviceUrl)) }) {
+            IconButton(onClick = { scope.launch { clipboard.setPlainText(serviceUrl) } }) {
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
                     contentDescription = stringResource(R.string.remote_access_cloudflare_service_url_copy),

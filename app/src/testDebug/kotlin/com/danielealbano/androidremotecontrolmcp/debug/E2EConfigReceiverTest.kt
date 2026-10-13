@@ -20,6 +20,7 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.DisplayName
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertNotNull
 
 @DisplayName("E2EConfigReceiver")
 class E2EConfigReceiverTest {
@@ -49,7 +50,9 @@ class E2EConfigReceiverTest {
         // The Hilt-generated base class has a volatile boolean `injected` field
         // that gates the inject(context) call in onReceive(). Setting it to true
         // prevents the Hilt injection from running, so our manually-set mocks are used.
-        val injectedField = receiver.javaClass.superclass.getDeclaredField("injected")
+        val hiltBaseClass = receiver.javaClass.superclass
+        assertNotNull(hiltBaseClass, "E2EConfigReceiver must extend the Hilt-generated base class")
+        val injectedField = hiltBaseClass.getDeclaredField("injected")
         injectedField.isAccessible = true
         injectedField.setBoolean(receiver, true)
     }
