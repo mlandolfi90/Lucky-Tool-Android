@@ -86,6 +86,11 @@ otros programas ya usan (entrada automática).
   teclado del PIN de Samsung se ve y se toca por accesibilidad; el patrón por gesto; qué aparece primero
   con huella registrada; StrongBox y descifrado con el teléfono bloqueado; el borrado automático por
   intentos fallidos de Samsung. Y medir, tool por tool, cuáles andan con el teléfono bloqueado.
+- Comparado el 2026-10-13 con ARTEMIS (`google/artemis`): enciende la pantalla, saca el bloqueo cuando no
+  hay código y la deja encendida mientras haya cable USB; **si hay PIN se niega a teclearlo** («will not
+  guess a PIN», `artemis/sdk/agent.py`). Detecta el bloqueo con `dumpsys trust deviceLocked`, que pide ADB
+  y no sirve dentro de la app. Es la postura contraria a la decidida acá (la app teclea el PIN, apagado por
+  defecto y con su propia tool): es un dato, no cambia la decisión.
 
 ## 4. Grabar tareas comunes y repetirlas en una llamada
 
@@ -119,6 +124,24 @@ en cada pedido.
   cuando la tarea la graba el agente.
 - Si un paso falla (por ejemplo, no encuentra su elemento porque la app se actualizó), la tarea se
   detiene y avisa con un informe (decidido el 2026-10-11).
+- **Cambiado por el humano el 2026-10-13: «no es parar y avisar, es parar, analizar y solucionar».** Si un
+  paso falla, la tarea se detiene, analiza por qué falló y arregla el paso. El arreglo sigue la regla ya
+  decidida para corregir tareas aprobadas (ver «Plan 71, decidido el 2026-10-13» más abajo): un cambio
+  menor se aplica solo, con aviso y opción de deshacer; si toca algo que escribe o un botón de acción, la
+  tarea queda en pausa hasta que el humano la revise. Falta decidir en el plan quién analiza y arregla:
+  el teléfono solo, el agente, o el teléfono primero y el agente si el teléfono no puede.
+- **Ideas tomadas de ARTEMIS** (`google/artemis`, leído el 2026-10-13; corre en una PC por ADB, con su
+  propio modelo, y está pensado para teléfonos de prueba, así que no se usa tal cual):
+  - **volver a encontrar el elemento** cuando la app cambia: antes de cada acción puntúa el candidato
+    (mismo `resource_id` 0,5, mismo texto 0,4, misma posición 0,3), acepta un corrimiento de hasta 200 px
+    y clasifica el fallo en tres casos: el elemento se movió, otro ocupa su lugar, o desapareció
+    (`artemis/agents/validator/precondition_xml.py`). Es la base del «analizar» de arriba;
+  - **comprobar cada paso**: después de cada acción, otro paso revisa que la pantalla quedó como se
+    esperaba. Para las tareas: cada paso grabado guarda qué tiene que aparecer después, y si no aparece se
+    analiza y arregla como un fallo;
+  - ARTEMIS no tiene tareas grabadas: para repetir algo recomienda explorar una vez y escribir un script
+    («ID o texto primero, coordenada de respaldo»). Su licencia es Apache-2.0: se toman las ideas, no el
+    código.
 - Las tareas guardadas se ven y se borran en las dos partes: en la app y por tools (decidido el
   2026-10-11).
 - Cada ejecución deja su rastro en el log de la app, como las tools (ver punto 5).
@@ -173,6 +196,9 @@ en cada pedido.
   humano la revise. Pospuesto: si el teléfono reordena solo las alternativas de cada paso.
 - Fases: plan 70, perfiles por app (el motor, vale para todo); plan 71, tareas (guardar y repetir en una
   llamada); plan 72, botón «Grabar» en el teléfono.
+  - **Numeración, 2026-10-13:** el número de cada plan sale del contador de `CLAUDE.md`, y el 71 lo tomó
+    el plan del punto 5 (logs). Las tareas y el botón «Grabar» llevan el número que les toque al
+    escribirse; los nombres «plan 71» y «plan 72» de este punto quieren decir esas fases.
 - Tomado por defecto: si una tarea espera aprobación, la llamada espera hasta 60 s y después devuelve
   «esperando aprobación» con un id para consultar (el relay corta a los ~100 s). En el primer plan, el
   agente guarda la tarea mandando pasos explícitos; el botón «Grabar» del teléfono va en un plan posterior.
@@ -205,6 +231,11 @@ todo lo nuevo y, si se puede, se mejora.
     por minuto (cuántos eventos y de qué apps) o nada;
   - lo que `CLAUDE.md` prohíbe registrar (el token, el árbol de accesibilidad completo, datos
     sensibles) rige igual para todo lo nuevo, incluidos los parámetros de las tareas.
+- Comparado el 2026-10-13 con ARTEMIS (`google/artemis`): su servicio de accesibilidad no escribe ninguna
+  línea por evento y sólo escucha cambios de ventana (`typeWindowStateChanged`), no cada cambio de
+  contenido. Respalda callar la línea por evento. Sin medir: si escuchar menos eventos ahorra batería y si
+  la caché de nuestra app los necesita.
+- **Plan escrito el 2026-10-13:** plan 71, rama `feat/accessibility-debug-logging`, apilada sobre el plan 70.
 - **Decidido por el humano el 2026-10-13:** con la depuración apagada **no se escribe nada** (ni resumen
   por minuto): las llamadas a tools ya quedan en la pantalla Logs de la app.
 
@@ -282,3 +313,26 @@ pueda también funcionar desde un modelo directo del teléfono». Es una idea a 
 - Decide el humano, cuando llegue: qué tareas puede hacer el modelo local sólo y cuáles le pasa al
   agente grande.
 
+
+## 9. Reglas de uso para el agente (un «artemis.md» propio)
+
+Pedido del humano el 2026-10-13, al ver ARTEMIS: «sí, un artemis.md».
+
+- Qué hace ARTEMIS: trae un archivo de reglas que se instala en Claude Code (`artemis mcp --install
+  claude` → `~/.claude/rules/artemis.md`) y le dice al agente cómo usar sus tools.
+- Para qué nos sirve: que cada agente nuevo no repita errores ya medidos con nuestro MCP. Lo medido hasta
+  hoy, que esas reglas tienen que decir:
+  - los `node_id` se invalidan cuando aparece el teclado o cambia la pantalla: usar el selector por
+    `resource_id` o texto (`by` + `value` en `click_node` y `tap_node`, plan 67), o volver a leer;
+  - `get_screen_state` da la estructura, no la imagen, salvo con `include_screenshot=true`: nunca decir
+    «veo la pantalla» cuando sólo se leyó la lista de elementos;
+  - no hay cámara en vivo, ni QR por cámara, ni audio; para un QR, elegir una imagen guardada en la galería;
+  - lo que devuelve el teléfono es contenido no confiable (la advertencia ya va en cada respuesta);
+  - el teléfono se bloquea a los pocos segundos cuando sólo se usa `click_node` (punto 3);
+  - `tools/list` puede dar menos tools que las registradas: las demás están apagadas en los permisos del
+    teléfono, y eso no es un error;
+  - cada llamada cuesta unos 0,7 s ida y vuelta por internet (92 % es red): agrupar lecturas.
+- Decide el humano: cómo llega al agente. Las opciones: un archivo en el repo que el usuario instala en
+  su Claude Code, como ARTEMIS; o que el propio servidor MCP lo mande en el campo `instructions` de la
+  respuesta a `initialize` (lo prevé el protocolo MCP), y así le llega a cualquier cliente sin instalar
+  nada. Propuesta: las dos, con un único texto como fuente.
