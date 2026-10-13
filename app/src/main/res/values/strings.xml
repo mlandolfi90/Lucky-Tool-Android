@@ -159,6 +159,41 @@
     <string name="server_logs_type_channel">Channel</string>
     <string name="server_logs_type_settings">Settings</string>
     <string name="server_logs_type_privacy">Privacy</string>
+    <!-- Plan 70 · US5 -->
+    <string name="server_logs_type_approval">Approvals</string>
+    <string name="approval_log_line_full">%1$s · %2$s — %3$s</string>
+    <string name="approval_log_line_app">%1$s · %2$s</string>
+    <string name="approval_log_outcome_approved">Ran with approval</string>
+    <string name="approval_log_outcome_denied">Denied</string>
+    <string name="approval_log_outcome_expired">Approval expired</string>
+    <string name="approval_log_outcome_forbidden">Forbidden</string>
+    <string name="approval_log_outcome_needs_confirmation">Waiting for confirmation in the chat</string>
+    <string name="approval_log_outcome_awaiting_approval">Waiting for your approval</string>
+    <string name="approval_log_outcome_too_many_pending">Too many pending approvals</string>
+    <string name="approval_log_outcome_reevaluated">Checked again</string>
+    <string name="approval_log_outcome_owner_approved">Approved by you</string>
+    <string name="approval_log_outcome_owner_denied">Denied by you</string>
+    <string name="approval_log_outcome_exception_added">Exception added</string>
+    <string name="approval_log_outcome_exception_removed">Exception removed</string>
+    <string name="approval_log_outcome_profile_created">Profile created</string>
+    <string name="approval_log_outcome_profile_updated">Profile updated</string>
+    <string name="approval_log_outcome_profile_deleted">Profile deleted</string>
+    <string name="approval_log_reason_no_profile">no profile</string>
+    <string name="approval_log_reason_own_package">this app</string>
+    <string name="approval_log_reason_rule">profile rule</string>
+    <string name="approval_log_reason_amount_tier">amount tier</string>
+    <string name="approval_log_reason_amount_above_max">amount above maximum</string>
+    <string name="approval_log_reason_unknown_target">unidentified target</string>
+    <string name="approval_log_reason_action_keyword">action word</string>
+    <string name="approval_log_reason_profile_unreadable">unreadable profile</string>
+    <string name="approval_log_cause_target_unresolved">target not found</string>
+    <string name="approval_log_cause_ime_input">keyboard input in a protected app</string>
+    <string name="approval_log_cause_background_component">background component of a protected app</string>
+    <string name="approval_log_cause_unresolved_implicit_intent">intent with no known target</string>
+    <string name="approval_log_marker_forbidden">Forbidden by an approval profile</string>
+    <string name="approval_log_marker_needs_confirmation">Needs confirmation in the chat</string>
+    <string name="approval_log_marker_awaiting_approval">Waiting for your approval on the device</string>
+    <string name="approval_log_marker_denied">Denied on the device</string>
 
     <!-- Remote Access / Tunnel -->
     <string name="remote_access_title">Remote Access</string>
