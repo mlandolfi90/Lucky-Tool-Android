@@ -197,7 +197,7 @@ graph TB
 - `McpServer.running`: `AtomicBoolean`
 - Accessibility node access: Must be on main thread (Android requirement)
 - `ActionApprovalCoordinator`: in-memory state guarded by one `Mutex` (same pattern as `OAuthApprovalCoordinatorImpl`); no critical section suspends
-- `ToolPolicyGate` mutation lock: while at least one approval profile is stored (or the profile store is unreadable), every call of a tool class that is not read-only is resolved, evaluated and, when authorized, run under a single `Mutex`, one call at a time; a long mutating call (`type`, about 250 ms per character) queues the others. The `NOTIFY` wait (up to 25 s, a suspended request coroutine) releases the lock; after the owner approves, the call re-checks under the lock before it runs.
+- `ToolPolicyGate` mutation lock: while at least one approval profile is stored (or the profile store is unreadable), every call of a tool class that is not read-only is resolved, evaluated and, when authorized, run under a single `Mutex`, one call at a time; a long mutating call (`type`, about 250 ms per character) queues the others. The `NOTIFY` wait (up to 25 s, a suspended request coroutine) releases the lock; after the owner approves, the call waits (up to 3 s) for the approval screen to close, so the re-check reads the app underneath, then re-checks under the lock before it runs; if the screen stays open (more requests waiting) it returns `awaiting_approval` and keeps the grant for the repeat.
 - `ApprovalProfileRepository`: in-memory `ProfilesSnapshot`, replaced only after the DataStore write succeeds; writes are serialized by the repository `Mutex`
 
 ---

@@ -2,6 +2,8 @@ package com.danielealbano.androidremotecontrolmcp.policy.gate
 
 import com.danielealbano.androidremotecontrolmcp.data.repository.ApprovalProfileRepository
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibility
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibilityImpl
 import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicyEngine
 import com.danielealbano.androidremotecontrolmcp.policy.log.ApprovalEventLogger
 import com.danielealbano.androidremotecontrolmcp.policy.model.RuleMode
@@ -31,6 +33,7 @@ class ToolPolicyGateImpl internal constructor(
     private val profileRepository: ApprovalProfileRepository,
     events: ApprovalEventLogger,
     private val timing: GateTiming,
+    screen: ApprovalScreenVisibility = ApprovalScreenVisibilityImpl(),
 ) : ToolPolicyGate {
     @Inject
     constructor(
@@ -39,10 +42,11 @@ class ToolPolicyGateImpl internal constructor(
         coordinator: ActionApprovalCoordinator,
         profileRepository: ApprovalProfileRepository,
         events: ApprovalEventLogger,
-    ) : this(subjectResolver, engine, coordinator, profileRepository, events, GateTiming.PRODUCTION)
+        screen: ApprovalScreenVisibility,
+    ) : this(subjectResolver, engine, coordinator, profileRepository, events, GateTiming.PRODUCTION, screen)
 
     private val assessor = GateAssessor(subjectResolver, engine, profileRepository)
-    private val authorizer = GateAuthorizer(coordinator, GateOutcomes(events, timing.nowMs), timing.nowMs)
+    private val authorizer = GateAuthorizer(coordinator, GateOutcomes(events, timing.nowMs), timing.nowMs, screen)
     private val mutationMutex = Mutex()
 
     override suspend fun guard(

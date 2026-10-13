@@ -2,6 +2,7 @@ package com.danielealbano.androidremotecontrolmcp.policy.gate
 
 import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibility
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingAction
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingActionRequest
 import com.danielealbano.androidremotecontrolmcp.policy.approval.TooManyPendingActionsException
@@ -15,6 +16,7 @@ internal class GateAuthorizer(
     private val coordinator: ActionApprovalCoordinator,
     private val outcomes: GateOutcomes,
     private val nowMs: () -> Long,
+    private val screen: ApprovalScreenVisibility,
 ) {
     suspend fun authorize(
         call: GateCall,
@@ -26,7 +28,11 @@ internal class GateAuthorizer(
             is Assessment.Evaluated -> authorizeDecision(call, assessment)
         }
 
-    /** Waits up to [waitMs] (0: no wait) for the owner, then reads the entry once; APPROVED consumes the grant. */
+    /**
+     * Waits up to [waitMs] (0: no wait) for the owner, then reads the entry once; APPROVED consumes the grant. After
+     * a wait, an approval is used only once the approval screen has closed: while it still covers the app (the
+     * owner has more requests open), the call returns `awaiting_approval` and the grant stays for the repeat.
+     */
     suspend fun awaitOwner(
         call: GateCall,
         awaiting: Authorization.AwaitOwner,
@@ -39,7 +45,9 @@ internal class GateAuthorizer(
         }
         return when (coordinator.stateOf(awaiting.pending.id, nowMs())) {
             ApprovalState.APPROVED -> {
-                if (coordinator.consumeGrant(assessment.fingerprint, RuleMode.NOTIFY, nowMs())) {
+                if (waitMs > 0L && !screen.awaitHidden(SCREEN_CLOSE_WAIT_MS)) {
+                    Verdict.Halt(outcomes.awaiting(call, decision, awaiting.pending))
+                } else if (coordinator.consumeGrant(assessment.fingerprint, RuleMode.NOTIFY, nowMs())) {
                     outcomes.approved(call, decision)
                     Verdict.Proceed(RuleMode.NOTIFY)
                 } else {
@@ -150,4 +158,9 @@ internal class GateAuthorizer(
         } catch (_: TooManyPendingActionsException) {
             null
         }
+
+    private companion object {
+        /** How long an approved call waits for the approval screen to close before its re-check. */
+        const val SCREEN_CLOSE_WAIT_MS = 3_000L
+    }
 }

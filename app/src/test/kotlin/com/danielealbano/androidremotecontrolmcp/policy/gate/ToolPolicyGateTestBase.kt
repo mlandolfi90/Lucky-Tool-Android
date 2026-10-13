@@ -7,6 +7,7 @@ import com.danielealbano.androidremotecontrolmcp.policy.PolicyFixtures
 import com.danielealbano.androidremotecontrolmcp.policy.PolicyFixtures.BANK_PACKAGE
 import com.danielealbano.androidremotecontrolmcp.policy.PolicyFixtures.NOW_MS
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinatorImpl
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibilityImpl
 import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicySubject
 import com.danielealbano.androidremotecontrolmcp.policy.log.ApprovalEventLoggerImpl
 import com.danielealbano.androidremotecontrolmcp.policy.model.ApprovalProfile
@@ -48,6 +49,7 @@ open class ToolPolicyGateTestBase {
     protected val coordinator = ActionApprovalCoordinatorImpl()
     protected val clock = AtomicLong(NOW_MS)
     protected val serverLog = RecordingServerLogRepository()
+    protected val screen = ApprovalScreenVisibilityImpl()
     protected val gate =
         ToolPolicyGateImpl(
             subjects,
@@ -56,6 +58,7 @@ open class ToolPolicyGateTestBase {
             repository,
             ApprovalEventLoggerImpl(serverLog),
             GateTiming(NOTIFY_WAIT_MS) { clock.get() },
+            screen,
         )
     protected val paySelector = PolicyFixtures.resourceId(PAY_RESOURCE_ID)
     protected val paySubject =

@@ -26,6 +26,8 @@ import com.danielealbano.androidremotecontrolmcp.mcp.oauth.OAuthApprovalCoordina
 import com.danielealbano.androidremotecontrolmcp.mcp.oauth.OAuthApprovalCoordinatorImpl
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinatorImpl
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibility
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibilityImpl
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyPipeline
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyPipelineImpl
 import com.danielealbano.androidremotecontrolmcp.privacy.model.PrivacyModelStore
@@ -211,6 +213,11 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindActionApprovalCoordinator(impl: ActionApprovalCoordinatorImpl): ActionApprovalCoordinator
+
+    /** Binds the tracker of the owner's approval screen, which approved NOTIFY calls wait on before re-checking. */
+    @Binds
+    @Singleton
+    abstract fun bindApprovalScreenVisibility(impl: ApprovalScreenVisibilityImpl): ApprovalScreenVisibility
 }
 
 @Suppress("TooManyFunctions")
