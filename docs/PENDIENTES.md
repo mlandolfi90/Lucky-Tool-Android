@@ -228,3 +228,25 @@ chanel». Surgió al preguntar qué es el canal y cómo se hace que un agente se
   en segundos o alcanza con que el agente pregunte cada tanto.
 - Decidido por el humano el 2026-10-13: va **después** del punto 4.
 
+## 8. Un agente que corra en el propio teléfono
+
+Pedido del humano el 2026-10-13: «cuando se puedan usar los modelos locales en los teléfonos, que la app
+pueda también funcionar desde un modelo directo del teléfono». Es una idea a futuro, no un plan.
+
+- Qué sería: además de los agentes que se conectan desde afuera, un modelo de lenguaje corriendo **en el
+  teléfono** usaría las mismas tools de la app, sin internet y sin que los datos salgan del aparato.
+- Ya existe una base: la app corre un modelo ONNX en el teléfono para el Privacy Mode
+  (`OrtPiiModelRunner`), así que correr modelos locales no es nuevo para ella.
+- Sin verificar: qué modelo de lenguaje local puede usar una app en el teléfono del humano (Samsung,
+  Android 16) y con qué API; si es apto para manejar varias pantallas seguidas o sólo tareas cortas; el
+  costo en batería y temperatura.
+- Usos que encajan con lo ya decidido:
+  - **correr tareas guardadas** (plan 71) y decidir lo rutinario sin depender de la red;
+  - **despertar al agente** (punto 7): el modelo local lee el evento y decide si vale la pena avisar al
+    agente grande, sin sacar el texto de las notificaciones del teléfono.
+- Reglas que ya cubren el caso: el modelo local es **un agente más**, así que los perfiles por app del
+  plan 70 lo atan igual que a cualquier otro; y lee contenido no confiable de la pantalla, así que la
+  advertencia anti-inyección le aplica con más razón, porque no hay un humano en el medio.
+- Decide el humano, cuando llegue: qué tareas puede hacer el modelo local sólo y cuáles le pasa al
+  agente grande.
+
