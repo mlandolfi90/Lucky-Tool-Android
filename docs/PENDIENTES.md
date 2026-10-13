@@ -133,9 +133,14 @@ en cada pedido.
     Prohibido. El humano lo edita en la app.
   - **Monto máximo** por tramos dentro del perfil (por ejemplo: hasta X corre solo, más arriba Confirmar,
     más arriba Huella, más arriba Prohibido).
-- Abierto: con tools sueltas la app no sabe si un número escrito es un monto. Propuesta: en una app con
-  perfil, todo número escrito cuenta como monto (por lo seguro), o el monto máximo vale sólo en tareas
-  grabadas, donde el parámetro se marca como monto. Decide el humano.
+- **Monto, decidido por el humano el 2026-10-13 («A + excepciones»):** en una app con perfil, **todo número
+  escrito cuenta como monto** (por lo seguro, venga de una tarea o de un agente suelto; `1.500,50` también
+  es número; los campos de contraseña nunca cuentan). La pantalla de aprobación ofrece «este campo no es un
+  monto», que excluye ese campo para siempre en esa app. Un monto que no se escribe (deslizador, botones
+  «+1000») no lo ve el límite: la red real es la columna botón de acción, que en apps de dinero nunca va
+  en «corre sola».
+- Fases: plan 70, perfiles por app (el motor, vale para todo); plan 71, tareas (guardar y repetir en una
+  llamada); plan 72, botón «Grabar» en el teléfono.
 - Tomado por defecto: si una tarea espera aprobación, la llamada espera hasta 60 s y después devuelve
   «esperando aprobación» con un id para consultar (el relay corta a los ~100 s). En el primer plan, el
   agente guarda la tarea mandando pasos explícitos; el botón «Grabar» del teléfono va en un plan posterior.
