@@ -76,8 +76,11 @@ internal class GateAuthorizer(
     }
 
     /**
-     * Consumes the owner's NOTIFY grant for [assessment]. When it is gone, an identical joined call used it first:
-     * `already_used`, so the agent re-reads the screen instead of repeating an action that may be done.
+     * Consumes the owner's NOTIFY grant for [assessment]. Any failure returns `already_used` (owner decision
+     * 2026-10-13), so the agent re-reads the screen instead of repeating an action that may be done. The usual cause
+     * is an identical joined call that used the grant first; the rare others are a server stop (`clearAll` drops
+     * every grant) and an entry re-evaluated down to ASK_IN_CHAT and then confirmed in the chat (a chat-strength
+     * grant does not satisfy NOTIFY).
      */
     suspend fun consumeOwnerGrant(
         call: GateCall,

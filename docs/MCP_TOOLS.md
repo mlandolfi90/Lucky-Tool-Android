@@ -364,7 +364,7 @@ The engine's `no_profile` reason never blocks a call and never appears in a resu
     "content": [
       {
         "type": "text",
-        "text": "<untrusted-content warning>\n{\"status\":\"awaiting_approval\",\"approval_id\":\"0a1b2c3d4e5f60718293a4b5c6d7e8f9\",\"app\":\"com.example.bank\",\"action\":\"action_button\",\"expires_at_ms\":1760000300000,\"next\":\"poll get_approval_status, then repeat this exact call\"}"
+        "text": "<untrusted-content warning>\n{\"status\":\"awaiting_approval\",\"approval_id\":\"0a1b2c3d4e5f60718293a4b5c6d7e8f9\",\"app\":\"com.example.bank\",\"action\":\"action_button\",\"expires_at_ms\":1760000300000,\"next\":\"poll get_approval_status and act on its status; if approved, repeat this exact call\"}"
       }
     ]
   }
@@ -3852,7 +3852,7 @@ Returns the state of an approval request. With `wait_ms` above 0 it long-polls: 
 | `pending` | Not decided yet. `expires_at_ms` is when the request expires (5 minutes after it was created). |
 | `approved` | Approved, on the device or through `android_confirm_human_approval`. Repeat the exact original call within 2 minutes; the grant is single use. |
 | `denied` | Denied by the owner, by a stricter re-check, or because the server stopped. Do not retry. |
-| `expired` | Not decided within its 5-minute window. An unknown `approval_id` also reads `expired`. Repeat the original call once (it starts a new request); if that one expires too, stop and tell the human. |
+| `expired` | Not decided within its 5-minute window. An unknown `approval_id` also reads `expired`; a request can be forgotten once 5 minutes have passed since it was created, whatever its status, and then reads `expired` too. Repeat the original call once: it is checked again from scratch (a used approval never carries over); if that one expires too, stop and tell the human. |
 | `not_required` | The owner added an exception and the call no longer needs approval. Repeat the exact original call: it runs without approval. |
 | `already_used` | Approved, and the single-use grant was already used by an identical call (yours included). Read the screen again before anything else: the action may already be done. Do not repeat the call blindly. |
 

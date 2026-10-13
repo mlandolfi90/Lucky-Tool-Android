@@ -21,7 +21,7 @@ internal object GateResults {
     const val STATUS_TOO_MANY_PENDING = "too_many_pending"
     const val NEXT_CONFIRM =
         "ask the human in the conversation; if they agree call confirm_human_approval then repeat this exact call"
-    const val NEXT_POLL = "poll get_approval_status, then repeat this exact call"
+    const val NEXT_POLL = "poll get_approval_status and act on its status; if approved, repeat this exact call"
 
     private const val KEY_STATUS = "status"
     private const val KEY_APP = "app"

@@ -467,6 +467,20 @@ class ActionApprovalCoordinatorImplTest {
         }
 
     @Test
+    fun `consumed grant leaves a pending entry with the same fingerprint pending`() =
+        runTest {
+            val chat = create(method = RuleMode.ASK_IN_CHAT)
+            coordinator.confirmInChat(chat.id, 1L)
+            val pending = create(method = RuleMode.NOTIFY, nowMs = 1L)
+
+            coordinator.consumeGrant("fp-1", RuleMode.ASK_IN_CHAT, 1L)
+
+            assertEquals(ActionApprovalState.ALREADY_USED, coordinator.stateOf(chat.id, 1L))
+            assertEquals(ActionApprovalState.PENDING, coordinator.stateOf(pending.id, 1L))
+            assertNotEquals(chat.id, pending.id)
+        }
+
+    @Test
     fun `confirmInChat on a used entry returns already used without a new grant`() =
         runTest {
             val action = create(method = RuleMode.ASK_IN_CHAT)

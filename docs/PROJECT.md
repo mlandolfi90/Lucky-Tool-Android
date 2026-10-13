@@ -398,7 +398,7 @@ The MCP server exposes 59 tools across 15 categories. For full JSON-RPC schemas,
 
 | Tool | Description | Required Params | Optional Params |
 |------|-------------|-----------------|-----------------|
-| `android_get_approval_status` | State of an approval request (`pending` / `approved` / `denied` / `expired` / `not_required` / `already_used`), with an optional long-poll that returns when the request is decided or expires | `approval_id` (string) | `wait_ms` (integer, 0-25000, default 0) |
+| `android_get_approval_status` | State of an approval request (`pending` / `approved` / `denied` / `expired` / `not_required` / `already_used`), with an optional long-poll that returns when the request leaves `pending` | `approval_id` (string) | `wait_ms` (integer, 0-25000, default 0) |
 | `android_confirm_human_approval` | Record the human's agreement in the conversation for an `ASK_IN_CHAT` request. Creates a single-use 2-minute grant for the identical call. | `approval_id` (string) | — |
 
 **Not app-scoped and always registered**: profiles never gate these tools, and the per-tool permissions cannot disable them (otherwise an approval request could never finish). Results are server-generated, with no untrusted-content warning: `textResult` on success, `errorTextResult` on error. `android_get_approval_status` reads state and expiry in one `ActionApprovalCoordinator.statusOf` call and long-polls at most `min(wait_ms, expires_at_ms - now)`. An unknown `approval_id` reads `expired`.
