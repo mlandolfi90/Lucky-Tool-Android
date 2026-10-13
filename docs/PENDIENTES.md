@@ -338,3 +338,20 @@ Pedido del humano el 2026-10-13, al ver ARTEMIS: «sí, un artemis.md».
   archivo que cada usuario instala, como hace ARTEMIS.
 - **Postura del humano, 2026-10-13:** «nos quedamos mejorando lo que ya tenemos, y si algo de ARTEMIS nos
   sirve lo aprovechamos». ARTEMIS es fuente de ideas, no un reemplazo ni una dependencia.
+
+## 10. La firma de los APK de prueba
+
+Pedido del humano el 2026-10-13: «queda pendiente resolver eso de la firma».
+
+- Medido el 2026-10-13: el APK debug del CI (PR #11, run `38425634668`) no se pudo instalar encima del que
+  tenía el teléfono: `INSTALL_FAILED_UPDATE_INCOMPATIBLE … signatures do not match`. El CI firma cada APK
+  debug con una clave de prueba nueva en cada corrida, así que cada versión obliga a desinstalar.
+- Lo que se pierde al desinstalar: la conexión al relay y la clave del servidor (se recargan con
+  `configurar-telefono-relay.ps1`), el permiso de accesibilidad (lo activa el humano a mano), los clientes
+  OAuth (claude.ai «Mi teléfono» se vuelve a conectar y aprobar) y todo lo que se haya configurado en la app,
+  como los perfiles de aprobación del plan 70.
+- El APK firmado con la clave propia (`edge-release`) sólo sale al mergear a `main`, y por ahora no se
+  mergea nada.
+- Decide el humano, en un plan chico: que el CI firme los APK de prueba siempre con la misma clave (por
+  ejemplo una clave debug fija guardada como secreto del repositorio), para que las versiones nuevas se
+  instalen encima sin perder nada.
