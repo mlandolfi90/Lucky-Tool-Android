@@ -37,9 +37,9 @@ the code will import that artifact directly, so it is declared directly. `hilt-n
 the `navigation-compose` version, which the BOM does not manage.
 
 **Acceptance criteria**
-- [ ] No source file imports `androidx.hilt.navigation.compose.hiltViewModel`.
-- [ ] `androidx.hilt:hilt-lifecycle-viewmodel-compose` is declared in the catalog and in `:app` dependencies; `hilt-navigation-compose` is still declared.
-- [ ] The 18 warnings in the 15 files below are gone.
+- [x] No source file imports `androidx.hilt.navigation.compose.hiltViewModel`.
+- [x] `androidx.hilt:hilt-lifecycle-viewmodel-compose` is declared in the catalog and in `:app` dependencies; `hilt-navigation-compose` is still declared.
+- [x] The 18 warnings in the 15 files below are gone.
 
 ### Task 1.1 — Declare the artifact
 
@@ -63,7 +63,7 @@ so one ref keeps them aligned on every bump.
 ```
 
 **Definition of Done**
-- [ ] Both diffs applied; `hilt-navigation-compose` is `1.4.0` (unchanged).
+- [x] Both diffs applied; `hilt-navigation-compose` is `1.4.0` (unchanged).
 
 ### Task 1.2 — Swap the import in 15 files
 
@@ -96,8 +96,8 @@ import keeps lexicographic order with its neighbours in every file):
 `ServerScreen.kt`, `TunnelSettingsScreen.kt` and `LogsScreen.kt` get the same swap inside US3/US2, which own them.
 
 **Definition of Done**
-- [ ] All 15 files changed; call sites untouched.
-- [ ] Tests: none new. The guard is US5's gate: the old import is a deprecation warning, which fails compilation once the gate is on.
+- [x] All 15 files changed; call sites untouched.
+- [x] Tests: none new. The guard is US5's gate: the old import is a deprecation warning, which fails compilation once the gate is on.
 
 ---
 
@@ -107,8 +107,8 @@ K2 smart casts make these `?.`, `!!` and repeated null checks dead, so removing 
 (critical in OAuth). The new tests pin the branches the simplified conditions guard, uncovered today.
 
 **Acceptance criteria**
-- [ ] The 11 warnings below are gone (LogsScreen 2, AppIconCache 1, EventChannelService 1, OAuth 6, E2EConfigReceiverTest 1).
-- [ ] OAuth accept/reject behaviour is identical for every input, pinned by the tests in Task 2.2.
+- [x] The 11 warnings below are gone (LogsScreen 2, AppIconCache 1, EventChannelService 1, OAuth 6, E2EConfigReceiverTest 1).
+- [x] OAuth accept/reject behaviour is identical for every input, pinned by the tests in Task 2.2.
 
 ### Task 2.1 — UI and services
 
@@ -186,7 +186,7 @@ the JVM, stop and ask the user — do not delete or suppress.
 | `onStartCommand with null intent returns START_STICKY and does nothing` | Sticky restart with a null intent never calls the controller |
 
 **Definition of Done**
-- [ ] Four actions applied; tests written per the tables.
+- [x] Four actions applied; tests written per the tables.
 
 ### Task 2.2 — OAuth
 
@@ -245,7 +245,7 @@ are safe past the guard:
 | `authorize with unknown or missing client_id returns 400 HTML without Location` | Unknown id and a raw `GET /authorize` without `client_id` → 400 `text/html`, no `Location` header |
 
 **Definition of Done**
-- [ ] Three actions applied; tests written per the tables.
+- [x] Three actions applied; tests written per the tables.
 
 ---
 
@@ -256,9 +256,9 @@ clip identical to today's (`ClipData.newPlainText("plain text", text)`, the exac
 `setText` used) and gives the change a JVM-testable unit; each call site launches it from `rememberCoroutineScope()`.
 
 **Acceptance criteria**
-- [ ] No source file references `LocalClipboardManager` or `ClipboardManager.setText`.
-- [ ] The helper builds the same `ClipData` as before (label `"plain text"`, same text), pinned by a JVM test; the three call sites and the ServerScreen toast are covered by the Manual QA Steps only (no Robolectric / Compose UI test infrastructure).
-- [ ] The 3 clipboard warnings and the 5 Hilt warnings of `ServerScreen.kt` / `TunnelSettingsScreen.kt` are gone.
+- [x] No source file references `LocalClipboardManager` or `ClipboardManager.setText`.
+- [x] The helper builds the same `ClipData` as before (label `"plain text"`, same text), pinned by a JVM test; the three call sites and the ServerScreen toast are covered by the Manual QA Steps only (no Robolectric / Compose UI test infrastructure).
+- [x] The 3 clipboard warnings and the 5 Hilt warnings of `ServerScreen.kt` / `TunnelSettingsScreen.kt` are gone.
 
 ### Task 3.1 — Shared helper
 
@@ -290,7 +290,7 @@ with `newPlainText` returning a `mockk<ClipData>` (under `isReturnDefaultValues`
 | `setPlainText passes the text unchanged` | Multi-line and empty strings reach `newPlainText` exactly |
 
 **Definition of Done**
-- [ ] Helper created; tests written per the table.
+- [x] Helper created; tests written per the table.
 
 ### Task 3.2 — Call sites
 
@@ -351,7 +351,7 @@ Action 3.2.1 minus the Hilt swap (this file has none).
 synchronous call did.
 
 **Definition of Done**
-- [ ] Three call sites migrated; the `AnnotatedString` import is removed from all three (it has no other use in them).
+- [x] Three call sites migrated; the `AnnotatedString` import is removed from all three (it has no other use in them).
 
 **Manual QA Steps** (declared, not run by the implementer): on the phone, tap Copy in Server (toast appears), in
 Tunnel › Cloudflare service URL, and in Event Channel › auth token; paste each elsewhere and compare.
@@ -364,9 +364,9 @@ Each of these has a replacement only at a higher API level or with different val
 today's result on every supported level (minSdk 33, compileSdk 37).
 
 **Acceptance criteria**
-- [ ] The 6 platform-deprecation warnings are gone (`CountryDisplay` 1, `labeledBy` 4, `NotificationProviderImpl` 1).
-- [ ] `CountryDisplay.name` returns the same value for every input it accepts today and never throws.
-- [ ] `labeledByText` is unchanged on API 33–35 and picks the platform's single-label choice (the last added) on 36+.
+- [x] The 6 platform-deprecation warnings are gone (`CountryDisplay` 1, `labeledBy` 4, `NotificationProviderImpl` 1).
+- [x] `CountryDisplay.name` returns the same value for every input it accepts today and never throws.
+- [x] `labeledByText` is unchanged on API 33–35 and picks the platform's single-label choice (the last added) on 36+.
 
 ### Task 4.1 — `Locale` constructor
 
@@ -388,7 +388,7 @@ always a valid region:
 | `name matches an independent region lookup for every two-letter code` | For all 676 codes, `name(c)` equals the same rule applied to `Locale.forLanguageTag("und-$c").getDisplayCountry(Locale.getDefault())` (empty or echoed code → null) |
 
 **Definition of Done**
-- [ ] Action applied; tests written per the table.
+- [x] Action applied; tests written per the table.
 
 ### Task 4.2 — `labeledBy`
 
@@ -442,7 +442,7 @@ every test using it wraps `mockkStatic(AccessibilityNodeInfoCompat::class)` in `
 | `parseNode labeledBy below API 36 reads the platform single-label getter` | No static mock: on the JVM `SDK_INT` is 0, so the real compat calls `node.getLabeledBy()`. **Setup**: stub it dynamically with `every { node invoke "getLabeledBy" withArguments listOf<Any>() } returns label`, so the test never references the deprecated API at compile time |
 
 **Definition of Done**
-- [ ] Action applied; tests written per the table.
+- [x] Action applied; tests written per the table.
 
 ### Task 4.3 — Background-activity-start mode
 
@@ -474,7 +474,7 @@ does not approve, this task is replaced by the option the user picks before this
 Tests: none new — the mode passed is unchanged and no test can set `SDK_INT` (no Robolectric).
 
 **Definition of Done**
-- [ ] Action applied.
+- [x] Action applied.
 
 ---
 
@@ -485,7 +485,7 @@ block, so every compile task of every variant and test source set (and every CI 
 `ci.yml` or Makefile change is needed. KSP warnings are out of scope (not compiler warnings; today there are none).
 
 **Acceptance criteria**
-- [ ] All five Kotlin modules set `allWarningsAsErrors`.
+- [x] All five Kotlin modules set `allWarningsAsErrors`.
 - [ ] A deliberately introduced warning fails CI (Task 6.2).
 
 ### Task 5.1 — Enable the flag
@@ -513,7 +513,7 @@ block, so every compile task of every variant and test source set (and every CI 
 ```
 
 **Definition of Done**
-- [ ] Five files changed.
+- [x] Five files changed.
 
 ---
 
@@ -524,9 +524,9 @@ does: the PR is opened before CI is read.
 
 ### Task 6.1 — Local gates and review (the only lint pass of the plan)
 
-- [ ] `ktlint` and `detekt` from `~/.lint-tools/` on `app/src/main`, `app/src/test`, `app/src/testDebug`, `app/src/gms`: zero findings beyond the recorded `testGms` baseline.
-- [ ] Grep: no `androidx.hilt.navigation.compose.hiltViewModel`, no `LocalClipboardManager`, no match for the regex `\.labeledBy\b` in `app/src`, exactly one `@Suppress` added by this plan.
-- [ ] One `code-reviewer` round in plan-compliance mode; blocking findings fixed before pushing.
+- [x] `ktlint` and `detekt` from `~/.lint-tools/` on `app/src/main`, `app/src/test`, `app/src/testDebug`, `app/src/gms`: zero findings beyond the recorded `testGms` baseline.
+- [x] Grep: no `androidx.hilt.navigation.compose.hiltViewModel`, no `LocalClipboardManager`, no match for the regex `\.labeledBy\b` in `app/src`, exactly one `@Suppress` added by this plan.
+- [x] One `code-reviewer` round in plan-compliance mode; blocking findings fixed before pushing.
 
 ### Task 6.2 — Publish and read CI once
 
@@ -567,3 +567,17 @@ Coverage confirmed: 43/43 warnings, one action each; every diff's context matche
 
 **User decision, 2026-10-13 — Task 4.3:** option A approved: the single line-scoped `@Suppress("DEPRECATION")` on
 `MODE_BACKGROUND_ACTIVITY_START_ALLOWED`. Rejected: raising minSdk to 36 (drops Android 13–15) and not enabling the gate.
+
+## Review findings — code-reviewer, plan compliance, round 1 of 1 (2026-10-13)
+
+**No BLOCKING findings.** Every action and test row implemented; the four lint-forced or approved deviations
+(multi-line `Locale.Builder` chain from ktlint, `OAuthFlowTestSupport.kt` split for detekt `LargeClass`, block body in
+`EventChannelServiceTest.newService()`, the approved `@Suppress`) verified sound. The reviewer compiled
+`CountryDisplay.kt` + `CountryDisplayTest.kt` locally with kotlinc `-Werror`: zero warnings, 6/6 tests pass.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| N1 | `getLabeledByList` fallback, `ClipEntry` stability and `ResolveInfo.activityInfo` field assignment on a mock cannot be run without the SDK | Decided by the CI run of Task 6.2 |
+| N2 | ServerScreen toast is skipped if the screen leaves composition before the coroutine runs | Accepted: as specified by the plan |
+| N3 | The baseline covers only the variants CI compiles | Accepted: by design; CI green is the proof |
+| N4 | Plan checkboxes unticked | Ticked |
