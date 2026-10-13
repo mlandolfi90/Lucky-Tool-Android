@@ -16,7 +16,7 @@ import kotlinx.serialization.json.putJsonObject
 
 private const val PARAM_APPROVAL_ID = "approval_id"
 private const val PARAM_WAIT_MS = "wait_ms"
-private const val MAX_STATUS_WAIT_MS = 25_000L
+internal const val MAX_STATUS_WAIT_MS = 25_000L
 private const val KEY_APPROVAL_ID = "approval_id"
 private const val KEY_STATUS = "status"
 private const val KEY_EXPIRES_AT_MS = "expires_at_ms"

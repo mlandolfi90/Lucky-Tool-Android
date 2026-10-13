@@ -924,7 +924,7 @@ Without it, an agent could approve its own requests.
 
 - **Approval window**: 300 000 ms (5 minutes)
 - **Approval grant TTL**: 120 000 ms (2 minutes, single use)
-- **`NOTIFY` wait inside the call**: 25 000 ms (below the MCP client's request timeout, which cut 60 s waits on 2026-10-13)
+- **`NOTIFY` wait inside the call**: 25 000 ms. Observed on 2026-10-13: the MCP client (claude.ai connector through the relay) cut a 60 s wait before the server answered; its exact timeout is not measured. After an approval the call still re-checks and runs, so a long call (typing) can end after the client gave up even though it ran
 - **`android_get_approval_status` `wait_ms`**: 0 (range 0-25000)
 - **Max pending approvals**: 10
 - **Max profiles**: 100; at most 5 amount tiers and 100 entries per exception list per profile
