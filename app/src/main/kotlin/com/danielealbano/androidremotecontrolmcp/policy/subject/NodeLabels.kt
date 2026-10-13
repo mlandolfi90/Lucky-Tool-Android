@@ -12,7 +12,10 @@ internal object NodeLabels {
     private const val PART_SEPARATOR = " "
     private val WHITESPACE = Regex("\\s+")
 
-    /** Tap/click label: own + descendants' text (breadth-first, capped); an editable node uses [fieldLabel]. */
+    /**
+     * Tap/click label: own + descendants' text (breadth-first, capped, each distinct part once, so a button whose
+     * text and description are both "7" reads "7"); an editable node uses [fieldLabel].
+     */
     fun interactiveLabel(node: AccessibilityNodeData): String? =
         if (node.editable) {
             fieldLabel(node)
@@ -46,8 +49,14 @@ internal object NodeLabels {
 
     private fun join(parts: List<String>): String? =
         WHITESPACE
-            .replace(parts.filter { it.isNotBlank() }.joinToString(PART_SEPARATOR), PART_SEPARATOR)
-            .trim()
+            .replace(
+                parts
+                    .map { it.trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .joinToString(PART_SEPARATOR),
+                PART_SEPARATOR,
+            ).trim()
             .take(MAX_LABEL_LENGTH)
             .ifEmpty { null }
 }

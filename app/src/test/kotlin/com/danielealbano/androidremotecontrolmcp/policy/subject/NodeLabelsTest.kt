@@ -25,6 +25,13 @@ class NodeLabelsTest {
     }
 
     @Test
+    fun `interactiveLabel keeps each distinct part once`() {
+        val node = SubjectFixtures.button("b", bounds, "7").copy(contentDescription = "7")
+
+        assertEquals("7", NodeLabels.interactiveLabel(node))
+    }
+
+    @Test
     fun `interactiveLabel of an editable node excludes its value`() {
         val node = SubjectFixtures.field("f", bounds, text = "1500", hint = "Monto")
 
