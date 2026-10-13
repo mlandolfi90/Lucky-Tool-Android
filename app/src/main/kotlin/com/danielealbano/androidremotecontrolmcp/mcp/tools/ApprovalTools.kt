@@ -1,8 +1,8 @@
 package com.danielealbano.androidremotecontrolmcp.mcp.tools
 
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalStatusView
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ChatConfirmResult
 import com.danielealbano.androidremotecontrolmcp.policy.subject.ToolPolicyCatalog
@@ -47,7 +47,7 @@ private fun waitBudgetMs(
     nowMs: Long,
 ): Long {
     val expiresAtMs = status.expiresAtMs
-    return if (status.state == ApprovalState.PENDING && expiresAtMs != null) {
+    return if (status.state == ActionApprovalState.PENDING && expiresAtMs != null) {
         minOf(requestedMs, expiresAtMs - nowMs).coerceAtLeast(0L)
     } else {
         0L
@@ -57,13 +57,13 @@ private fun waitBudgetMs(
 /** Server-generated status JSON; `expires_at_ms` only while pending. */
 private fun statusJson(
     approvalId: String,
-    state: ApprovalState,
+    state: ActionApprovalState,
     expiresAtMs: Long?,
 ): String =
     buildJsonObject {
         put(KEY_APPROVAL_ID, approvalId)
         put(KEY_STATUS, state.wireCode())
-        if (state == ApprovalState.PENDING && expiresAtMs != null) {
+        if (state == ActionApprovalState.PENDING && expiresAtMs != null) {
             put(KEY_EXPIRES_AT_MS, expiresAtMs)
         }
     }.toString()
@@ -74,9 +74,8 @@ private fun statusOnlyError(status: String): CallToolResult =
 /**
  * MCP tool: get_approval_status
  *
- * State of an approval created by the profile gate; optional long-poll that ends when the request is decided or
- * expires. State and expiry come from one [ActionApprovalCoordinator.statusOf] read. Action-only: server-generated
- * text.
+ * State of an approval created by the profile gate; optional long-poll that ends when the request leaves PENDING.
+ * State and expiry come from one [ActionApprovalCoordinator.statusOf] read. Action-only: server-generated text.
  */
 class GetApprovalStatusTool(
     private val coordinator: ActionApprovalCoordinator,
@@ -106,11 +105,15 @@ class GetApprovalStatusTool(
             toolName = TOOL_NAME,
             name = "$toolNamePrefix$TOOL_NAME",
             description =
-                "Returns the status (pending, approved, denied or expired) of an approval request returned as " +
-                    "needs_human_confirmation or awaiting_approval by a call on an app with an approval profile. " +
-                    "With wait_ms (0-25000) it waits until the request is decided, expires or wait_ms runs " +
-                    "out. Once approved, repeat the original call exactly, within 2 minutes; the approval is " +
-                    "single use.",
+                "Returns the status of an approval request returned as needs_human_confirmation or " +
+                    "awaiting_approval by a call on an app with an approval profile. With wait_ms (0-25000) it " +
+                    "waits until the request leaves pending or wait_ms runs out. pending: not decided yet. " +
+                    "approved: repeat the original call exactly, within 2 minutes; the approval is single use. " +
+                    "denied: stop, do not retry. expired: not decided within 5 minutes (or unknown id); repeat " +
+                    "the original call once, and if that expires too, stop and tell the human. not_required: the " +
+                    "owner added an exception; repeat the exact call, it runs without approval. already_used: an " +
+                    "identical call already used this approval; re-read the screen first, the action may already " +
+                    "be done; do not repeat it blindly.",
             inputSchema =
                 ToolSchema(
                     properties =
@@ -151,7 +154,7 @@ class ConfirmHumanApprovalTool(
         val approvalId = requireApprovalId(arguments)
         return when (coordinator.confirmInChat(approvalId, nowMs())) {
             ChatConfirmResult.CONFIRMED, ChatConfirmResult.ALREADY_APPROVED -> {
-                McpToolUtils.textResult(statusJson(approvalId, ApprovalState.APPROVED, null))
+                McpToolUtils.textResult(statusJson(approvalId, ActionApprovalState.APPROVED, null))
             }
 
             ChatConfirmResult.NOT_CONFIRMABLE -> {
@@ -159,11 +162,19 @@ class ConfirmHumanApprovalTool(
             }
 
             ChatConfirmResult.DENIED -> {
-                statusOnlyError(ApprovalState.DENIED.wireCode())
+                statusOnlyError(ActionApprovalState.DENIED.wireCode())
             }
 
             ChatConfirmResult.EXPIRED -> {
-                statusOnlyError(ApprovalState.EXPIRED.wireCode())
+                statusOnlyError(ActionApprovalState.EXPIRED.wireCode())
+            }
+
+            ChatConfirmResult.NOT_REQUIRED -> {
+                statusOnlyError(ActionApprovalState.NOT_REQUIRED.wireCode())
+            }
+
+            ChatConfirmResult.ALREADY_USED -> {
+                statusOnlyError(ActionApprovalState.ALREADY_USED.wireCode())
             }
         }
     }
@@ -179,7 +190,9 @@ class ConfirmHumanApprovalTool(
                 "Call ONLY after the human explicitly agreed in the conversation to the action of a call that " +
                     "returned needs_human_confirmation. Marks that request approved and creates a single-use " +
                     "approval valid for 2 minutes; then repeat the original call exactly. Requests waiting for " +
-                    "the device owner (awaiting_approval) cannot be confirmed here.",
+                    "the device owner (awaiting_approval) cannot be confirmed here. not_required: repeat the " +
+                    "call, it runs without approval. already_used: re-read the screen first, the action may " +
+                    "already be done.",
             inputSchema =
                 ToolSchema(
                     properties =

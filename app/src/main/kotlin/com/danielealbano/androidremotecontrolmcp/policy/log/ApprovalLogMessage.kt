@@ -10,8 +10,9 @@ import com.danielealbano.androidremotecontrolmcp.policy.wireCode
 
 /**
  * What happened to a gated call, an approval or a profile. Codes are stored on disk: never rename. Writers: the gate
- * (APPROVED … TOO_MANY_PENDING), the re-evaluator (REEVALUATED), the approval UI (OWNER_APPROVED, OWNER_DENIED,
- * EXPIRED for a late approval, EXCEPTION_ADDED), the profile editor (EXCEPTION_REMOVED, PROFILE_*).
+ * (APPROVED … TOO_MANY_PENDING, NOT_REQUIRED, ALREADY_USED), the re-evaluator (REEVALUATED), the approval UI
+ * (OWNER_APPROVED, OWNER_DENIED, EXPIRED for a late approval, EXCEPTION_ADDED), the profile editor
+ * (EXCEPTION_REMOVED, PROFILE_*).
  */
 enum class ApprovalLogOutcome {
     APPROVED,
@@ -29,6 +30,8 @@ enum class ApprovalLogOutcome {
     PROFILE_CREATED,
     PROFILE_UPDATED,
     PROFILE_DELETED,
+    NOT_REQUIRED,
+    ALREADY_USED,
 }
 
 /**

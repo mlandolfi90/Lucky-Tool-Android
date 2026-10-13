@@ -313,6 +313,49 @@ class ApprovalGateIntegrationTest {
         }
 
     @Test
+    fun `exception that ends the approval reads not_required and the repeat runs`() =
+        runTest {
+            val deps = dependencies(RuleMode.NOTIFY, notifyWaitMs = SHORT_WAIT_MS)
+
+            McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                val id = checkNotNull(field(client.tap(), "approval_id"))
+                val pending = deps.policy.awaitPending()
+                deps.policy.setProfiles(bank(PolicyActionType.ACTION_BUTTON to RuleMode.RUN))
+                val runDecision = pending.decision.copy(mode = RuleMode.RUN)
+                deps.policy.coordinator.applyReevaluation(id, runDecision, deps.policy.nowMs())
+
+                val status = client.status(id)
+                assertNotEquals(true, status.isError)
+                assertEquals("not_required", field(status, "status"))
+
+                assertNotEquals(true, client.tap().isError)
+            }
+
+            coVerify(exactly = 1) { deps.actionExecutor.tap(500f, 800f) }
+        }
+
+    @Test
+    fun `used grant reads already_used in status and confirm`() =
+        runTest {
+            val deps = dependencies(RuleMode.ASK_IN_CHAT)
+
+            McpIntegrationTestHelper.withTestApplication(deps) { client, _ ->
+                val id = checkNotNull(field(client.tap(), "approval_id"))
+                client.confirm(id)
+                assertNotEquals(true, client.tap().isError)
+
+                val status = client.status(id)
+                assertNotEquals(true, status.isError)
+                assertEquals("already_used", field(status, "status"))
+                val confirmed = client.confirm(id)
+                assertEquals(true, confirmed.isError)
+                assertEquals("""{"status":"already_used"}""", textOf(confirmed))
+            }
+
+            coVerify(exactly = 1) { deps.actionExecutor.tap(500f, 800f) }
+        }
+
+    @Test
     fun `confirm refuses notify requests`() =
         runTest {
             val deps = dependencies(RuleMode.NOTIFY, notifyWaitMs = SHORT_WAIT_MS)

@@ -4,9 +4,9 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.danielealbano.androidremotecontrolmcp.di.IoDispatcher
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.amount.AmountParser
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ExceptionEligibility
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingAction
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingReevaluator
@@ -63,9 +63,16 @@ class PolicyApprovalViewModel
                 val action = pendingAction(id)
                 if (action != null) {
                     when (coordinator.approve(id, System.currentTimeMillis())) {
-                        ApprovalState.APPROVED -> logDecision(action, ApprovalLogOutcome.OWNER_APPROVED)
-                        ApprovalState.EXPIRED -> logDecision(action, ApprovalLogOutcome.EXPIRED)
-                        ApprovalState.PENDING, ApprovalState.DENIED -> Unit
+                        ActionApprovalState.APPROVED -> logDecision(action, ApprovalLogOutcome.OWNER_APPROVED)
+
+                        ActionApprovalState.EXPIRED -> logDecision(action, ApprovalLogOutcome.EXPIRED)
+
+                        // Decided or closed elsewhere before this approval: nothing to log.
+                        ActionApprovalState.PENDING,
+                        ActionApprovalState.DENIED,
+                        ActionApprovalState.NOT_REQUIRED,
+                        ActionApprovalState.ALREADY_USED,
+                        -> Unit
                     }
                 }
             }
@@ -77,7 +84,7 @@ class PolicyApprovalViewModel
                 val action = pendingAction(id)
                 if (action != null) {
                     coordinator.deny(id)
-                    if (coordinator.stateOf(id, System.currentTimeMillis()) == ApprovalState.DENIED) {
+                    if (coordinator.stateOf(id, System.currentTimeMillis()) == ActionApprovalState.DENIED) {
                         logDecision(action, ApprovalLogOutcome.OWNER_DENIED)
                     }
                 }

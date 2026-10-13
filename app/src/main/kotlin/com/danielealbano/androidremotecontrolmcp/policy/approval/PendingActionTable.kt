@@ -1,6 +1,5 @@
 package com.danielealbano.androidremotecontrolmcp.policy.approval
 
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.security.SecureRandom
 import java.util.Locale
@@ -10,9 +9,9 @@ internal class PendingActionEntry(
     var action: PendingAction,
     val fingerprint: String,
 ) {
-    val state = MutableStateFlow(ApprovalState.PENDING)
+    val state = MutableStateFlow(ActionApprovalState.PENDING)
 
-    fun isPending(): Boolean = state.value == ApprovalState.PENDING
+    fun isPending(): Boolean = state.value == ActionApprovalState.PENDING
 
     /** Joins [request] (same fingerprint): a stricter method replaces subject, decision and method in place. */
     fun joinWith(request: PendingActionRequest): PendingAction {
@@ -37,6 +36,13 @@ internal class PendingActionTable(
     fun pendingCount(): Int = rows.values.count { it.isPending() }
 
     fun pendingSnapshot(): List<PendingAction> = rows.values.filter { it.isPending() }.map { it.action }
+
+    /** The grant for [fingerprint] was consumed: every APPROVED row with it becomes ALREADY_USED. */
+    fun markGrantUsed(fingerprint: String) {
+        rows.values
+            .filter { it.fingerprint == fingerprint && it.state.value == ActionApprovalState.APPROVED }
+            .forEach { it.state.value = ActionApprovalState.ALREADY_USED }
+    }
 
     /** Adds a PENDING row for [request]; at [ActionApprovalPolicy.MAX_TRACKED_ENTRIES] the oldest decided row goes. */
     fun create(
@@ -66,7 +72,7 @@ internal class PendingActionTable(
         while (iterator.hasNext()) {
             val entry = iterator.next()
             if (nowMs >= entry.action.expiresAtMs) {
-                if (entry.isPending()) entry.state.value = ApprovalState.EXPIRED
+                if (entry.isPending()) entry.state.value = ActionApprovalState.EXPIRED
                 iterator.remove()
             }
         }
@@ -74,7 +80,7 @@ internal class PendingActionTable(
 
     /** Every PENDING row becomes DENIED (waking awaiters); decided rows are kept for status reads. */
     fun denyAllPending() {
-        rows.values.filter { it.isPending() }.forEach { it.state.value = ApprovalState.DENIED }
+        rows.values.filter { it.isPending() }.forEach { it.state.value = ActionApprovalState.DENIED }
     }
 
     /** 16 SecureRandom bytes as 32 lowercase hex chars, unique among tracked rows. */

@@ -1,6 +1,5 @@
 package com.danielealbano.androidremotecontrolmcp.policy.approval
 
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicyDecision
 import com.danielealbano.androidremotecontrolmcp.policy.model.RuleMode
 import kotlinx.coroutines.flow.StateFlow
@@ -27,13 +26,13 @@ interface ActionApprovalCoordinator {
     suspend fun awaitDecision(
         id: String,
         timeoutMs: Long,
-    ): ApprovalState
+    ): ActionApprovalState
 
     /** Owner approval on the device. Expiry wins; on APPROVED a device-strength grant is created. */
     suspend fun approve(
         id: String,
         nowMs: Long,
-    ): ApprovalState
+    ): ActionApprovalState
 
     /** `confirm_human_approval`: only ASK_IN_CHAT entries; creates a chat-strength grant. */
     suspend fun confirmInChat(
@@ -48,7 +47,7 @@ interface ActionApprovalCoordinator {
     suspend fun stateOf(
         id: String,
         nowMs: Long,
-    ): ApprovalState
+    ): ActionApprovalState
 
     /**
      * State and expiry read atomically (one critical section): a lapsed PENDING entry becomes EXPIRED; unknown id →
@@ -59,7 +58,10 @@ interface ActionApprovalCoordinator {
         nowMs: Long,
     ): ApprovalStatusView
 
-    /** Consumes the grant for [fingerprint] once, only if its strength satisfies [requiredMode]. */
+    /**
+     * Consumes the grant for [fingerprint] once, only if its strength satisfies [requiredMode]. On success every
+     * APPROVED entry with that fingerprint becomes ALREADY_USED (the ledger keeps one grant per fingerprint).
+     */
     suspend fun consumeGrant(
         fingerprint: String,
         requiredMode: RuleMode,
@@ -68,7 +70,7 @@ interface ActionApprovalCoordinator {
 
     /**
      * Applies a re-evaluated [decision] to a PENDING entry: ASK_IN_CHAT/NOTIFY → entry updated in place
-     * (STILL_PENDING); RUN → entry closed as EXPIRED without a grant (NO_LONGER_NEEDS_APPROVAL: the agent
+     * (STILL_PENDING); RUN → entry closed as NOT_REQUIRED without a grant (NO_LONGER_NEEDS_APPROVAL: the agent
      * repeats the call and is evaluated fresh); any other mode → DENIED (NOW_FORBIDDEN); not pending → NOT_PENDING.
      */
     suspend fun applyReevaluation(

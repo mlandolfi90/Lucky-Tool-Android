@@ -333,10 +333,48 @@ class ToolPolicyGateImplTest : ToolPolicyGateTestBase() {
             assertEquals("""{"status":"expired"}""", textOf(result))
             assertNull(marker)
             assertEquals(0, executions)
+            assertTrue(approvalMessages().last().startsWith("expired"))
         }
 
     @Test
-    fun `joined notify call whose grant was used returns expired`() =
+    fun `notify closed by a re-evaluation returns not required`() =
+        runTest {
+            useProfiles(bank(PolicyActionType.ACTION_BUTTON to RuleMode.NOTIFY))
+            scriptTap()
+            launch {
+                val pending = coordinator.observePending().first { it.isNotEmpty() }.first()
+                coordinator.applyReevaluation(pending.id, pending.decision.copy(mode = RuleMode.RUN), clock.get())
+            }
+
+            val (result, marker) = guardMarked()
+
+            assertEquals(true, result.isError)
+            assertEquals("""{"status":"not_required"}""", textOf(result))
+            assertNull(marker)
+            assertEquals(0, executions)
+            assertTrue(approvalMessages().last().startsWith("not_required"))
+        }
+
+    @Test
+    fun `call repeated after not required runs without approval`() =
+        runTest {
+            useProfiles(bank(PolicyActionType.ACTION_BUTTON to RuleMode.NOTIFY))
+            scriptTap()
+            launch {
+                val pending = coordinator.observePending().first { it.isNotEmpty() }.first()
+                useProfiles(bank(PolicyActionType.ACTION_BUTTON to RuleMode.RUN))
+                coordinator.applyReevaluation(pending.id, pending.decision.copy(mode = RuleMode.RUN), clock.get())
+            }
+            tap()
+
+            val repeat = tap()
+
+            assertEquals("ok", textOf(repeat))
+            assertEquals(1, executions)
+        }
+
+    @Test
+    fun `joined notify call whose grant was used returns already used`() =
         runTest {
             useProfiles(bank(PolicyActionType.ACTION_BUTTON to RuleMode.NOTIFY))
             scriptTap()
@@ -356,7 +394,29 @@ class ToolPolicyGateImplTest : ToolPolicyGateTestBase() {
 
             assertEquals(1, executions)
             assertEquals(1, results.count { textOf(it) == "ok" })
-            assertEquals(1, results.count { textOf(it) == """{"status":"expired"}""" })
+            assertEquals(1, results.count { textOf(it) == """{"status":"already_used"}""" })
+            assertEquals(1, approvalMessages().count { it.startsWith("already_used") })
+            assertTrue(approvalMessages().none { it.startsWith("expired") })
+        }
+
+    @Test
+    fun `notify call whose grant an identical call used while it waited returns already used`() =
+        runTest {
+            useProfiles(bank(PolicyActionType.ACTION_BUTTON to RuleMode.NOTIFY))
+            scriptTap()
+            val other =
+                async {
+                    val pending = coordinator.observePending().first { it.isNotEmpty() }.first()
+                    coordinator.approve(pending.id, clock.get())
+                    tap()
+                }
+
+            val (result, marker) = guardMarked()
+
+            assertEquals("ok", textOf(other.await()))
+            assertEquals("""{"status":"already_used"}""", textOf(result))
+            assertNull(marker)
+            assertEquals(1, executions)
         }
 
     @Test

@@ -21,6 +21,15 @@ class OAuthApprovalCoordinatorImplTest {
     ) = ApprovalRequest("Claude", "claude.ai", logoUri, clientIp, clientGeo)
 
     @Test
+    @DisplayName("OAuth states stay the four OAuth values (action approvals use their own type)")
+    fun oauthStatesUnchanged() {
+        assertEquals(
+            listOf(ApprovalState.PENDING, ApprovalState.APPROVED, ApprovalState.DENIED, ApprovalState.EXPIRED),
+            ApprovalState.entries,
+        )
+    }
+
+    @Test
     @DisplayName("createPending appears in pending flow with 2-digit code")
     fun createPendingAppears() =
         runTest {

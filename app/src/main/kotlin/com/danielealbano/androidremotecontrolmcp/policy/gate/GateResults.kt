@@ -16,6 +16,8 @@ internal object GateResults {
     const val STATUS_AWAITING = "awaiting_approval"
     const val STATUS_DENIED = "denied"
     const val STATUS_EXPIRED = "expired"
+    const val STATUS_NOT_REQUIRED = "not_required"
+    const val STATUS_ALREADY_USED = "already_used"
     const val STATUS_TOO_MANY_PENDING = "too_many_pending"
     const val NEXT_CONFIRM =
         "ask the human in the conversation; if they agree call confirm_human_approval then repeat this exact call"
@@ -57,6 +59,10 @@ internal object GateResults {
     fun denied(): CallToolResult = statusOnlyError(STATUS_DENIED)
 
     fun expired(): CallToolResult = statusOnlyError(STATUS_EXPIRED)
+
+    fun notRequired(): CallToolResult = statusOnlyError(STATUS_NOT_REQUIRED)
+
+    fun alreadyUsed(): CallToolResult = statusOnlyError(STATUS_ALREADY_USED)
 
     fun tooManyPending(): CallToolResult = statusOnlyError(STATUS_TOO_MANY_PENDING)
 

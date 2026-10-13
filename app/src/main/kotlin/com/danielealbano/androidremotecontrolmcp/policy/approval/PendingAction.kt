@@ -1,6 +1,5 @@
 package com.danielealbano.androidremotecontrolmcp.policy.approval
 
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicyDecision
 import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicySubject
 import com.danielealbano.androidremotecontrolmcp.policy.model.RuleMode
@@ -45,12 +44,20 @@ data class PendingAction(
  * [expiresAtMs] is non-null exactly when [state] is PENDING.
  */
 data class ApprovalStatusView(
-    val state: ApprovalState,
+    val state: ActionApprovalState,
     val expiresAtMs: Long?,
 )
 
 /** Result of `confirm_human_approval` on an entry. */
-enum class ChatConfirmResult { CONFIRMED, ALREADY_APPROVED, NOT_CONFIRMABLE, DENIED, EXPIRED }
+enum class ChatConfirmResult {
+    CONFIRMED,
+    ALREADY_APPROVED,
+    NOT_CONFIRMABLE,
+    DENIED,
+    EXPIRED,
+    NOT_REQUIRED,
+    ALREADY_USED,
+}
 
 /** Result of re-evaluating a pending entry after the owner added an exception. Never an approval. */
 enum class ReevaluationOutcome { STILL_PENDING, NO_LONGER_NEEDS_APPROVAL, NOW_FORBIDDEN, NOT_PENDING, NOT_ELIGIBLE }

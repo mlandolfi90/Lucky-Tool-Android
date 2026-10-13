@@ -178,6 +178,8 @@
     <string name="approval_log_outcome_profile_created">Profile created</string>
     <string name="approval_log_outcome_profile_updated">Profile updated</string>
     <string name="approval_log_outcome_profile_deleted">Profile deleted</string>
+    <string name="approval_log_outcome_not_required">No longer needs approval; not run</string>
+    <string name="approval_log_outcome_already_used">Approval already used; not run</string>
     <string name="approval_log_reason_no_profile">no profile</string>
     <string name="approval_log_reason_own_package">this app</string>
     <string name="approval_log_reason_rule">profile rule</string>

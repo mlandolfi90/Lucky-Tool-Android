@@ -1,7 +1,7 @@
 package com.danielealbano.androidremotecontrolmcp.policy.gate
 
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibility
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingAction
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingActionRequest
@@ -45,7 +45,7 @@ internal class GateAuthorizer(
             coordinator.awaitDecision(awaiting.pending.id, waitMs)
         }
         return when (coordinator.stateOf(awaiting.pending.id, nowMs())) {
-            ApprovalState.APPROVED -> {
+            ActionApprovalState.APPROVED -> {
                 if (waitMs > 0L && !screen.awaitHidden(SCREEN_CLOSE_WAIT_MS)) {
                     Verdict.Halt(outcomes.awaiting(call, decision, awaiting.pending))
                 } else {
@@ -53,21 +53,32 @@ internal class GateAuthorizer(
                 }
             }
 
-            ApprovalState.DENIED -> {
+            ActionApprovalState.DENIED -> {
                 Verdict.Halt(outcomes.denied(call, decision))
             }
 
-            ApprovalState.EXPIRED -> {
+            ActionApprovalState.EXPIRED -> {
                 Verdict.Halt(outcomes.expired(call, decision))
             }
 
-            ApprovalState.PENDING -> {
+            ActionApprovalState.NOT_REQUIRED -> {
+                Verdict.Halt(outcomes.notRequired(call, decision))
+            }
+
+            ActionApprovalState.ALREADY_USED -> {
+                Verdict.Halt(outcomes.alreadyUsed(call, decision))
+            }
+
+            ActionApprovalState.PENDING -> {
                 Verdict.Halt(outcomes.awaiting(call, decision, awaiting.pending))
             }
         }
     }
 
-    /** Consumes the owner's NOTIFY grant for [assessment]; an identical joined call may have used it already. */
+    /**
+     * Consumes the owner's NOTIFY grant for [assessment]. When it is gone, an identical joined call used it first:
+     * `already_used`, so the agent re-reads the screen instead of repeating an action that may be done.
+     */
     suspend fun consumeOwnerGrant(
         call: GateCall,
         assessment: Assessment.Evaluated,
@@ -76,7 +87,7 @@ internal class GateAuthorizer(
             outcomes.approved(call, assessment.decision)
             Verdict.Proceed(RuleMode.NOTIFY)
         } else {
-            Verdict.Halt(outcomes.expired(call, assessment.decision))
+            Verdict.Halt(outcomes.alreadyUsed(call, assessment.decision))
         }
 
     private suspend fun authorizeDecision(

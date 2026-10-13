@@ -1,6 +1,5 @@
 package com.danielealbano.androidremotecontrolmcp.policy.approval
 
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.engine.PolicyDecision
 import com.danielealbano.androidremotecontrolmcp.policy.model.RuleMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,22 +52,22 @@ class ActionApprovalCoordinatorImpl
         override suspend fun awaitDecision(
             id: String,
             timeoutMs: Long,
-        ): ApprovalState {
-            val state = mutex.withLock { table.get(id)?.state } ?: return ApprovalState.EXPIRED
+        ): ActionApprovalState {
+            val state = mutex.withLock { table.get(id)?.state } ?: return ActionApprovalState.EXPIRED
             return withTimeoutOrNull(timeoutMs.coerceAtLeast(0L)) {
-                state.first { it != ApprovalState.PENDING }
+                state.first { it != ActionApprovalState.PENDING }
             } ?: state.value
         }
 
         override suspend fun approve(
             id: String,
             nowMs: Long,
-        ): ApprovalState =
+        ): ActionApprovalState =
             mutex.withLock {
                 val entry = table.get(id)
                 val state =
                     when {
-                        entry == null -> ApprovalState.EXPIRED
+                        entry == null -> ActionApprovalState.EXPIRED
                         !entry.isPending() -> entry.state.value
                         else -> entry.approveWithin(grants, ActionApprovalPolicy.OWNER_DEVICE_GRANT_STRENGTH, nowMs)
                     }
@@ -97,7 +96,7 @@ class ActionApprovalCoordinatorImpl
                 table
                     .get(id)
                     ?.takeIf { it.isPending() }
-                    ?.let { it.state.value = ApprovalState.DENIED }
+                    ?.let { it.state.value = ActionApprovalState.DENIED }
                 pending.value = table.pendingSnapshot()
             }
         }
@@ -105,27 +104,32 @@ class ActionApprovalCoordinatorImpl
         override suspend fun stateOf(
             id: String,
             nowMs: Long,
-        ): ApprovalState = statusOf(id, nowMs).state
+        ): ActionApprovalState = statusOf(id, nowMs).state
 
         override suspend fun statusOf(
             id: String,
             nowMs: Long,
         ): ApprovalStatusView =
             mutex.withLock {
-                val entry = table.get(id) ?: return@withLock ApprovalStatusView(ApprovalState.EXPIRED, null)
+                val entry = table.get(id) ?: return@withLock ApprovalStatusView(ActionApprovalState.EXPIRED, null)
                 if (entry.isPending() && nowMs >= entry.action.expiresAtMs) {
-                    entry.state.value = ApprovalState.EXPIRED
+                    entry.state.value = ActionApprovalState.EXPIRED
                     pending.value = table.pendingSnapshot()
                 }
                 val state = entry.state.value
-                ApprovalStatusView(state, entry.action.expiresAtMs.takeIf { state == ApprovalState.PENDING })
+                ApprovalStatusView(state, entry.action.expiresAtMs.takeIf { state == ActionApprovalState.PENDING })
             }
 
         override suspend fun consumeGrant(
             fingerprint: String,
             requiredMode: RuleMode,
             nowMs: Long,
-        ): Boolean = mutex.withLock { grants.consume(fingerprint, requiredMode, nowMs) }
+        ): Boolean =
+            mutex.withLock {
+                grants.consume(fingerprint, requiredMode, nowMs).also { consumed ->
+                    if (consumed) table.markGrantUsed(fingerprint)
+                }
+            }
 
         override suspend fun applyReevaluation(
             id: String,
@@ -147,12 +151,12 @@ class ActionApprovalCoordinatorImpl
                         }
 
                         decision.mode == RuleMode.RUN -> {
-                            entry.state.value = ApprovalState.EXPIRED
+                            entry.state.value = ActionApprovalState.NOT_REQUIRED
                             ReevaluationOutcome.NO_LONGER_NEEDS_APPROVAL
                         }
 
                         else -> {
-                            entry.state.value = ApprovalState.DENIED
+                            entry.state.value = ActionApprovalState.DENIED
                             ReevaluationOutcome.NOW_FORBIDDEN
                         }
                     }
@@ -174,9 +178,9 @@ private fun PendingActionEntry.approveWithin(
     grants: GrantLedger,
     strength: RuleMode,
     nowMs: Long,
-): ApprovalState {
+): ActionApprovalState {
     val approved = nowMs < action.expiresAtMs
-    state.value = if (approved) ApprovalState.APPROVED else ApprovalState.EXPIRED
+    state.value = if (approved) ActionApprovalState.APPROVED else ActionApprovalState.EXPIRED
     if (approved) grants.grant(fingerprint, strength, nowMs)
     return state.value
 }
@@ -187,23 +191,28 @@ private fun PendingActionEntry.confirmFromChat(
     nowMs: Long,
 ): ChatConfirmResult =
     when (state.value) {
-        ApprovalState.PENDING -> {
-            if (approveWithin(grants, ActionApprovalPolicy.CHAT_GRANT_STRENGTH, nowMs) == ApprovalState.APPROVED) {
-                ChatConfirmResult.CONFIRMED
-            } else {
-                ChatConfirmResult.EXPIRED
-            }
+        ActionApprovalState.PENDING -> {
+            val approved = approveWithin(grants, ActionApprovalPolicy.CHAT_GRANT_STRENGTH, nowMs)
+            if (approved == ActionApprovalState.APPROVED) ChatConfirmResult.CONFIRMED else ChatConfirmResult.EXPIRED
         }
 
-        ApprovalState.APPROVED -> {
+        ActionApprovalState.APPROVED -> {
             ChatConfirmResult.ALREADY_APPROVED
         }
 
-        ApprovalState.DENIED -> {
+        ActionApprovalState.DENIED -> {
             ChatConfirmResult.DENIED
         }
 
-        ApprovalState.EXPIRED -> {
+        ActionApprovalState.EXPIRED -> {
             ChatConfirmResult.EXPIRED
+        }
+
+        ActionApprovalState.NOT_REQUIRED -> {
+            ChatConfirmResult.NOT_REQUIRED
+        }
+
+        ActionApprovalState.ALREADY_USED -> {
+            ChatConfirmResult.ALREADY_USED
         }
     }

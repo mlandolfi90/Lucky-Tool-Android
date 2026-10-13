@@ -1,6 +1,5 @@
 package com.danielealbano.androidremotecontrolmcp.policy.approval
 
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingActionFixtures.aDecision
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingActionFixtures.aPendingAction
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingActionFixtures.aRequest
@@ -41,7 +40,7 @@ class ActionApprovalCoordinatorImplTest {
             val action = create()
 
             assertEquals(listOf(action), coordinator.observePending().value)
-            assertEquals(ApprovalState.PENDING, coordinator.stateOf(action.id, 0L))
+            assertEquals(ActionApprovalState.PENDING, coordinator.stateOf(action.id, 0L))
         }
 
     @Test
@@ -120,7 +119,7 @@ class ActionApprovalCoordinatorImplTest {
             val fresh = create(fingerprint = "fp-new", nowMs = W)
 
             assertEquals(listOf(fresh.id), pendingIds())
-            old.forEach { assertEquals(ApprovalState.EXPIRED, coordinator.stateOf(it.id, W)) }
+            old.forEach { assertEquals(ActionApprovalState.EXPIRED, coordinator.stateOf(it.id, W)) }
         }
 
     @Test
@@ -137,9 +136,9 @@ class ActionApprovalCoordinatorImplTest {
         runTest {
             val action = create()
 
-            assertEquals(ApprovalState.APPROVED, coordinator.approve(action.id, W - 1))
+            assertEquals(ActionApprovalState.APPROVED, coordinator.approve(action.id, W - 1))
             assertTrue(pendingIds().isEmpty())
-            assertEquals(ApprovalState.APPROVED, coordinator.stateOf(action.id, W - 1))
+            assertEquals(ActionApprovalState.APPROVED, coordinator.stateOf(action.id, W - 1))
         }
 
     @Test
@@ -147,7 +146,7 @@ class ActionApprovalCoordinatorImplTest {
         runTest {
             val action = create()
 
-            assertEquals(ApprovalState.EXPIRED, coordinator.approve(action.id, action.createdAtMs + W))
+            assertEquals(ActionApprovalState.EXPIRED, coordinator.approve(action.id, action.createdAtMs + W))
             assertFalse(coordinator.consumeGrant("fp-1", RuleMode.NOTIFY, action.createdAtMs + W))
         }
 
@@ -158,8 +157,8 @@ class ActionApprovalCoordinatorImplTest {
 
             coordinator.deny(action.id)
 
-            assertEquals(ApprovalState.DENIED, coordinator.stateOf(action.id, 1L))
-            assertEquals(ApprovalState.DENIED, coordinator.approve(action.id, 1L))
+            assertEquals(ActionApprovalState.DENIED, coordinator.stateOf(action.id, 1L))
+            assertEquals(ActionApprovalState.DENIED, coordinator.approve(action.id, 1L))
             assertFalse(coordinator.consumeGrant("fp-1", RuleMode.NOTIFY, 1L))
         }
 
@@ -168,9 +167,9 @@ class ActionApprovalCoordinatorImplTest {
         runTest {
             val action = create()
 
-            assertEquals(ApprovalState.EXPIRED, coordinator.stateOf("unknown", 0L))
-            assertEquals(ApprovalState.EXPIRED, coordinator.approve("unknown", 0L))
-            assertEquals(ApprovalState.EXPIRED, coordinator.awaitDecision("unknown", 1_000L))
+            assertEquals(ActionApprovalState.EXPIRED, coordinator.stateOf("unknown", 0L))
+            assertEquals(ActionApprovalState.EXPIRED, coordinator.approve("unknown", 0L))
+            assertEquals(ActionApprovalState.EXPIRED, coordinator.awaitDecision("unknown", 1_000L))
             assertEquals(ChatConfirmResult.EXPIRED, coordinator.confirmInChat("unknown", 0L))
             coordinator.deny("unknown")
             assertEquals(listOf(action.id), pendingIds())
@@ -181,7 +180,7 @@ class ActionApprovalCoordinatorImplTest {
         runTest {
             val action = create()
 
-            assertEquals(ApprovalState.EXPIRED, coordinator.stateOf(action.id, action.createdAtMs + W))
+            assertEquals(ActionApprovalState.EXPIRED, coordinator.stateOf(action.id, action.createdAtMs + W))
             assertTrue(pendingIds().isEmpty())
         }
 
@@ -190,7 +189,10 @@ class ActionApprovalCoordinatorImplTest {
         runTest {
             val action = create(nowMs = 1_000L)
 
-            assertEquals(ApprovalStatusView(ApprovalState.PENDING, 1_000L + W), coordinator.statusOf(action.id, 1_000L))
+            assertEquals(
+                ApprovalStatusView(ActionApprovalState.PENDING, 1_000L + W),
+                coordinator.statusOf(action.id, 1_000L),
+            )
         }
 
     @Test
@@ -201,14 +203,14 @@ class ActionApprovalCoordinatorImplTest {
             coordinator.approve(approved.id, 1L)
             coordinator.deny(denied.id)
 
-            assertEquals(ApprovalStatusView(ApprovalState.APPROVED, null), coordinator.statusOf(approved.id, 1L))
-            assertEquals(ApprovalStatusView(ApprovalState.DENIED, null), coordinator.statusOf(denied.id, 1L))
+            assertEquals(ApprovalStatusView(ActionApprovalState.APPROVED, null), coordinator.statusOf(approved.id, 1L))
+            assertEquals(ApprovalStatusView(ActionApprovalState.DENIED, null), coordinator.statusOf(denied.id, 1L))
         }
 
     @Test
     fun `statusOf unknown id is expired without expiry`() =
         runTest {
-            assertEquals(ApprovalStatusView(ApprovalState.EXPIRED, null), coordinator.statusOf("unknown", 5L))
+            assertEquals(ApprovalStatusView(ActionApprovalState.EXPIRED, null), coordinator.statusOf("unknown", 5L))
         }
 
     @Test
@@ -220,9 +222,9 @@ class ActionApprovalCoordinatorImplTest {
 
             val status = coordinator.statusOf(action.id, action.createdAtMs + W)
 
-            assertEquals(ApprovalStatusView(ApprovalState.EXPIRED, null), status)
+            assertEquals(ApprovalStatusView(ActionApprovalState.EXPIRED, null), status)
             assertTrue(pendingIds().isEmpty())
-            assertEquals(ApprovalState.EXPIRED, awaiter.await())
+            assertEquals(ActionApprovalState.EXPIRED, awaiter.await())
         }
 
     @Test
@@ -234,7 +236,7 @@ class ActionApprovalCoordinatorImplTest {
 
             coordinator.approve(action.id, 1_000L)
 
-            assertEquals(ApprovalState.APPROVED, awaiter.await())
+            assertEquals(ActionApprovalState.APPROVED, awaiter.await())
         }
 
     @Test
@@ -242,7 +244,7 @@ class ActionApprovalCoordinatorImplTest {
         runTest {
             val action = create()
 
-            assertEquals(ApprovalState.PENDING, coordinator.awaitDecision(action.id, WAIT_MS))
+            assertEquals(ActionApprovalState.PENDING, coordinator.awaitDecision(action.id, WAIT_MS))
             assertTrue(testScheduler.currentTime >= WAIT_MS)
         }
 
@@ -255,7 +257,7 @@ class ActionApprovalCoordinatorImplTest {
 
             create(fingerprint = "fp-other", nowMs = W)
 
-            assertEquals(ApprovalState.EXPIRED, awaiter.await())
+            assertEquals(ActionApprovalState.EXPIRED, awaiter.await())
         }
 
     @Test
@@ -265,8 +267,8 @@ class ActionApprovalCoordinatorImplTest {
             val pending = create(fingerprint = "fp-p")
             coordinator.approve(approved.id, 1L)
 
-            assertEquals(ApprovalState.APPROVED, coordinator.awaitDecision(approved.id, 0L))
-            assertEquals(ApprovalState.PENDING, coordinator.awaitDecision(pending.id, 0L))
+            assertEquals(ActionApprovalState.APPROVED, coordinator.awaitDecision(approved.id, 0L))
+            assertEquals(ActionApprovalState.PENDING, coordinator.awaitDecision(pending.id, 0L))
         }
 
     @Test
@@ -284,7 +286,7 @@ class ActionApprovalCoordinatorImplTest {
             val action = create(method = RuleMode.NOTIFY)
 
             assertEquals(ChatConfirmResult.NOT_CONFIRMABLE, coordinator.confirmInChat(action.id, 1L))
-            assertEquals(ApprovalState.PENDING, coordinator.stateOf(action.id, 1L))
+            assertEquals(ActionApprovalState.PENDING, coordinator.stateOf(action.id, 1L))
             assertFalse(coordinator.consumeGrant("fp-1", RuleMode.ASK_IN_CHAT, 1L))
         }
 
@@ -384,9 +386,95 @@ class ActionApprovalCoordinatorImplTest {
             val outcome = coordinator.applyReevaluation(action.id, aDecision(mode = RuleMode.RUN), 1L)
 
             assertEquals(ReevaluationOutcome.NO_LONGER_NEEDS_APPROVAL, outcome)
-            assertEquals(ApprovalState.EXPIRED, coordinator.stateOf(action.id, 1L))
+            assertEquals(
+                ApprovalStatusView(ActionApprovalState.NOT_REQUIRED, null),
+                coordinator.statusOf(action.id, 1L),
+            )
             assertFalse(coordinator.consumeGrant("fp-1", RuleMode.ASK_IN_CHAT, 1L))
             assertTrue(pendingIds().isEmpty())
+        }
+
+    @Test
+    fun `applyReevaluation to run wakes awaiters with not required`() =
+        runTest {
+            val action = create()
+            val awaiter = async { coordinator.awaitDecision(action.id, WAIT_MS) }
+            runCurrent()
+
+            coordinator.applyReevaluation(action.id, aDecision(mode = RuleMode.RUN), 1L)
+
+            assertEquals(ActionApprovalState.NOT_REQUIRED, awaiter.await())
+            assertTrue(testScheduler.currentTime < WAIT_MS)
+        }
+
+    @Test
+    fun `not required entry stays not required after its window`() =
+        runTest {
+            val action = create()
+            coordinator.applyReevaluation(action.id, aDecision(mode = RuleMode.RUN), 1L)
+
+            assertEquals(ActionApprovalState.NOT_REQUIRED, coordinator.stateOf(action.id, action.createdAtMs + W))
+        }
+
+    @Test
+    fun `confirmInChat on a not required entry returns not required without a grant`() =
+        runTest {
+            val action = create(method = RuleMode.ASK_IN_CHAT)
+            coordinator.applyReevaluation(action.id, aDecision(mode = RuleMode.RUN), 1L)
+
+            assertEquals(ChatConfirmResult.NOT_REQUIRED, coordinator.confirmInChat(action.id, 1L))
+            assertFalse(coordinator.consumeGrant("fp-1", RuleMode.ASK_IN_CHAT, 1L))
+        }
+
+    @Test
+    fun `consumed grant marks the approved entry already used`() =
+        runTest {
+            val action = create()
+            coordinator.approve(action.id, 1L)
+
+            assertTrue(coordinator.consumeGrant("fp-1", RuleMode.NOTIFY, 1L))
+
+            assertEquals(
+                ApprovalStatusView(ActionApprovalState.ALREADY_USED, null),
+                coordinator.statusOf(action.id, 1L),
+            )
+            assertEquals(ActionApprovalState.ALREADY_USED, coordinator.approve(action.id, 1L))
+        }
+
+    @Test
+    fun `refused consume leaves the approved entry approved`() =
+        runTest {
+            val action = create(method = RuleMode.ASK_IN_CHAT)
+            coordinator.confirmInChat(action.id, 1L)
+
+            assertFalse(coordinator.consumeGrant("fp-1", RuleMode.NOTIFY, 1L))
+
+            assertEquals(ActionApprovalState.APPROVED, coordinator.stateOf(action.id, 1L))
+        }
+
+    @Test
+    fun `consumed grant marks only entries with that fingerprint`() =
+        runTest {
+            val used = create(fingerprint = "fp-used")
+            val other = create(fingerprint = "fp-other")
+            coordinator.approve(used.id, 1L)
+            coordinator.approve(other.id, 1L)
+
+            coordinator.consumeGrant("fp-used", RuleMode.NOTIFY, 1L)
+
+            assertEquals(ActionApprovalState.ALREADY_USED, coordinator.stateOf(used.id, 1L))
+            assertEquals(ActionApprovalState.APPROVED, coordinator.stateOf(other.id, 1L))
+        }
+
+    @Test
+    fun `confirmInChat on a used entry returns already used without a new grant`() =
+        runTest {
+            val action = create(method = RuleMode.ASK_IN_CHAT)
+            coordinator.confirmInChat(action.id, 1L)
+            coordinator.consumeGrant("fp-1", RuleMode.ASK_IN_CHAT, 1L)
+
+            assertEquals(ChatConfirmResult.ALREADY_USED, coordinator.confirmInChat(action.id, 2L))
+            assertFalse(coordinator.consumeGrant("fp-1", RuleMode.ASK_IN_CHAT, 2L))
         }
 
     @Test
@@ -397,7 +485,7 @@ class ActionApprovalCoordinatorImplTest {
             val outcome = coordinator.applyReevaluation(action.id, aDecision(mode = RuleMode.FORBIDDEN), 1L)
 
             assertEquals(ReevaluationOutcome.NOW_FORBIDDEN, outcome)
-            assertEquals(ApprovalState.DENIED, coordinator.stateOf(action.id, 1L))
+            assertEquals(ActionApprovalState.DENIED, coordinator.stateOf(action.id, 1L))
         }
 
     @Test
@@ -412,8 +500,8 @@ class ActionApprovalCoordinatorImplTest {
             assertEquals(ReevaluationOutcome.NOT_PENDING, coordinator.applyReevaluation(approved.id, decision, 1L))
             assertEquals(ReevaluationOutcome.NOT_PENDING, coordinator.applyReevaluation(denied.id, decision, 1L))
             assertEquals(ReevaluationOutcome.NOT_PENDING, coordinator.applyReevaluation("unknown", decision, 1L))
-            assertEquals(ApprovalState.APPROVED, coordinator.stateOf(approved.id, 1L))
-            assertEquals(ApprovalState.DENIED, coordinator.stateOf(denied.id, 1L))
+            assertEquals(ActionApprovalState.APPROVED, coordinator.stateOf(approved.id, 1L))
+            assertEquals(ActionApprovalState.DENIED, coordinator.stateOf(denied.id, 1L))
         }
 
     @Test
@@ -428,7 +516,7 @@ class ActionApprovalCoordinatorImplTest {
 
             coordinator.clearAll()
 
-            actions.forEach { assertEquals(ApprovalState.DENIED, coordinator.stateOf(it.id, 1L)) }
+            actions.forEach { assertEquals(ActionApprovalState.DENIED, coordinator.stateOf(it.id, 1L)) }
             assertTrue(pendingIds().isEmpty())
         }
 
@@ -441,7 +529,7 @@ class ActionApprovalCoordinatorImplTest {
 
             coordinator.clearAll()
 
-            assertEquals(ApprovalState.DENIED, awaiter.await())
+            assertEquals(ActionApprovalState.DENIED, awaiter.await())
             assertTrue(testScheduler.currentTime < WAIT_MS)
         }
 
@@ -466,8 +554,8 @@ class ActionApprovalCoordinatorImplTest {
             coordinator.clearAll()
             val fresh = create(fingerprint = "fp-a", nowMs = 2L)
 
-            assertEquals(ApprovalState.APPROVED, coordinator.stateOf(approved.id, 2L))
-            assertEquals(ApprovalState.PENDING, coordinator.stateOf(fresh.id, 2L))
+            assertEquals(ActionApprovalState.APPROVED, coordinator.stateOf(approved.id, 2L))
+            assertEquals(ActionApprovalState.PENDING, coordinator.stateOf(fresh.id, 2L))
             assertNotEquals(approved.id, fresh.id)
         }
 
@@ -481,9 +569,9 @@ class ActionApprovalCoordinatorImplTest {
 
             val fresh = create(fingerprint = "fp-new")
 
-            assertEquals(ApprovalState.EXPIRED, coordinator.stateOf(approved.first().id, 0L))
-            assertEquals(ApprovalState.APPROVED, coordinator.stateOf(approved.last().id, 0L))
-            assertEquals(ApprovalState.PENDING, coordinator.stateOf(fresh.id, 0L))
+            assertEquals(ActionApprovalState.EXPIRED, coordinator.stateOf(approved.first().id, 0L))
+            assertEquals(ActionApprovalState.APPROVED, coordinator.stateOf(approved.last().id, 0L))
+            assertEquals(ActionApprovalState.PENDING, coordinator.stateOf(fresh.id, 0L))
         }
 
     @Test

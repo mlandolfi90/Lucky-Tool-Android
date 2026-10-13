@@ -72,6 +72,22 @@ internal class GateOutcomes(
         return GateResults.expired()
     }
 
+    fun notRequired(
+        call: GateCall,
+        decision: PolicyDecision,
+    ): CallToolResult {
+        record(call, decision.toLogRecord(ApprovalLogOutcome.NOT_REQUIRED))
+        return GateResults.notRequired()
+    }
+
+    fun alreadyUsed(
+        call: GateCall,
+        decision: PolicyDecision,
+    ): CallToolResult {
+        record(call, decision.toLogRecord(ApprovalLogOutcome.ALREADY_USED))
+        return GateResults.alreadyUsed()
+    }
+
     fun tooManyPending(
         call: GateCall,
         decision: PolicyDecision,

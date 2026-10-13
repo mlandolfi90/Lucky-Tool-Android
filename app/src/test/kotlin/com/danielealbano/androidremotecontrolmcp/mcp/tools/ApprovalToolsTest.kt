@@ -1,13 +1,14 @@
 package com.danielealbano.androidremotecontrolmcp.mcp.tools
 
 import com.danielealbano.androidremotecontrolmcp.mcp.McpToolException
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinatorImpl
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalPolicy
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalStatusView
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ChatConfirmResult
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingActionFixtures
+import com.danielealbano.androidremotecontrolmcp.policy.model.RuleMode
 import com.danielealbano.androidremotecontrolmcp.testutil.PolicyTestDoubles
 import com.danielealbano.androidremotecontrolmcp.testutil.RecordingServerLogRepository
 import io.mockk.coEvery
@@ -38,8 +39,9 @@ class ApprovalToolsTest {
     private val confirmTool = ConfirmHumanApprovalTool(coordinator, nowMs)
 
     init {
-        coEvery { coordinator.statusOf(ID, any()) } returns ApprovalStatusView(ApprovalState.PENDING, EXPIRES_AT_MS)
-        coEvery { coordinator.awaitDecision(any(), any()) } returns ApprovalState.PENDING
+        coEvery { coordinator.statusOf(ID, any()) } returns
+            ApprovalStatusView(ActionApprovalState.PENDING, EXPIRES_AT_MS)
+        coEvery { coordinator.awaitDecision(any(), any()) } returns ActionApprovalState.PENDING
     }
 
     private fun args(
@@ -66,9 +68,9 @@ class ApprovalToolsTest {
         }
 
     @Test
-    fun `status approved denied expired omit expiry`() =
+    fun `every status other than pending omits expiry`() =
         runTest {
-            listOf(ApprovalState.APPROVED, ApprovalState.DENIED, ApprovalState.EXPIRED).forEach { state ->
+            ActionApprovalState.entries.filter { it != ActionApprovalState.PENDING }.forEach { state ->
                 listOf(null, EXPIRES_AT_MS).forEach { expiry ->
                     coEvery { coordinator.statusOf(ID, any()) } returns ApprovalStatusView(state, expiry)
 
@@ -86,8 +88,8 @@ class ApprovalToolsTest {
         runTest {
             coEvery { coordinator.statusOf(ID, any()) } returnsMany
                 listOf(
-                    ApprovalStatusView(ApprovalState.PENDING, EXPIRES_AT_MS),
-                    ApprovalStatusView(ApprovalState.APPROVED, null),
+                    ApprovalStatusView(ActionApprovalState.PENDING, EXPIRES_AT_MS),
+                    ApprovalStatusView(ActionApprovalState.APPROVED, null),
                 )
 
             val result = statusTool.execute(args(waitMs = 3_000L))
@@ -111,9 +113,9 @@ class ApprovalToolsTest {
     @Test
     fun `wait_ms does not wait for a request that is not pending`() =
         runTest {
-            coEvery { coordinator.statusOf(ID, any()) } returns ApprovalStatusView(ApprovalState.APPROVED, null)
+            coEvery { coordinator.statusOf(ID, any()) } returns ApprovalStatusView(ActionApprovalState.APPROVED, null)
             statusTool.execute(args(waitMs = 3_000L))
-            coEvery { coordinator.statusOf(ID, any()) } returns ApprovalStatusView(ApprovalState.PENDING, NOW_MS)
+            coEvery { coordinator.statusOf(ID, any()) } returns ApprovalStatusView(ActionApprovalState.PENDING, NOW_MS)
             statusTool.execute(args(waitMs = 3_000L))
 
             coVerify(exactly = 0) { coordinator.awaitDecision(any(), any()) }
@@ -161,6 +163,8 @@ class ApprovalToolsTest {
                 ChatConfirmResult.NOT_CONFIRMABLE to """{"status":"not_confirmable"}""",
                 ChatConfirmResult.DENIED to """{"status":"denied"}""",
                 ChatConfirmResult.EXPIRED to """{"status":"expired"}""",
+                ChatConfirmResult.NOT_REQUIRED to """{"status":"not_required"}""",
+                ChatConfirmResult.ALREADY_USED to """{"status":"already_used"}""",
             ).forEach { (chat, expected) ->
                 coEvery { coordinator.confirmInChat(ID, NOW_MS) } returns chat
 
@@ -198,9 +202,46 @@ class ApprovalToolsTest {
             assertEquals(ActionApprovalPolicy.APPROVAL_WINDOW_MS, testScheduler.currentTime)
         }
 
+    @Test
+    fun `status and confirm read not required after a re-evaluation to run`() =
+        runTest {
+            val realCoordinator = ActionApprovalCoordinatorImpl()
+            val request = PendingActionFixtures.aRequest(method = RuleMode.ASK_IN_CHAT)
+            val pending = realCoordinator.createOrJoin(request, NOW_MS)
+            realCoordinator.applyReevaluation(pending.id, PendingActionFixtures.aDecision(mode = RuleMode.RUN), NOW_MS)
+
+            val status = GetApprovalStatusTool(realCoordinator, nowMs).execute(args(approvalId = pending.id))
+            val confirmed = ConfirmHumanApprovalTool(realCoordinator, nowMs).execute(args(approvalId = pending.id))
+
+            assertEquals("""{"approval_id":"${pending.id}","status":"not_required"}""", textOf(status))
+            assertNotEquals(true, status.isError)
+            assertEquals("""{"status":"not_required"}""", textOf(confirmed))
+            assertEquals(true, confirmed.isError)
+        }
+
+    @Test
+    fun `status and confirm read already used once the grant is consumed`() =
+        runTest {
+            val realCoordinator = ActionApprovalCoordinatorImpl()
+            val request = PendingActionFixtures.aRequest(fingerprint = FINGERPRINT, method = RuleMode.ASK_IN_CHAT)
+            val pending = realCoordinator.createOrJoin(request, NOW_MS)
+            val confirmTool = ConfirmHumanApprovalTool(realCoordinator, nowMs)
+            confirmTool.execute(args(approvalId = pending.id))
+            realCoordinator.consumeGrant(FINGERPRINT, RuleMode.ASK_IN_CHAT, NOW_MS)
+
+            val status = GetApprovalStatusTool(realCoordinator, nowMs).execute(args(approvalId = pending.id))
+            val confirmed = confirmTool.execute(args(approvalId = pending.id))
+
+            assertEquals("""{"approval_id":"${pending.id}","status":"already_used"}""", textOf(status))
+            assertNotEquals(true, status.isError)
+            assertEquals("""{"status":"already_used"}""", textOf(confirmed))
+            assertEquals(true, confirmed.isError)
+        }
+
     private companion object {
         const val ID = "id-1"
         const val NOW_MS = 1_000L
         const val EXPIRES_AT_MS = 5_000L
+        const val FINGERPRINT = "fp-used"
     }
 }

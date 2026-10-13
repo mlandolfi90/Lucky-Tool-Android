@@ -65,7 +65,7 @@ fun approvalLogText(message: String): String {
 
 /**
  * String resources of the APPROVAL log codes and of the gate's TOOL_CALL markers. Reasons and causes use exhaustive
- * `when`s; the 15 outcomes use a map, and `ApprovalLogLabelsTest` fails when an outcome has no entry.
+ * `when`s; the 17 outcomes use a map, and `ApprovalLogLabelsTest` fails when an outcome has no entry.
  */
 internal object ApprovalLogLabels {
     private val OUTCOMES: Map<ApprovalLogOutcome, Int> =
@@ -85,6 +85,8 @@ internal object ApprovalLogLabels {
             ApprovalLogOutcome.PROFILE_CREATED to R.string.approval_log_outcome_profile_created,
             ApprovalLogOutcome.PROFILE_UPDATED to R.string.approval_log_outcome_profile_updated,
             ApprovalLogOutcome.PROFILE_DELETED to R.string.approval_log_outcome_profile_deleted,
+            ApprovalLogOutcome.NOT_REQUIRED to R.string.approval_log_outcome_not_required,
+            ApprovalLogOutcome.ALREADY_USED to R.string.approval_log_outcome_already_used,
         )
 
     private val TOOL_CALL_MARKERS: Map<String, Int> =

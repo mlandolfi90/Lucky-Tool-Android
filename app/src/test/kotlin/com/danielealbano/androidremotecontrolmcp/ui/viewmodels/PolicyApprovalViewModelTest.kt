@@ -1,10 +1,10 @@
 package com.danielealbano.androidremotecontrolmcp.ui.viewmodels
 
 import app.cash.turbine.test
-import com.danielealbano.androidremotecontrolmcp.mcp.oauth.ApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.amount.AmountParser
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalPolicy
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalState
 import com.danielealbano.androidremotecontrolmcp.policy.approval.ExceptionReevaluation
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingAction
 import com.danielealbano.androidremotecontrolmcp.policy.approval.PendingActionFixtures
@@ -59,8 +59,8 @@ class PolicyApprovalViewModelTest {
     fun setUp() {
         Dispatchers.setMain(dispatcher)
         every { coordinator.observePending() } returns pendingFlow
-        coEvery { coordinator.approve(any(), any()) } returns ApprovalState.APPROVED
-        coEvery { coordinator.stateOf(any(), any()) } returns ApprovalState.DENIED
+        coEvery { coordinator.approve(any(), any()) } returns ActionApprovalState.APPROVED
+        coEvery { coordinator.stateOf(any(), any()) } returns ActionApprovalState.DENIED
         coEvery { reevaluator.addExceptionAndReevaluate(any(), any()) } returns
             ExceptionReevaluation(exceptionStored = true, outcome = ReevaluationOutcome.STILL_PENDING)
         every { appIconCache.getLaunchableApps() } returns listOf(PACKAGE to "Bank")
@@ -204,7 +204,7 @@ class PolicyApprovalViewModelTest {
 
     @Test
     fun `late approve logs expired`() {
-        coEvery { coordinator.approve(any(), any()) } returns ApprovalState.EXPIRED
+        coEvery { coordinator.approve(any(), any()) } returns ActionApprovalState.EXPIRED
 
         viewModel().approve("id-1")
 
@@ -213,9 +213,20 @@ class PolicyApprovalViewModelTest {
 
     @Test
     fun `approve that finds the entry already denied logs nothing`() {
-        coEvery { coordinator.approve(any(), any()) } returns ApprovalState.DENIED
+        coEvery { coordinator.approve(any(), any()) } returns ActionApprovalState.DENIED
 
         viewModel().approve("id-1")
+
+        verify(exactly = 0) { events.log(any(), any(), any()) }
+    }
+
+    @Test
+    fun `approve that finds the entry not required or already used logs nothing`() {
+        listOf(ActionApprovalState.NOT_REQUIRED, ActionApprovalState.ALREADY_USED).forEach { state ->
+            coEvery { coordinator.approve(any(), any()) } returns state
+
+            viewModel().approve("id-1")
+        }
 
         verify(exactly = 0) { events.log(any(), any(), any()) }
     }
@@ -239,7 +250,7 @@ class PolicyApprovalViewModelTest {
 
     @Test
     fun `deny logs nothing when the entry was approved meanwhile`() {
-        coEvery { coordinator.stateOf(any(), any()) } returns ApprovalState.APPROVED
+        coEvery { coordinator.stateOf(any(), any()) } returns ActionApprovalState.APPROVED
 
         viewModel().deny("id-1")
 
