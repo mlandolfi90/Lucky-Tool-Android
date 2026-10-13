@@ -176,6 +176,9 @@ class BrandResourcesTest {
         assertEquals(FOREGROUND_STROKE_ALPHAS, pathAttributes(FOREGROUND, "strokeAlpha")) {
             "the brand fades the inner border to 0.85 and nothing else"
         }
+        assertEquals(NO_FILL_ALPHA, pathAttributes(FOREGROUND, "fillAlpha")) {
+            "an added fillAlpha would fade the flame without changing a colour or a width"
+        }
         assertEquals(
             listOf("android:fillColor"),
             parse(FOREGROUND).elements("aapt:attr").map { it.getAttribute("name") },
@@ -255,6 +258,9 @@ class BrandResourcesTest {
         assertFalse("android:fillColor" in read(MONOCHROME)) {
             "launchers tint the monochrome layer, so it carries strokes only"
         }
+        assertFalse("android:fillAlpha" in read(MONOCHROME)) {
+            "a layer with no fill has nothing to fade"
+        }
         assertEquals(
             listOf(SAFE_ZONE_TRANSFORM, INNER_BORDER_TRANSFORM, FLAME_TRANSFORM),
             document.elements("group").map { it.transform() },
@@ -304,6 +310,12 @@ class BrandResourcesTest {
             listOf("", OPAQUE_WHITE),
             pathAttributes(NOTIFICATION, "fillColor").map { it.lowercase() },
         ) { "the shield is stroked and the flame is filled opaque" }
+        assertEquals(listOf("", ""), pathAttributes(NOTIFICATION, "strokeAlpha")) {
+            "at 24dp the silhouette is the icon: nothing may fade either path"
+        }
+        assertEquals(listOf("", ""), pathAttributes(NOTIFICATION, "fillAlpha")) {
+            "a faded flame renders as a gap in the shield"
+        }
         assertEquals(
             "?attr/colorControlNormal",
             document.documentElement.getAttribute("android:tint"),
@@ -378,6 +390,7 @@ class BrandResourcesTest {
         val FOREGROUND_FILL_COLOURS = listOf("", "", NEON, "", "", "")
         val FOREGROUND_STROKE_ALPHAS = listOf("", "0.85", "", "", "", "")
         val MONOCHROME_STROKE_COLOURS = List(6) { OPAQUE_WHITE }
+        val NO_FILL_ALPHA = List(6) { "" }
 
         val GRADIENT_GEOMETRY =
             mapOf(

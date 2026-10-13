@@ -823,3 +823,50 @@ the shoulder lands at r ≈ 32.50 (miter ratio 1.22, inside the default limit of
 33 key-content circle. The two adaptive drawables' declared `dp` stays unpinned: their only three
 consumers are the two mipmaps, where `AdaptiveIconDrawable` lays each layer out to the mask, and
 `AboutScreen`, which overrides with `Modifier.size`. There are no density mipmap fallbacks.
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 5, 2026-10-13
+
+Verdict: **CLEAN** — 0 critical, 0 warnings, 0 findings requiring a change, plus one INFO whose
+resolution the reviewer offered as record-only. **It was closed in code instead**, so the DoD
+checkbox below stays open until a sixth pass confirms that delta; a clean verdict cannot cover a
+change made after it was given.
+
+Round 5 re-verified every round-4 resolution by its own measurement rather than on report:
+it compiled and ran the real suite on this host (**15/15**), caught X5–X9 each by the row that owns
+the tinted layer, observed all six of Task 4.1 Action 4's reversion rows failing by the test the plan
+names, re-judged **30 of 30** mutations as caught, compared all five resource blocks (and both
+mipmaps against the shared block) byte-identical to the plan, confirmed the ten-file scope and the
+plan file at 27 flips and nothing else, ran both linters clean, and read run `38334334395` on
+`76d2f10` green on all five checks with `BrandResourcesTest` 15/15 under both variant tasks.
+
+Two of its checks are worth keeping because they close holes the earlier rounds left in the
+*reasoning*, not in the code:
+
+- **The replacement of the relative monochrome comparison is strictly stronger, not merely
+  different.** Round 4 swapped a foreground↔monochrome first-group comparison for absolute
+  constants, which raised the question of whether the inter-layer coupling was lost. Measured both
+  directions: moving the tinted layer's outer group alone is caught, and moving **both** layers
+  identically to `scale 1.125 / translate 18` is caught by two rows. The coupling survives
+  transitively because the foreground's own group is pinned absolutely, and the absolute form
+  additionally pins the group count and order (inserting a fourth group is caught).
+- **The fail-closed property of `groupWrapping` was confirmed by observation**, settling round-4's
+  INFO-R4-2: corrupting a selected `pathData` makes the selector match zero groups and fail loudly at
+  `assertEquals(1, matches.size)`.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| I-R5-1 | INFO: three mutations survived all 15 rows, reachable only by **adding** an opacity attribute that no shipped drawable declares — `strokeAlpha` on the notification shield, and `fillAlpha` on the notification and foreground flames. `strokeAlpha` was pinned for the foreground and the tinted layer, so additions there were caught; `fillAlpha` was pinned nowhere. Breaks no stated acceptance criterion, and is a different mutation class from the 45+ graded in rounds 1–4, every one of which changed an *existing* value. | **Closed in code rather than declared.** The reviewer offered a record-only terminus; pinning costs four assertions and the threat is real — a faded flame ships as a gap in the shield and no colour, width or path assertion can see it. Each goes in the row that already owns the file: the foreground's `fillAlpha` list must be `NO_FILL_ALPHA`; the tinted layer, which already forbids a fill, now also forbids fading one; the notification icon's `strokeAlpha` and `fillAlpha` lists must both be empty, because at 24dp the silhouette *is* the icon. Verified **by the real compiled test**: all three survivors now fail one row each, and so does a fourth probe adding `fillAlpha` to the tinted layer. Suite still **15** rows; ktlint 0 findings, detekt exit 0 |
+
+**Declared terminus, re-measured by round 5 and unchanged.** `strokeLineCap`/`strokeLineJoin` stay
+unpinned — removing the foreground's `strokeLineJoin` survives, and the miter tip at the shoulder
+recomputes to r ≈ 32.50 inside the 33 circle (interior angle 109.8°, miter ratio 1.222, inside the
+default limit of 4). The two adaptive drawables' declared `dp` stays unpinned — halving it survives,
+and their only three consumers are the two mipmaps, where `AdaptiveIconDrawable` lays each layer out
+to the mask, and `AboutScreen`, which overrides with `Modifier.size`. With I-R5-1 closed, no opacity
+attribute remains outside the guards.
+
+**Suite shape:** **15 test methods**; the shared infrastructure differs from the plan's "in full"
+block in **six** places — two forced by ktlint and four additive: **4** helpers and **21** companion
+constants beyond the plan's 6 and 14 (`NO_FILL_ALPHA` is the twenty-first).
