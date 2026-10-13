@@ -23,6 +23,7 @@ import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.SettingsInd
 import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.StorageSettingsScreen
 import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.TunnelSettingsScreen
 import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.WifiMonitorScreen
+import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.approvalProfileDestinations
 import com.danielealbano.androidremotecontrolmcp.ui.screens.settings.geofenceDestinations
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.ChannelViewModel
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.MainViewModel
@@ -124,5 +125,6 @@ fun SettingsScreen(
             )
         }
         geofenceDestinations(navController)
+        approvalProfileDestinations(navController)
     }
 }

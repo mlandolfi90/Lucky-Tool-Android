@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -74,6 +75,7 @@ private fun SettingsEntriesColumn(
             subtitle = stringResource(R.string.settings_security_subtitle),
             onClick = { onNavigate(SettingsRoute.Security.route) },
         )
+        ApprovalProfilesEntry(onNavigate = onNavigate)
         SettingsEntry(
             icon = Icons.Default.Shield,
             title = stringResource(R.string.settings_privacy_title),
@@ -111,6 +113,16 @@ private fun SettingsEntriesColumn(
             onClick = { onNavigate(SettingsRoute.ChannelSettings.route) },
         )
     }
+}
+
+@Composable
+private fun ApprovalProfilesEntry(onNavigate: (String) -> Unit) {
+    SettingsEntry(
+        icon = Icons.Default.Policy,
+        title = stringResource(R.string.settings_approval_profiles_title),
+        subtitle = stringResource(R.string.settings_approval_profiles_subtitle),
+        onClick = { onNavigate(SettingsRoute.ApprovalProfiles.route) },
+    )
 }
 
 @Composable
