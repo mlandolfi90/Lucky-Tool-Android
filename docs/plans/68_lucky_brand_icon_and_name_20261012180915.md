@@ -663,7 +663,7 @@ in the PR body; if any is not taken, say so, and never present an estimate as an
 - [x] Local pre-checks clean; the five CI checks green, read with `gh`; no Kotlin `w: ` warning
       introduced by this plan.
 - [x] Every reversion row observed failing and restored, or declared as not executed.
-- [ ] `code-reviewer` plan-compliance pass clean and recorded.
+- [x] `code-reviewer` plan-compliance pass clean and recorded.
 - [x] MB1-MB4 reported in the PR body, taken or declared; PR URL reported.
 
 ---
@@ -955,3 +955,41 @@ a path; `android:alpha` on a group; and `tileMode` on the gradient, whose stops 
 body. The honest form of the claim round 6 got wrong: **within the `VectorDrawable` attribute surface
 that round 7 enumerated, every item that visibly changes the art is pinned, and the rest are listed
 here with the measurement that found them harmless.**
+
+---
+
+## Closing note — the review loop was cut, 2026-10-13
+
+**Decided by the user**: *"corta el bucle, necesitamos cambiar la forma"*. Round 8 was stopped
+mid-run. This note is the honest account of what the DoD tick above rests on, and of what it does
+not.
+
+**What the tick rests on.** Round 5 returned **CLEAN** after a full independent re-audit — geometry
+re-derived from scratch, all five resource blocks byte-identical to this plan's XML (both mipmaps
+against the shared block), `AboutScreen.kt`, the two strings, the ten-file scope, plan-file integrity,
+both linters, 30/30 mutations caught, the real compiled suite 15/15, all six of Task 4.1's reversion
+rows observed failing, and CI green. Rounds 6 and 7 were hunts commissioned **on top of** that clean
+verdict, each asked to find ways the art could change with the suite green. Each found real gaps, each
+one was closed in code and verified by the real compiled test, and each closure is recorded above. CI
+is green on the final head `32124ae` with `BrandResourcesTest` 15/15 under both variant tasks.
+
+**What it does not rest on.** Round 8 never reported. Its brief was the delta of `32124ae` — the trim,
+rotation, group-census and `aapt` closures — which was verified here instead: eleven mutations of that
+class caught by the real compiled test, every declared terminus item still surviving, both linters
+clean, and CI green. No independent reviewer confirmed that delta.
+
+**Why the loop was cut, recorded because it is the lesson, not an excuse.** The artwork and the name
+were finished in the first five commits. The next five commits and eight review rounds were all guard
+hardening, at roughly twenty minutes a round plus a thirteen-minute CI run each. Two of those rounds
+found defects that genuinely mattered — a drawable could ship **wholly invisible** with all fifteen
+rows green — and three rounds caught claims of mine that were false. The later rounds were chasing
+attributes no shipped file uses. The loop was self-sustaining for two reasons that compound: the
+governing rule is that every finding must be addressed including INFO, and I asked each reviewer to
+hunt for more. A reviewer asked to find something will find something. The stopping rule has to be
+decided before the hunt starts, not after each round.
+
+**State at the cut.** 15 test methods; **5** helpers and **25** companion constants beyond the plan's
+6 members and 14 constants; ktlint 1.8.0 → 0 findings and detekt 2.0.0-alpha.5 → exit 0 on both source
+sets; CI run `38339761087` green on all five checks. The manual checks MB1–MB4 remain **declared and
+not taken** — they need the user and the phone, and no amount of review substitutes for looking at the
+icon.
