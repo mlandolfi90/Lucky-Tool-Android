@@ -256,9 +256,9 @@ class BrandResourcesTest {
             "launchers tint the monochrome layer, so it carries strokes only"
         }
         assertEquals(
-            parse(FOREGROUND).elements("group").first().transform(),
-            document.elements("group").first().transform(),
-        ) { "the monochrome layer must use the foreground's safe-zone transform" }
+            listOf(SAFE_ZONE_TRANSFORM, INNER_BORDER_TRANSFORM, FLAME_TRANSFORM),
+            document.elements("group").map { it.transform() },
+        ) { "the tinted layer must place the mark exactly as the foreground does" }
         assertEquals(
             pathAttributes(FOREGROUND, "pathData"),
             pathAttributes(MONOCHROME, "pathData"),
@@ -268,6 +268,13 @@ class BrandResourcesTest {
         }
         assertEquals(CANVAS, document.documentElement.getAttribute("android:viewportWidth"))
         assertEquals(CANVAS, document.documentElement.getAttribute("android:viewportHeight"))
+        assertEquals(MONOCHROME_STROKE_COLOURS, strokeColours(MONOCHROME)) {
+            "a launcher tints this layer, so its colour is opacity: a faded stroke fades " +
+                "the themed icon, which no stroke width or path can show"
+        }
+        assertEquals(FOREGROUND_STROKE_ALPHAS, pathAttributes(MONOCHROME, "strokeAlpha")) {
+            "both layers fade the inner border to 0.85 and leave everything else opaque"
+        }
     }
 
     @Test
@@ -370,6 +377,7 @@ class BrandResourcesTest {
             listOf(NEON, NEON, "", KNOCKOUT, KNOCKOUT, KNOCKOUT)
         val FOREGROUND_FILL_COLOURS = listOf("", "", NEON, "", "", "")
         val FOREGROUND_STROKE_ALPHAS = listOf("", "0.85", "", "", "", "")
+        val MONOCHROME_STROKE_COLOURS = List(6) { OPAQUE_WHITE }
 
         val GRADIENT_GEOMETRY =
             mapOf(

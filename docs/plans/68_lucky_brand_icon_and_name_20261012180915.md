@@ -780,3 +780,46 @@ member is a value some row compares against, or a helper some row needs.
 
 **Measured after the change:** ktlint 1.8.0 → 0 findings on `app/src/main/kotlin` and
 `app/src/test/kotlin`; detekt 2.0.0-alpha.5 → exit 0 on both.
+
+---
+
+## Review findings — `code-reviewer` (plan compliance), round 4, 2026-10-12
+
+Verdict: **NOT CLEAN** — 0 critical, 1 WARNING, 4 INFO, all addressed below. No compliance defect was
+found: the geometry, all five resource blocks (and both mipmaps against the shared block), the
+`AboutScreen` line, the two strings, the ten-file scope, the plan-file integrity, both linters and CI
+were re-verified correct.
+
+**The round's most useful result is a correction to this plan's own premise, not a finding.** Rounds
+1–3 and the PR body all rested on "Gradle cannot run on this host, so every assertion was
+re-implemented in Python". That is false, and round 4 disproved it by doing the thing it declared
+impossible: `BrandResourcesTest` is a pure-JVM JUnit 5 test — `javax.xml` DOM plus JUnit, no Android
+class anywhere — so it needs no Gradle, no Android SDK and no emulator. **I reproduced that
+independently rather than taking it on report**: `kotlin-compiler-embeddable` 2.4.0 and
+`junit-platform-console-standalone` from the session scratchpad, `kotlin-stdlib`, `annotations`,
+`kotlin-reflect` and `kotlinx-coroutines-core-jvm` from the existing Gradle cache, the module
+mirrored into the scratchpad so `moduleDir` resolves there, and the repository never written to.
+
+| ID | Finding | Resolution |
+|----|---------|------------|
+| WARNING-R4-1 | WARNING: the monochrome layer's `strokeColor` and `strokeAlpha` were unpinned, so recolouring all six strokes to `#20FFFFFF` (X5) or fading the inner border to 0.1 (X6) passed all 15 rows while leaving the themed icon at 12.5 % alpha. This is the **identical defect class** round 3 graded WARNING and closed for `ic_notification.xml`: a launcher *tints* this layer, so its colour is a carrier of opacity, and the row's own message — "a layer with no fill is defined entirely by its stroke widths" — was the incomplete premise. Breaks no stated acceptance criterion. | **Closed, not declared away.** The row that already owns the layer now pins `strokeColours(MONOCHROME)` to `MONOCHROME_STROKE_COLOURS` and its `strokeAlpha` list to `FOREGROUND_STROKE_ALPHAS`, so both layers must fade the inner border identically. Verified **by the real compiled test**: X5 and X6 each fail one row |
+| INFO-R4-1 | INFO: round 3's W-R3-1 row claimed the PR body states that line 743's "3 helpers beyond the plan's 6" is superseded. The body contained neither the word nor the reference — an unverified claim about a document, the same class rounds 1–3 kept finding. | The sentence was added to the PR body, which now names the superseded count explicitly. The substance was never at risk: W-R3-1 itself supersedes line 743, and the shipped counts are 4 helpers and now 20 constants |
+| INFO-R4-2 | INFO: round 3's I-R3-1 row said "a concatenation typo would have produced a silently false guard". Measured the other way: the three-literal `FLAME_PATH` is byte-exact in all three drawables, and a one-character typo makes `groupWrapping` match zero groups, failing two rows loudly with `expected: <1> but was: <0>`. | **The claim is inverted and is corrected here.** The selector is fail-closed, which is the stronger property; the check was still worth doing, but it protects against a wrong value, not a silent one |
+| INFO-R4-3 | INFO: the monochrome layer's non-first group transforms were unpinned (X7 flame `translateY`, X8 inner `scaleX`, X9 flame `scaleX` all survived), while the foreground's and the notification's were pinned. No stated AC breached. | Closed in the same row: all three of the tinted layer's group transforms are now compared against `listOf(SAFE_ZONE_TRANSFORM, INNER_BORDER_TRANSFORM, FLAME_TRANSFORM)` — absolute constants, replacing a relative first-group-only comparison. Verified by the real test: X7, X8 and X9 each fail one row |
+| INFO-R4-4 | INFO: the PR body's deviation "**Guard reversion not executed** — the plan's six reversion rows need a Gradle toolchain this host does not have" rests on the false premise above, and the Testing table's "40/40 mirrored assertions" row exists only because of it. | **The deviation is withdrawn and replaced by an observation.** I ran the real suite on this host — **15 successful, 0 failed** — and then executed all six of Task 4.1 Action 4's reversion rows on scratch copies: every one failed, by the test the plan names (scale 1.125/translate 18 → 1 failure; flame `translateY` 0 → 1; a `C` given five parameters → 2; `<monochrome>` removed from the round icon → 1; `app_name` reverted → 1; `AboutScreen` back to `72.dp` → 1). The plan's guard-reversion requirement is now **satisfied by observation rather than by declaration**, and eleven mutations from rounds 1–4 were re-judged by the real test as well, all caught |
+
+**Suite shape after round 4:** still **15 test methods**. The shared infrastructure differs from the
+plan's "in full" block in **six** places: two forced by ktlint (`read()` by
+`standard:chain-method-continuation`, `PARAMETER_COUNTS` by `standard:argument-list-wrapping`) and
+four additive — **4** helpers and **20** companion constants beyond the plan's 6 and 14
+(`MONOCHROME_STROKE_COLOURS` is the twentieth, added by this round).
+
+**Measured after the change:** the real compiled test 15/15; ktlint 1.8.0 → 0 findings on
+`app/src/main/kotlin` and `app/src/test/kotlin`; detekt 2.0.0-alpha.5 → exit 0 on both.
+
+**Declared terminus, unchanged and still defensible** — round 4 recomputed both of its claims and
+both hold. `strokeLineCap`/`strokeLineJoin` stay unpinned: with the join removed, the miter tip at
+the shoulder lands at r ≈ 32.50 (miter ratio 1.22, inside the default limit of 4), still within the
+33 key-content circle. The two adaptive drawables' declared `dp` stays unpinned: their only three
+consumers are the two mipmaps, where `AdaptiveIconDrawable` lays each layer out to the mask, and
+`AboutScreen`, which overrides with `Modifier.size`. There are no density mipmap fallbacks.
