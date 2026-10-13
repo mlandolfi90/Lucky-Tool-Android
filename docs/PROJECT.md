@@ -147,7 +147,7 @@ The typical startup flow: User opens app → enables Accessibility Service in An
   - `policy/amount/` — `AmountScan.kt`, `AmountTokenizer.kt`, `AmountReader.kt`, `AmountParser.kt`
   - `policy/engine/` — `PolicyLabels.kt`, `ActionKeywords.kt`, `PolicyTarget.kt`, `PolicySubject.kt`, `DecisionReason.kt`, `PolicyDecision.kt`, `PolicyEngine.kt`, `OwnPackageName.kt`, `TargetClassifier.kt`, `AmountRule.kt`, `PolicyEngineImpl.kt`
   - `policy/subject/` — `ToolPolicyClass.kt`, `ToolPolicyCatalog.kt`, `SubjectResolution.kt`, `PolicySubjectResolver.kt`, `ToolSubjectResolver.kt`, `PolicyWindowSource.kt`, `PolicyWindowSourceImpl.kt`, `IntentTargetResolver.kt`, `IntentTargetResolverImpl.kt`, `WindowHitTester.kt`, `NodeLabels.kt`, `PolicyTargets.kt`, `SubjectSupport.kt`, `WindowSubjectResolver.kt`, `NodeSubjectResolver.kt`, `CoordinateSubjectResolver.kt`, `TextSubjectResolver.kt`, `NotificationSubjectResolver.kt`, `LaunchSubjectResolver.kt`, `ToolSubjectResolverImpl.kt`
-  - `policy/approval/` — `ActionApprovalPolicy.kt`, `PendingAction.kt`, `CallFingerprint.kt`, `ExceptionEligibility.kt`, `PendingReevaluator.kt`, `ActionApprovalCoordinator.kt`, `PendingActionTable.kt`, `GrantLedger.kt`, `ActionApprovalCoordinatorImpl.kt`, `PolicyApprovalLabels.kt`
+  - `policy/approval/` — `ActionApprovalPolicy.kt`, `ActionApprovalState.kt`, `PendingAction.kt`, `CallFingerprint.kt`, `ExceptionEligibility.kt`, `PendingReevaluator.kt`, `ActionApprovalCoordinator.kt`, `PendingActionTable.kt`, `GrantLedger.kt`, `ActionApprovalCoordinatorImpl.kt`, `PolicyApprovalLabels.kt`
   - `policy/gate/` — `ToolPolicyGate.kt`, `GateTiming.kt`, `GateResults.kt`, `GateAssessment.kt`, `GateOutcomes.kt`, `GateAuthorizer.kt`, `ToolPolicyGateImpl.kt`, `PendingReevaluatorImpl.kt`
   - `policy/log/` — `ApprovalLogMessage.kt`, `ApprovalEventLogger.kt`
   - `policy/di/` — `PolicyModule.kt`, `PolicySubjectModule.kt`, `PolicyGateModule.kt`
@@ -221,7 +221,7 @@ Tool errors are returned as `CallToolResult(isError = true)` with an error messa
 
 The MCP server exposes 59 tools across 15 categories. For full JSON-RPC schemas, detailed usage examples, and implementation notes, see [MCP_TOOLS.md](MCP_TOOLS.md).
 
-> **Approval profiles**: every tool call passes through `ToolPolicyGate` before it runs. A call on an app with an approval profile can return `forbidden`, `needs_human_confirmation`, `awaiting_approval`, `denied`, `expired` or `too_many_pending` instead of running. See [Approval Profiles](#approval-profiles-per-app-action-policy) and [MCP_TOOLS.md](MCP_TOOLS.md#approval-profiles).
+> **Approval profiles**: every tool call passes through `ToolPolicyGate` before it runs. A call on an app with an approval profile can return `forbidden`, `needs_human_confirmation`, `awaiting_approval`, `denied`, `expired`, `not_required`, `already_used` or `too_many_pending` instead of running. See [Approval Profiles](#approval-profiles-per-app-action-policy) and [MCP_TOOLS.md](MCP_TOOLS.md#approval-profiles).
 
 > **Tool Naming Convention**: All tool names are prefixed with `android_` by default (e.g., `android_tap`, `android_find_nodes`). When a device slug is configured (e.g., `pixel7`), the prefix becomes `android_pixel7_` (e.g., `android_pixel7_tap`). See [MCP_TOOLS.md](MCP_TOOLS.md) for details.
 
@@ -398,7 +398,7 @@ The MCP server exposes 59 tools across 15 categories. For full JSON-RPC schemas,
 
 | Tool | Description | Required Params | Optional Params |
 |------|-------------|-----------------|-----------------|
-| `android_get_approval_status` | State of an approval request (`pending` / `approved` / `denied` / `expired`), with an optional long-poll that returns when the request is decided or expires | `approval_id` (string) | `wait_ms` (integer, 0-25000, default 0) |
+| `android_get_approval_status` | State of an approval request (`pending` / `approved` / `denied` / `expired` / `not_required` / `already_used`), with an optional long-poll that returns when the request is decided or expires | `approval_id` (string) | `wait_ms` (integer, 0-25000, default 0) |
 | `android_confirm_human_approval` | Record the human's agreement in the conversation for an `ASK_IN_CHAT` request. Creates a single-use 2-minute grant for the identical call. | `approval_id` (string) | — |
 
 **Not app-scoped and always registered**: profiles never gate these tools, and the per-tool permissions cannot disable them (otherwise an approval request could never finish). Results are server-generated, with no untrusted-content warning: `textResult` on success, `errorTextResult` on error. `android_get_approval_status` reads state and expiry in one `ActionApprovalCoordinator.statusOf` call and long-polls at most `min(wait_ms, expires_at_ms - now)`. An unknown `approval_id` reads `expired`.
@@ -406,7 +406,9 @@ The MCP server exposes 59 tools across 15 categories. For full JSON-RPC schemas,
 **Errors**: `McpToolException.InvalidParams` for a missing or empty `approval_id`, or `wait_ms` outside 0-25000. `android_confirm_human_approval` returns `isError=true` with one of:
 - `{"status":"not_confirmable"}` for a `NOTIFY` request;
 - `{"status":"denied"}` for a denied request;
-- `{"status":"expired"}` for an expired or unknown id.
+- `{"status":"expired"}` for an expired or unknown id;
+- `{"status":"not_required"}` for a request closed because it no longer needs approval;
+- `{"status":"already_used"}` for a request whose grant was already used.
 
 ---
 
@@ -723,7 +725,7 @@ MCP tools return data originating from the Android device (UI element text, cont
 - Helper functions: `untrustedTextResult()`, `untrustedTextAndImageResult()`, `untrustedImageResult()`
 - Pure action confirmations (tap, click, swipe, etc.) that return only server-generated text are exempt
 - New tools returning device content MUST use the `untrusted*` helpers
-- Approval outcomes that name the target app (`forbidden`, `needs_human_confirmation`, `awaiting_approval`) use the `untrusted*` helpers; `denied`, `expired`, `too_many_pending` and the approval tools' results are server-generated and do not
+- Approval outcomes that name the target app (`forbidden`, `needs_human_confirmation`, `awaiting_approval`) use the `untrusted*` helpers; `denied`, `expired`, `not_required`, `already_used`, `too_many_pending` and the approval tools' results are server-generated and do not
 - **Limitation**: Image content (screenshots, camera photos) cannot carry an inline text warning. The warning is added as a separate `TextContent` before the `ImageContent`, but a multimodal LLM processing the image directly could still be influenced by adversarial text rendered on screen. This is an inherent limitation of the MCP protocol.
 
 ### Approval Profiles (Per-App Action Policy)
@@ -809,10 +811,10 @@ The owner can attach an approval profile to an app (package) in **Settings → A
   - "Not an action button" is offered only when the reason is `UNKNOWN_TARGET`, on an identifiable target with a selector.
 - Each needs a second confirmation (a dialog).
 - Each is listed in the profile editor and can be removed at any time. The UI says "until you remove it", never "forever".
-- Adding one goes through `PendingReevaluator` (`policy/gate/PendingReevaluatorImpl`): it stores the exception with `addException`, re-runs the engine on the pending request's stored subject and applies the result with `applyReevaluation`; it never approves. A request that still needs approval stays pending; one that no longer needs approval closes as `EXPIRED` without a grant (the agent repeats the call); one that is now forbidden closes as `DENIED`. The result (`ExceptionReevaluation`) tells the approval screen whether the exception was stored, even when the request was no longer pending afterwards.
+- Adding one goes through `PendingReevaluator` (`policy/gate/PendingReevaluatorImpl`): it stores the exception with `addException`, re-runs the engine on the pending request's stored subject and applies the result with `applyReevaluation`; it never approves. A request that still needs approval stays pending; one that no longer needs approval closes as `NOT_REQUIRED` without a grant (the agent repeats the call and it runs); one that is now forbidden closes as `DENIED`. The result (`ExceptionReevaluation`) tells the approval screen whether the exception was stored, even when the request was no longer pending afterwards.
 
 **Approvals** (`policy/approval/ActionApprovalCoordinator`, in-memory, `Mutex`-guarded like `OAuthApprovalCoordinatorImpl`):
-- States: `PENDING`, `APPROVED`, `DENIED`, `EXPIRED`. An unknown id reads `EXPIRED`. Expiry wins over a late approval.
+- States (`ActionApprovalState`, separate from the OAuth `ApprovalState`; the wire code is the lowercase name): `PENDING`, `APPROVED`, `DENIED`, `EXPIRED` (not decided within the window), `NOT_REQUIRED` (closed by a re-evaluation to `RUN`), `ALREADY_USED` (approved and its grant consumed: a consumed grant marks every `APPROVED` entry with that fingerprint). An unknown id reads `EXPIRED`. Expiry wins over a late approval.
 - Ids are 16 `SecureRandom` bytes in lowercase hex.
 - A request stays pending for at most 5 minutes; at most 10 requests can be pending (a new one beyond that is refused with `too_many_pending`; joins never count).
 - A grant lasts 2 minutes and is single use. A grant approved by the owner on the device satisfies `ASK_IN_CHAT` and `NOTIFY`; a grant confirmed through `android_confirm_human_approval` satisfies only `ASK_IN_CHAT`.
@@ -848,13 +850,13 @@ Without it, an agent could approve its own requests.
 - Log type `ServerLogEntry.Type.APPROVAL` (id 8, never renumbered), written only through `ApprovalEventLogger`.
 - The message (`ApprovalLogMessage`) is `<outcome> action=<code> mode=<code> reason=<code> app=<package>`: absent fields are omitted and `app` is last. `reason` holds a `DecisionReason` code or a `BlockCause.code`.
 - Outcome codes (`ApprovalLogOutcome`, stored on disk, never renamed), by writer:
-  - the gate: `approved`, `denied`, `expired`, `forbidden`, `needs_confirmation`, `awaiting_approval`, `too_many_pending` (with the un-prefixed tool name and the duration);
+  - the gate: `approved`, `denied`, `expired`, `not_required`, `already_used`, `forbidden`, `needs_confirmation`, `awaiting_approval`, `too_many_pending` (with the un-prefixed tool name and the duration);
   - `PendingReevaluatorImpl`: `reevaluated` (with the tool name);
   - the approval screen: `owner_approved` (`expired` for an approval that came too late), `owner_denied`, `exception_added` (whenever the exception was stored);
   - the profile editor: `exception_removed`, `profile_created`, `profile_updated`, `profile_deleted` (package only).
 - The Logs screen has an Approvals chip and renders each line from string resources as outcome, app and reason.
 - It NEVER records amount values, field text, selector values or approval ids.
-- `TOOL_CALL` entries use the constant markers `forbidden`, `needs_confirmation`, `awaiting_approval` or `denied` for calls the gate halted that way; every other `isError` result (including `expired` and `too_many_pending`) keeps `failed`. `LogsScreen` and `ServerLogsSection` show those four markers from string resources (`ApprovalLogText.kt`), never raw.
+- `TOOL_CALL` entries use the constant markers `forbidden`, `needs_confirmation`, `awaiting_approval` or `denied` for calls the gate halted that way; every other `isError` result (including `expired`, `not_required`, `already_used` and `too_many_pending`) keeps `failed`. `LogsScreen` and `ServerLogsSection` show those four markers from string resources (`ApprovalLogText.kt`), never raw.
 
 ---
 

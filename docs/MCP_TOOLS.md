@@ -56,7 +56,7 @@ The MCP server exposes 59 tools via the JSON-RPC 2.0 protocol, organized into 15
 | Sharing | `android_get_shared_content`, `android_share_file_via_web` | 48 |
 | Approvals | `android_get_approval_status`, `android_confirm_human_approval` | 70 |
 
-A call that acts on an app with an approval profile may return an approval outcome (`forbidden`, `needs_human_confirmation`, `awaiting_approval`, `denied`, `expired`, `too_many_pending`) instead of running. See [Approval Profiles](#approval-profiles).
+A call that acts on an app with an approval profile may return an approval outcome (`forbidden`, `needs_human_confirmation`, `awaiting_approval`, `denied`, `expired`, `not_required`, `already_used`, `too_many_pending`) instead of running. See [Approval Profiles](#approval-profiles).
 
 ## Tool Naming Convention
 
@@ -222,7 +222,7 @@ Each profile has one mode per action type.
 |------|--------------------|
 | `RUN` | Runs the call. |
 | `ASK_IN_CHAT` | Does not run the call. Returns `needs_human_confirmation` with an `approval_id`. |
-| `NOTIFY` | Does not run the call yet. Notifies the owner on the device and waits up to 25 seconds. Runs the call if the owner approves in that time; otherwise returns `awaiting_approval`, `denied` or `expired`. |
+| `NOTIFY` | Does not run the call yet. Notifies the owner on the device and waits up to 25 seconds. Runs the call if the owner approves in that time; otherwise returns `awaiting_approval`, `denied`, `expired`, `not_required` or `already_used`. |
 | `FORBIDDEN` | Never runs the call. Returns `forbidden`. |
 
 **Strictest wins**: `RUN` < `ASK_IN_CHAT` < `NOTIFY` < `FORBIDDEN`. This applies:
@@ -264,18 +264,20 @@ When the gate does not run the call, the result text is a JSON object with a `st
 |----------|-----------|---------|---------------------|
 | `forbidden` | `true` | The profile, the own-package guard or a fail-closed check does not allow this action. | Stop. Do not retry, rephrase, or reach the same result another way. Tell the human what was blocked and why (`reason`). |
 | `needs_human_confirmation` | `false` | The profile requires the human's agreement in the conversation. | Describe the action to the human and ask. If they clearly agree, call `android_confirm_human_approval` with the `approval_id`, then repeat the **exact same call**. If they decline or do not answer, do not confirm. |
-| `awaiting_approval` | `false` | The owner was notified on the device and has not decided within 25 seconds, or approved while the approval screen still covers the app. | Call `android_get_approval_status` (use `wait_ms` to long-poll) until the status is `approved`, then repeat the **exact same call**. Stop on `denied` or `expired`. |
+| `awaiting_approval` | `false` | The owner was notified on the device and has not decided within 25 seconds, or approved while the approval screen still covers the app. | Call `android_get_approval_status` (use `wait_ms` to long-poll) until the status leaves `pending`, then act on that status as its row in this table says (`approved`: repeat the **exact same call**). |
 | `denied` | `true` | The owner denied the request on the device, the profile forbids it after an exception the owner added, or the server stopped while it was pending. | Stop. Do not retry. Tell the human. |
-| `expired` | `true` | The request was not decided within 5 minutes, an identical call already used the single-use grant, or an exception the owner added means it no longer needs approval. | Repeat the original call once: it is checked again from scratch and either runs or starts a new approval request. |
+| `expired` | `true` | The request was not decided within its 5-minute window. | Repeat the original call **once**: it is checked again from scratch and starts a new approval request. If that one expires too, stop and tell the human. |
+| `not_required` | `true` | The owner added an exception ("not an amount", "not an action button") on the approval screen and the call no longer needs approval. | Repeat the **exact same call**: it runs without approval. |
+| `already_used` | `true` | The approval was already used: an identical call ran with its single-use grant. | Read the screen again before anything else: the action may already be done. Do not repeat the call blindly. |
 | `too_many_pending` | `true` | 10 approval requests are already pending. | Wait for pending requests to be decided or to expire. Do not loop. |
 
 **Fields**:
 - `forbidden`: `status`, `app` (the target package, or `null` when it is unknown), `action`, `reason`.
 - `needs_human_confirmation` and `awaiting_approval`: exactly, in this order, `status`, `approval_id`, `app`, `action`, `expires_at_ms` (when the request expires, 5 minutes after it was created), `next`.
-- `denied`, `expired`, `too_many_pending`: `status` only.
+- `denied`, `expired`, `not_required`, `already_used`, `too_many_pending`: `status` only.
 - `action` values: `read`, `navigate`, `type`, `action_button`.
 
-**Untrusted-content warning**: `forbidden`, `needs_human_confirmation` and `awaiting_approval` name a device app (`app`), so their text starts with the [untrusted-content warning](#anti-prompt-injection-warning) line, followed by the JSON. `app` is the only device-derived field: `status`, `approval_id`, `action`, `reason`, `expires_at_ms` and `next` are fixed server values defined in this document. The `next` text names the tools without their prefix (`confirm_human_approval`, `get_approval_status`); call them with the configured prefix (`android_` or `android_<slug>_`). `denied`, `expired` and `too_many_pending` carry no device content and no warning. No result ever contains amounts, field text or element labels.
+**Untrusted-content warning**: `forbidden`, `needs_human_confirmation` and `awaiting_approval` name a device app (`app`), so their text starts with the [untrusted-content warning](#anti-prompt-injection-warning) line, followed by the JSON. `app` is the only device-derived field: `status`, `approval_id`, `action`, `reason`, `expires_at_ms` and `next` are fixed server values defined in this document. The `next` text names the tools without their prefix (`confirm_human_approval`, `get_approval_status`); call them with the configured prefix (`android_` or `android_<slug>_`). `denied`, `expired`, `not_required`, `already_used` and `too_many_pending` carry no device content and no warning. No result ever contains amounts, field text or element labels.
 
 **Repeating the exact same call**:
 - An approval creates a **single-use grant**, valid for 2 minutes, for one call fingerprint: tool name, arguments, target app and target element.
@@ -288,7 +290,7 @@ When the gate does not run the call, the result text is a JSON object with a `st
 - The approval screen lists every pending request, `ASK_IN_CHAT` ones included: the owner can approve or deny them there too. `android_get_approval_status` then reports `approved` or `denied`. The owner opens it from the approval notification (`NOTIFY` requests only) or from the card on the app's Server screen, shown while any request is pending.
 - The owner can add an exception ("not an amount", "not an action button") to a pending request. The request is then checked again; it is never approved by that:
   - it stays `pending` when it still needs approval;
-  - it becomes `expired` when it no longer needs approval: repeat the call and it is checked again from scratch;
+  - it becomes `not_required` when it no longer needs approval: repeat the exact call and it runs without approval;
   - it becomes `denied` when the profile now forbids it.
 - When the server stops, every pending request becomes `denied` and every unused grant is dropped.
 
@@ -3850,7 +3852,9 @@ Returns the state of an approval request. With `wait_ms` above 0 it long-polls: 
 | `pending` | Not decided yet. `expires_at_ms` is when the request expires (5 minutes after it was created). |
 | `approved` | Approved, on the device or through `android_confirm_human_approval`. Repeat the exact original call within 2 minutes; the grant is single use. |
 | `denied` | Denied by the owner, by a stricter re-check, or because the server stopped. Do not retry. |
-| `expired` | Not decided in time, or closed because it no longer needs approval. An unknown `approval_id` also reads `expired`. Repeating the original call starts a new request or runs it. |
+| `expired` | Not decided within its 5-minute window. An unknown `approval_id` also reads `expired`. Repeat the original call once (it starts a new request); if that one expires too, stop and tell the human. |
+| `not_required` | The owner added an exception and the call no longer needs approval. Repeat the exact original call: it runs without approval. |
+| `already_used` | Approved, and the single-use grant was already used by an identical call (yours included). Read the screen again before anything else: the action may already be done. Do not repeat the call blindly. |
 
 `expires_at_ms` is present only while `pending`. Every status is a normal (non-error) result. This tool never runs the original call.
 
@@ -3897,7 +3901,7 @@ Only call this after the human explicitly agreed. The app cannot verify it.
 ```json
 { "approval_id": "9f2c4a7e1b3d5f60718293a4b5c6d7e8", "status": "approved" }
 ```
-Confirming a request that is already `approved` (for example by the owner on the device) returns the same result and creates no second grant.
+Confirming a request that is already `approved` (for example by the owner on the device) returns the same result and creates no second grant. Once its grant has been used, confirming returns `already_used`.
 
 **Example**:
 ```bash
@@ -3915,6 +3919,8 @@ curl -X POST http://localhost:8080/mcp \
 - `{"status":"not_confirmable"}`: the request waits for the owner's approval on the device (`NOTIFY`); poll `android_get_approval_status` instead
 - `{"status":"denied"}`: the request was denied
 - `{"status":"expired"}`: the request expired, or the `approval_id` is unknown
+- `{"status":"not_required"}`: the owner added an exception and the call no longer needs approval; repeat the exact original call
+- `{"status":"already_used"}`: the approval was already used by an identical call; read the screen again before anything else
 
 ### Security Considerations
 

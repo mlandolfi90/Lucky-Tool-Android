@@ -226,7 +226,7 @@ sequenceDiagram
     SDK->>SDK: Route by method ("tools/call")<br/>Extract tool name + arguments<br/>Look up registered tool
     SDK->>Gate: guard(toolName, arguments, execute)<br/>(inside the TOOL_CALL logging wrapper)
     Gate->>Gate: Resolve subject, evaluate profiles<br/>(see Data Flow: Approval Gate)
-    alt forbidden, approval needed, denied, expired or too many pending
+    alt forbidden, approval needed, denied, expired, not required, already used or too many pending
         Gate-->>SDK: CallToolResult with the approval status JSON
     end
     Gate->>Tool: execute() (RUN or a consumed grant)
@@ -274,11 +274,14 @@ flowchart TB
     Notify -->|"10 entries already pending"| TooMany
     Notify -->|"approved, consume grant"| Held
     Notify -->|"denied"| Denied["denied<br/>isError=true"]
-    Notify -->|"expired, or grant already used"| Expired["expired<br/>isError=true"]
+    Notify -->|"not decided within 5 min"| Expired["expired<br/>isError=true"]
+    Notify -->|"owner exception, now RUN"| NotRequired["not_required<br/>isError=true"]
+    Notify -->|"grant used by an identical call"| AlreadyUsed["already_used<br/>isError=true"]
     Notify -->|"still pending"| Awaiting
     Held -->|"no"| Exec
     Held -->|"yes"| Recheck["take the mutation Mutex<br/>re-resolve + re-evaluate, no waiting"]
     Recheck -->|"same fingerprint, not stricter"| Exec
+    Recheck -->|"owner grant already used"| AlreadyUsed
     Recheck -->|"changed"| Again["decide the fresh result without waiting<br/>run it or return its outcome"]
 ```
 
@@ -329,6 +332,12 @@ sequenceDiagram
     else owner denies
         O->>C: tap the notification, then Deny
         G-->>A: denied
+    else owner adds an exception and the call now runs
+        O->>C: exception, re-evaluation (applyReevaluation)
+        G-->>A: not_required
+        A->>G: the exact same tools/call
+        G->>T: execute()
+        T-->>A: tool result
     end
 ```
 
