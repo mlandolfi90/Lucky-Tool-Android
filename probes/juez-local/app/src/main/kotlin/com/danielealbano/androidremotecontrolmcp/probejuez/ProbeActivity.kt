@@ -22,6 +22,8 @@ class ProbeActivity : Activity() {
                 ProbeFiles.modelDirs(this@ProbeActivity).forEach { dir ->
                     appendLine("${dir.absolutePath}: ${dir.list()?.joinToString().orEmpty()}")
                 }
+                val images = ProbeFiles.imagesDir(this@ProbeActivity)
+                appendLine("Imágenes: ${images.absolutePath}: ${images.list()?.joinToString().orEmpty()}")
                 appendLine("Resultados: ${ProbeFiles.resultsDir(this@ProbeActivity).absolutePath}")
             }
         val model = intent.getStringExtra(RunRequest.EXTRA_MODEL)

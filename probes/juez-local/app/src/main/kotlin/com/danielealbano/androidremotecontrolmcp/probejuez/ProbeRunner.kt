@@ -6,6 +6,7 @@ import android.os.Debug
 import android.os.SystemClock
 import android.util.Log
 import com.google.ai.edge.litertlm.Backend
+import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
@@ -28,12 +29,15 @@ class ProbeRunner(
             ProbeFiles.findModel(context, request.model)
                 ?: error("model ${request.model} not found in ${ProbeFiles.modelDirs(context)}")
         Engine.setNativeMinLogSeverity(LogSeverity.WARNING)
-        val backend = if (request.backend == "gpu") Backend.GPU() else Backend.CPU(threadCount = request.threads)
+        val withImages = request.set == RunRequest.SET_IMAGES
+        val cases = if (withImages) JudgeCases.imageCases else JudgeCases.all
         val engineConfig =
             EngineConfig(
                 modelPath = modelFile.absolutePath,
-                backend = backend,
-                maxNumTokens = MAX_NUM_TOKENS,
+                backend = backendFor(request),
+                visionBackend = if (withImages) backendFor(request) else null,
+                maxNumTokens = if (withImages) MAX_NUM_TOKENS_IMAGES else MAX_NUM_TOKENS,
+                maxNumImages = if (withImages) 1 else null,
                 cacheDir = context.cacheDir.path,
             )
         val importanceAtStart = ownImportance()
@@ -53,12 +57,12 @@ class ProbeRunner(
                 Log.i(
                     TAG,
                     "JUEZ INIT tag=${request.tag} model=${request.model} backend=${request.backend} " +
-                        "prompt=${request.prompt} thinking=${request.thinking} template=$templateLabel " +
-                        "initMs=$initMs pssKb=$pssAfterInitKb importance=$importanceAtStart",
+                        "set=${request.set} prompt=${request.prompt} thinking=${request.thinking} " +
+                        "template=$templateLabel initMs=$initMs pssKb=$pssAfterInitKb importance=$importanceAtStart",
                 )
                 val outcomes =
                     (1..request.repeat).flatMap { round ->
-                        JudgeCases.all.map { case -> judge(engine, case, request, round, chatTemplate) }
+                        cases.map { case -> judge(engine, case, request, round, chatTemplate) }
                     }
                 summarize(request, initMs, pssAfterInitKb, importanceAtStart, outcomes).put("template", templateLabel)
             }
@@ -96,8 +100,22 @@ class ProbeRunner(
                 chatTemplate = chatTemplate,
             )
         val prompt = if (stepMode) case.stepPrompt() else case.prompt()
+        val imageBytes =
+            case.image?.let { name ->
+                File(ProbeFiles.imagesDir(context), name)
+                    .takeIf { it.isFile }
+                    ?.readBytes()
+                    ?: error("image $name not found in ${ProbeFiles.imagesDir(context)}")
+            }
         val started = SystemClock.elapsedRealtime()
-        val reply = engine.createConversation(config).use { it.sendMessage(prompt).toString() }
+        val reply =
+            engine.createConversation(config).use { conversation ->
+                if (imageBytes == null) {
+                    conversation.sendMessage(prompt).toString()
+                } else {
+                    conversation.sendMessage(Contents.of(Content.ImageBytes(imageBytes), Content.Text(prompt))).toString()
+                }
+            }
         val elapsedMs = SystemClock.elapsedRealtime() - started
         val verdict = if (stepMode) JudgeCases.stepVerdict(reply, case.step) else JudgeCases.verdictOf(reply)
         val importance = ownImportance()
@@ -132,6 +150,7 @@ class ProbeRunner(
             .put("threads", request.threads)
             .put("thinking", request.thinking)
             .put("prompt", request.prompt)
+            .put("set", request.set)
             .put("delaySec", request.delaySec)
             .put("initMs", initMs)
             .put("pssAfterInitKb", pssAfterInitKb)
@@ -161,6 +180,9 @@ class ProbeRunner(
         percent: Int,
     ): Long = if (sorted.isEmpty()) 0L else sorted[(sorted.size - 1) * percent / HUNDRED]
 
+    private fun backendFor(request: RunRequest): Backend =
+        if (request.backend == "gpu") Backend.GPU() else Backend.CPU(threadCount = request.threads)
+
     private fun ownImportance(): Int =
         ActivityManager.RunningAppProcessInfo().also { ActivityManager.getMyMemoryState(it) }.importance
 
@@ -177,6 +199,7 @@ class ProbeRunner(
         const val TAG = ProbeService.TAG
         const val MILLIS_PER_SECOND = 1000L
         const val MAX_NUM_TOKENS = 2048
+        const val MAX_NUM_TOKENS_IMAGES = 4096
         const val MAX_OUTPUT_TOKENS = 16
         const val MAX_OUTPUT_TOKENS_THINKING = 1024
         const val REPLY_LOG_CHARS = 120

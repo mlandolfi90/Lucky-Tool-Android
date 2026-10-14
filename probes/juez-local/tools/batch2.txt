@@ -1,11 +1,15 @@
-# tag model backend delaySec mode thinking prompt
+# tag model backend delaySec mode thinking prompt set
 # Plan del humano (2026-10-14): Gemma 4 E2B contra E4B, en modo sencillo y en modo pensar.
 # Extra ya aceptado: la pregunta "paso" (la IA dice el numero de paso y la app lo compara).
-e2b-sencillo gemma-4-E2B-it.litertlm gpu 6 bg config sino
-e2b-pensar gemma-4-E2B-it.litertlm gpu 6 bg on sino
-e4b-sencillo gemma-4-E4B-it.litertlm gpu 6 bg config sino
-e4b-pensar gemma-4-E4B-it.litertlm gpu 6 bg on sino
-e2b-paso gemma-4-E2B-it.litertlm gpu 6 bg config paso
-e2b-paso-pensar gemma-4-E2B-it.litertlm gpu 6 bg on paso
-e4b-paso gemma-4-E4B-it.litertlm gpu 6 bg config paso
-e4b-paso-pensar gemma-4-E4B-it.litertlm gpu 6 bg on paso
+e2b-sencillo gemma-4-E2B-it.litertlm gpu 6 bg config sino texto
+e2b-pensar gemma-4-E2B-it.litertlm gpu 6 bg on sino texto
+e4b-sencillo gemma-4-E4B-it.litertlm gpu 6 bg config sino texto
+e4b-pensar gemma-4-E4B-it.litertlm gpu 6 bg on sino texto
+e2b-paso gemma-4-E2B-it.litertlm gpu 6 bg config paso texto
+e2b-paso-pensar gemma-4-E2B-it.litertlm gpu 6 bg on paso texto
+e4b-paso gemma-4-E4B-it.litertlm gpu 6 bg config paso texto
+e4b-paso-pensar gemma-4-E4B-it.litertlm gpu 6 bg on paso texto
+# Capturas inventadas (tools/make_screens.py): 3 SI y 6 NO; los datos solo estan en la imagen.
+e2b-img gemma-4-E2B-it.litertlm gpu 6 bg config sino imagenes
+e4b-img gemma-4-E4B-it.litertlm gpu 6 bg config sino imagenes
+e4b-img-pensar gemma-4-E4B-it.litertlm gpu 6 bg on sino imagenes

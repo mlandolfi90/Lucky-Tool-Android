@@ -15,6 +15,9 @@ object ProbeFiles {
     fun resultsDir(context: Context): File =
         context.getExternalFilesDir("results") ?: File(context.filesDir, "results").apply { mkdirs() }
 
+    fun imagesDir(context: Context): File =
+        context.getExternalFilesDir("images") ?: File(context.filesDir, "images").apply { mkdirs() }
+
     fun findModel(
         context: Context,
         name: String,
@@ -31,6 +34,7 @@ data class RunRequest(
     val thinking: String,
     val repeat: Int,
     val prompt: String,
+    val set: String,
 ) {
     companion object {
         const val EXTRA_MODEL = "model"
@@ -41,8 +45,10 @@ data class RunRequest(
         const val EXTRA_THINKING = "thinking"
         const val EXTRA_REPEAT = "repeat"
         const val EXTRA_PROMPT = "prompt"
+        const val EXTRA_SET = "set"
         const val THINKING_ON = "on"
         const val PROMPT_STEP = "paso"
+        const val SET_IMAGES = "imagenes"
         private const val DEFAULT_THREADS = 4
 
         fun from(intent: Intent): RunRequest? {
@@ -56,6 +62,7 @@ data class RunRequest(
                 thinking = intent.getStringExtra(EXTRA_THINKING) ?: "config",
                 repeat = intent.getIntExtra(EXTRA_REPEAT, 1),
                 prompt = intent.getStringExtra(EXTRA_PROMPT) ?: "sino",
+                set = intent.getStringExtra(EXTRA_SET) ?: "texto",
             )
         }
     }
