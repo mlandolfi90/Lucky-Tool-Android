@@ -355,3 +355,8 @@ Pedido del humano el 2026-10-13: «queda pendiente resolver eso de la firma».
 - Decide el humano, en un plan chico: que el CI firme los APK de prueba siempre con la misma clave (por
   ejemplo una clave debug fija guardada como secreto del repositorio), para que las versiones nuevas se
   instalen encima sin perder nada.
+
+**Resuelto el 2026-10-13.** El CI instala una clave debug fija antes de cada build debug (secreto
+`DEBUG_KEYSTORE_BASE64`, en Infisical y en GitHub; commit `94f658c` del PR #11). Medido: los APK de las corridas
+de `94f658c` y `7cfad22` tienen el mismo certificado. El teléfono se desinstaló una última vez para pasar a esa
+clave; desde ahí las versiones nuevas se instalan encima.
