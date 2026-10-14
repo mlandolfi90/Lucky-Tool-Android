@@ -1,0 +1,18 @@
+--------- beginning of main
+10-14 03:35:32.134 20880 20911 I JUEZ    : JUEZ INIT tag=qwen-cpu-fg model=qwen3_0_6b_mixed_int4.litertlm backend=cpu initMs=942 pssKb=1119346 importance=100
+10-14 03:35:32.215 20880 20911 E JUEZ    : JUEZ ERROR tag=qwen-cpu-fg LiteRtLmJniException: Failed to call nativeSendMessage: INTERNAL: Failed to apply template: invalid operation: tried to use + operator on unsupported types string and sequence (in template:14)
+10-14 03:35:32.215 20880 20911 E JUEZ    : com.google.ai.edge.litertlm.LiteRtLmJniException: Failed to call nativeSendMessage: INTERNAL: Failed to apply template: invalid operation: tried to use + operator on unsupported types string and sequence (in template:14)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at com.google.ai.edge.litertlm.LiteRtLmJni.nativeSendMessage(Native Method)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at com.google.ai.edge.litertlm.Conversation.sendMessage(Conversation.kt:140)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at com.google.ai.edge.litertlm.Conversation.sendMessage(Conversation.kt:204)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at com.google.ai.edge.litertlm.Conversation.sendMessage(Conversation.kt:249)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at com.google.ai.edge.litertlm.Conversation.sendMessage$default(Conversation.kt:239)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at com.danielealbano.androidremotecontrolmcp.probejuez.ProbeRunner.judge(ProbeRunner.kt:77)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at com.danielealbano.androidremotecontrolmcp.probejuez.ProbeRunner.run(ProbeRunner.kt:53)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at com.danielealbano.androidremotecontrolmcp.probejuez.ProbeService$onStartCommand$1.invokeSuspend(ProbeService.kt:40)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:34)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at kotlinx.coroutines.DispatchedTask.run(DispatchedTask.kt:100)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at kotlinx.coroutines.scheduling.CoroutineScheduler.runSafely(CoroutineScheduler.kt:586)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.executeTask(CoroutineScheduler.kt:807)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.runWorker(CoroutineScheduler.kt:717)
+10-14 03:35:32.215 20880 20911 E JUEZ    : 	at kotlinx.coroutines.scheduling.CoroutineScheduler$Worker.run(CoroutineScheduler.kt:704)
