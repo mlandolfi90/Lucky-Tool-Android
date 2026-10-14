@@ -35,7 +35,7 @@ class ProbeRunner(
             EngineConfig(
                 modelPath = modelFile.absolutePath,
                 backend = backendFor(request),
-                visionBackend = if (withImages) backendFor(request) else null,
+                visionBackend = if (withImages) visionBackendFor(request) else null,
                 maxNumTokens = if (withImages) MAX_NUM_TOKENS_IMAGES else MAX_NUM_TOKENS,
                 maxNumImages = if (withImages) 1 else null,
                 cacheDir = context.cacheDir.path,
@@ -58,6 +58,7 @@ class ProbeRunner(
                     TAG,
                     "JUEZ INIT tag=${request.tag} model=${request.model} backend=${request.backend} " +
                         "set=${request.set} prompt=${request.prompt} thinking=${request.thinking} " +
+                        "sampler=${request.sampler} " +
                         "template=$templateLabel initMs=$initMs pssKb=$pssAfterInitKb importance=$importanceAtStart",
                 )
                 val outcomes =
@@ -83,7 +84,12 @@ class ProbeRunner(
         val config =
             ConversationConfig(
                 systemInstruction = Contents.of(if (stepMode) JudgeCases.SYSTEM_STEP else JudgeCases.SYSTEM),
-                samplerConfig = SamplerConfig(topK = 1, topP = 1.0, temperature = 0.0),
+                samplerConfig =
+                    if (request.sampler == RunRequest.SAMPLER_NONE) {
+                        null
+                    } else {
+                        SamplerConfig(topK = 1, topP = 1.0, temperature = 0.0)
+                    },
                 maxOutputToken = if (thinkingOn) MAX_OUTPUT_TOKENS_THINKING else MAX_OUTPUT_TOKENS,
                 thinkingConfig =
                     when (request.thinking) {
@@ -151,6 +157,7 @@ class ProbeRunner(
             .put("thinking", request.thinking)
             .put("prompt", request.prompt)
             .put("set", request.set)
+            .put("sampler", request.sampler)
             .put("delaySec", request.delaySec)
             .put("initMs", initMs)
             .put("pssAfterInitKb", pssAfterInitKb)
@@ -181,6 +188,14 @@ class ProbeRunner(
     ): Long = if (sorted.isEmpty()) 0L else sorted[(sorted.size - 1) * percent / HUNDRED]
 
     private fun backendFor(request: RunRequest): Backend =
+        when (request.backend) {
+            "gpu" -> Backend.GPU()
+            "npu" -> Backend.NPU(nativeLibraryDir = context.applicationInfo.nativeLibraryDir)
+            else -> Backend.CPU(threadCount = request.threads)
+        }
+
+    /** The vision encoder never runs on the NPU; with the decoder on the NPU it goes to the CPU. */
+    private fun visionBackendFor(request: RunRequest): Backend =
         if (request.backend == "gpu") Backend.GPU() else Backend.CPU(threadCount = request.threads)
 
     private fun ownImportance(): Int =

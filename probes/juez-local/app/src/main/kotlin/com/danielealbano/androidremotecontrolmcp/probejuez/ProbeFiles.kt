@@ -35,6 +35,7 @@ data class RunRequest(
     val repeat: Int,
     val prompt: String,
     val set: String,
+    val sampler: String,
 ) {
     companion object {
         const val EXTRA_MODEL = "model"
@@ -46,9 +47,11 @@ data class RunRequest(
         const val EXTRA_REPEAT = "repeat"
         const val EXTRA_PROMPT = "prompt"
         const val EXTRA_SET = "set"
+        const val EXTRA_SAMPLER = "sampler"
         const val THINKING_ON = "on"
         const val PROMPT_STEP = "paso"
         const val SET_IMAGES = "imagenes"
+        const val SAMPLER_NONE = "none"
         private const val DEFAULT_THREADS = 4
 
         fun from(intent: Intent): RunRequest? {
@@ -63,6 +66,7 @@ data class RunRequest(
                 repeat = intent.getIntExtra(EXTRA_REPEAT, 1),
                 prompt = intent.getStringExtra(EXTRA_PROMPT) ?: "sino",
                 set = intent.getStringExtra(EXTRA_SET) ?: "texto",
+                sampler = intent.getStringExtra(EXTRA_SAMPLER) ?: "greedy",
             )
         }
     }

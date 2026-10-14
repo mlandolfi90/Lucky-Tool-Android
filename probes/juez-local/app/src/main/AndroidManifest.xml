@@ -6,6 +6,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".ProbeApp"
         android:allowBackup="false"
         android:label="Probe juez local"
         android:theme="@android:style/Theme.Material.Light">
@@ -15,6 +16,9 @@
             android:required="false" />
         <uses-native-library
             android:name="libOpenCL.so"
+            android:required="false" />
+        <uses-native-library
+            android:name="libcdsprpc.so"
             android:required="false" />
 
         <activity
