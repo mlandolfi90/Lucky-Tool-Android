@@ -37,6 +37,13 @@ class ProbeRunner(
                 cacheDir = context.cacheDir.path,
             )
         val importanceAtStart = ownImportance()
+        val chatTemplate =
+            if (request.model.startsWith(QWEN3_PREFIX)) {
+                context.assets.open(QWEN3_TEMPLATE_ASSET).bufferedReader().use { it.readText() }
+            } else {
+                null
+            }
+        val templateLabel = if (chatTemplate == null) "model" else "litertlm-qwen3"
         val summary =
             Engine(engineConfig).use { engine ->
                 val initStarted = SystemClock.elapsedRealtime()
@@ -46,13 +53,14 @@ class ProbeRunner(
                 Log.i(
                     TAG,
                     "JUEZ INIT tag=${request.tag} model=${request.model} backend=${request.backend} " +
+                        "prompt=${request.prompt} thinking=${request.thinking} template=$templateLabel " +
                         "initMs=$initMs pssKb=$pssAfterInitKb importance=$importanceAtStart",
                 )
                 val outcomes =
                     (1..request.repeat).flatMap { round ->
-                        JudgeCases.all.map { case -> judge(engine, case, request, round) }
+                        JudgeCases.all.map { case -> judge(engine, case, request, round, chatTemplate) }
                     }
-                summarize(request, initMs, pssAfterInitKb, importanceAtStart, outcomes)
+                summarize(request, initMs, pssAfterInitKb, importanceAtStart, outcomes).put("template", templateLabel)
             }
         File(ProbeFiles.resultsDir(context), "${request.tag}.json").writeText(summary.toString(2))
         summary.remove("results")
@@ -64,19 +72,34 @@ class ProbeRunner(
         case: JudgeCase,
         request: RunRequest,
         round: Int,
+        chatTemplate: String?,
     ): JSONObject {
+        val stepMode = request.prompt == RunRequest.PROMPT_STEP
+        val thinkingOn = request.thinking == RunRequest.THINKING_ON
         val config =
             ConversationConfig(
-                systemInstruction = Contents.of(JudgeCases.SYSTEM),
+                systemInstruction = Contents.of(if (stepMode) JudgeCases.SYSTEM_STEP else JudgeCases.SYSTEM),
                 samplerConfig = SamplerConfig(topK = 1, topP = 1.0, temperature = 0.0),
-                maxOutputToken = MAX_OUTPUT_TOKENS,
-                thinkingConfig = if (request.thinking == "config") ThinkingConfig(enableThinking = false) else null,
-                extraContext = if (request.thinking == "none") emptyMap() else mapOf("enable_thinking" to false),
+                maxOutputToken = if (thinkingOn) MAX_OUTPUT_TOKENS_THINKING else MAX_OUTPUT_TOKENS,
+                thinkingConfig =
+                    when (request.thinking) {
+                        "config" -> ThinkingConfig(enableThinking = false)
+                        RunRequest.THINKING_ON -> ThinkingConfig(enableThinking = true)
+                        else -> null
+                    },
+                extraContext =
+                    when (request.thinking) {
+                        "none" -> emptyMap()
+                        RunRequest.THINKING_ON -> mapOf("enable_thinking" to true)
+                        else -> mapOf("enable_thinking" to false)
+                    },
+                chatTemplate = chatTemplate,
             )
+        val prompt = if (stepMode) case.stepPrompt() else case.prompt()
         val started = SystemClock.elapsedRealtime()
-        val reply = engine.createConversation(config).use { it.sendMessage(case.prompt()).toString() }
+        val reply = engine.createConversation(config).use { it.sendMessage(prompt).toString() }
         val elapsedMs = SystemClock.elapsedRealtime() - started
-        val verdict = JudgeCases.verdictOf(reply)
+        val verdict = if (stepMode) JudgeCases.stepVerdict(reply, case.step) else JudgeCases.verdictOf(reply)
         val importance = ownImportance()
         val shortReply = reply.replace('\n', ' ').take(REPLY_LOG_CHARS)
         Log.i(
@@ -108,6 +131,7 @@ class ProbeRunner(
             .put("backend", request.backend)
             .put("threads", request.threads)
             .put("thinking", request.thinking)
+            .put("prompt", request.prompt)
             .put("delaySec", request.delaySec)
             .put("initMs", initMs)
             .put("pssAfterInitKb", pssAfterInitKb)
@@ -154,7 +178,12 @@ class ProbeRunner(
         const val MILLIS_PER_SECOND = 1000L
         const val MAX_NUM_TOKENS = 2048
         const val MAX_OUTPUT_TOKENS = 16
+        const val MAX_OUTPUT_TOKENS_THINKING = 1024
         const val REPLY_LOG_CHARS = 120
+        const val QWEN3_PREFIX = "qwen3"
+
+        /** LiteRT-LM's canonical Qwen3 template: the one inside the model file cannot render list contents. */
+        const val QWEN3_TEMPLATE_ASSET = "qwen3_chat_template.jinja"
         const val P50 = 50
         const val P90 = 90
         const val HUNDRED = 100

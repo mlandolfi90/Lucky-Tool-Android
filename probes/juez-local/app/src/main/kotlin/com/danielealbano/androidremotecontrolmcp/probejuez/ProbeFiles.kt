@@ -30,6 +30,7 @@ data class RunRequest(
     val tag: String,
     val thinking: String,
     val repeat: Int,
+    val prompt: String,
 ) {
     companion object {
         const val EXTRA_MODEL = "model"
@@ -39,6 +40,9 @@ data class RunRequest(
         const val EXTRA_TAG = "tag"
         const val EXTRA_THINKING = "thinking"
         const val EXTRA_REPEAT = "repeat"
+        const val EXTRA_PROMPT = "prompt"
+        const val THINKING_ON = "on"
+        const val PROMPT_STEP = "paso"
         private const val DEFAULT_THREADS = 4
 
         fun from(intent: Intent): RunRequest? {
@@ -51,6 +55,7 @@ data class RunRequest(
                 tag = intent.getStringExtra(EXTRA_TAG) ?: "run",
                 thinking = intent.getStringExtra(EXTRA_THINKING) ?: "config",
                 repeat = intent.getIntExtra(EXTRA_REPEAT, 1),
+                prompt = intent.getStringExtra(EXTRA_PROMPT) ?: "sino",
             )
         }
     }
