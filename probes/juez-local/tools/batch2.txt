@@ -1,7 +1,5 @@
 # tag model backend delaySec mode thinking prompt
-qwen-cpu-bg qwen3_0_6b_mixed_int4.litertlm cpu 6 bg config sino
-qwen-gpu-bg qwen3_0_6b_mixed_int4.litertlm gpu 6 bg config sino
+# Qwen3-0.6B descartado el 2026-10-14: los modelos chicos razonan peor.
 gemma-gpu-bg-paso gemma-4-E2B-it.litertlm gpu 6 bg config paso
-qwen-cpu-bg-paso qwen3_0_6b_mixed_int4.litertlm cpu 6 bg config paso
 gemma-gpu-bg-think gemma-4-E2B-it.litertlm gpu 6 bg on sino
 gemma-gpu-bg-paso-think gemma-4-E2B-it.litertlm gpu 6 bg on paso
