@@ -12,15 +12,20 @@ object ProbeFiles {
             File(context.filesDir, "models").apply { mkdirs() },
         )
 
-    fun resultsDir(context: Context): File =
-        context.getExternalFilesDir("results") ?: File(context.filesDir, "results").apply { mkdirs() }
+    fun resultsDir(context: Context): File = appDir(context, "results")
 
-    fun imagesDir(context: Context): File =
-        context.getExternalFilesDir("images") ?: File(context.filesDir, "images").apply { mkdirs() }
+    fun imagesDir(context: Context): File = appDir(context, "images")
 
     /** The question files ([JudgeConfig]), pushed before every run so that the questions change without a build. */
-    fun configDir(context: Context): File =
-        context.getExternalFilesDir("config") ?: File(context.filesDir, "config").apply { mkdirs() }
+    fun configDir(context: Context): File = appDir(context, "config")
+
+    /** The screenshot [name] in the images folder; a missing one fails the run. */
+    fun imageFile(
+        context: Context,
+        name: String,
+    ): File =
+        File(imagesDir(context), name).takeIf { it.isFile }
+            ?: error("image $name not found in ${imagesDir(context)}")
 
     fun findModel(
         context: Context,
@@ -31,6 +36,11 @@ object ProbeFiles {
         context: Context,
         name: String,
     ): File? = File(configDir(context), name).takeIf { it.isFile }
+
+    private fun appDir(
+        context: Context,
+        name: String,
+    ): File = context.getExternalFilesDir(name) ?: File(context.filesDir, name).apply { mkdirs() }
 }
 
 /**

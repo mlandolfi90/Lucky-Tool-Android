@@ -1,5 +1,6 @@
 package com.danielealbano.androidremotecontrolmcp.probejuez
 
+import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -11,16 +12,6 @@ class JudgeConfigTest {
     private val configDir = File("..", "config")
 
     private fun load(name: String): JudgeConfig = JudgeConfig.load(File(configDir, name))
-
-    private fun case(
-        step: Int = 6,
-        image: String? = null,
-    ) = JudgeCase(id = "t", plan = "plan", step = step, action = "acción", expected = "SI", image = image)
-
-    private fun prompt(
-        answer: String = "sino",
-        marker: String? = null,
-    ) = JudgePrompt("system", "{plan}{action}", answer, marker, maxTokens = 16, maxTokensThinking = 1024)
 
     @Test
     fun `every question file parses and fills every question`() {
@@ -79,47 +70,6 @@ class JudgeConfigTest {
     }
 
     @Test
-    fun `sino verdict reads the first SI or NO outside the thinking`() {
-        // Arrange
-        val sino = prompt()
-
-        // Act & Assert
-        assertEquals(JudgeConfig.YES, JudgeConfig.verdict(sino, case(), "SI"))
-        assertEquals(JudgeConfig.YES, JudgeConfig.verdict(sino, case(), "Sí."))
-        assertEquals(JudgeConfig.NO, JudgeConfig.verdict(sino, case(), "No"))
-        assertEquals(JudgeConfig.NO, JudgeConfig.verdict(sino, case(), "<think>el plan dice SI</think>NO"))
-        assertEquals(JudgeConfig.NO, JudgeConfig.verdict(sino, case(), "<|channel>thought\nSI<channel|>NO"))
-        assertEquals(JudgeConfig.INVALID, JudgeConfig.verdict(sino, case(), "<|channel>thought\nSI, porque"))
-        assertEquals(JudgeConfig.INVALID, JudgeConfig.verdict(sino, case(), "SIN datos"))
-        assertEquals(JudgeConfig.INVALID, JudgeConfig.verdict(sino, case(), ""))
-    }
-
-    @Test
-    fun `paso verdict compares the first number with the current step`() {
-        // Arrange
-        val paso = prompt(answer = "paso")
-
-        // Act & Assert
-        assertEquals(JudgeConfig.YES, JudgeConfig.verdict(paso, case(step = 6), "6"))
-        assertEquals(JudgeConfig.YES, JudgeConfig.verdict(paso, case(step = 6), "Paso 6"))
-        assertEquals(JudgeConfig.NO, JudgeConfig.verdict(paso, case(step = 6), "0"))
-        assertEquals(JudgeConfig.NO, JudgeConfig.verdict(paso, case(step = 1), "<think>no es el 1</think>6"))
-        assertEquals(JudgeConfig.INVALID, JudgeConfig.verdict(paso, case(step = 6), "ninguno"))
-    }
-
-    @Test
-    fun `a marker reads the verdict after its last occurrence`() {
-        // Arrange
-        val lista = prompt(marker = "VEREDICTO:")
-        val checklist = "APP: CambioApp = CambioApp → SI\nMONTO: 50000 Bs = 20000 Bs → NO\nVEREDICTO: NO"
-
-        // Act & Assert
-        assertEquals(JudgeConfig.NO, JudgeConfig.verdict(lista, case(), checklist))
-        assertEquals(JudgeConfig.YES, JudgeConfig.verdict(lista, case(), "veredicto: sí"))
-        assertEquals(JudgeConfig.INVALID, JudgeConfig.verdict(lista, case(), "APP: CambioApp → SI"))
-    }
-
-    @Test
     fun `unknown keys, a question without the action and unfilled placeholders fail`() {
         // Arrange
         val good = File(configDir, "casos-v1.json").readText()
@@ -143,6 +93,46 @@ class JudgeConfigTest {
         assertThrows<IllegalArgumentException> { JudgeConfig.parse(noAction) }
         assertThrows<IllegalStateException> {
             misspelled.questionFor(misspelled.prompt("sino"), misspelled.casesFor(RunRequest.SET_TEXT).first())
+        }
+    }
+
+    @Test
+    fun `v6 cases carry the plan values of their step`() {
+        // Arrange
+        val cases = load("casos-v6.json").casesFor(RunRequest.SET_ALL).associateBy { it.id }
+
+        // Act & Assert
+        assertEquals(
+            mapOf("APP" to listOf("CambioApp"), "MONTO" to listOf("20000 Bs"), "DESTINATARIO" to listOf("juanp2p")),
+            cases.getValue("s05-liberar").allowed,
+        )
+        assertEquals(listOf("BancoApp"), cases.getValue("s10-mirar-banco").allowed["APP"])
+        assertEquals(listOf("Ana"), cases.getValue("s09-enviar-mensaje").allowed["DESTINATARIO"])
+        assertEquals(emptyMap<String, List<String>>(), load("casos-v1.json").casesFor(RunRequest.SET_ALL)[0].allowed)
+    }
+
+    @Test
+    fun `a datos prompt needs a marker, fields and the plan values of every case`() {
+        // Arrange
+        val v6 = File(configDir, "casos-v6.json").readText()
+        val datos = { root: JSONObject -> root.getJSONObject("prompts").getJSONObject("datos") }
+        val noMarker = JSONObject(v6).apply { datos(this).remove("marker") }
+        val noFields = JSONObject(v6).apply { datos(this).remove("fields") }
+        val unknownField = JSONObject(v6).apply { datos(this).put("fields", JSONArray(listOf("APP", "MONEDA"))) }
+        val stepWithoutValues = JSONObject(v6).apply { getJSONObject("stepData").getJSONObject("venta").remove("6") }
+        val unknownPlan = JSONObject(v6).apply { getJSONObject("stepData").put("compra", JSONObject()) }
+        val noValues =
+            JSONObject(v6).apply {
+                getJSONObject("stepData").getJSONObject("chat").getJSONObject("3").put("APP", JSONArray())
+            }
+        val fieldsInSino =
+            JSONObject(File(configDir, "casos-v1.json").readText()).apply {
+                getJSONObject("prompts").getJSONObject("sino").put("fields", JSONArray(listOf("APP")))
+            }
+
+        // Act & Assert
+        listOf(noMarker, noFields, unknownField, stepWithoutValues, unknownPlan, noValues, fieldsInSino).forEach {
+            assertThrows<IllegalArgumentException> { JudgeConfig.parse(it) }
         }
     }
 

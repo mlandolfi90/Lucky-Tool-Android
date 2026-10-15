@@ -8,12 +8,15 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
 import android.util.Log
+import com.google.ai.edge.litertlm.LiteRtLmJniException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import org.json.JSONException
+import java.io.IOException
 
 /**
  * Foreground service that runs the probe, like the real app's server service: the run keeps going while
@@ -35,19 +38,36 @@ class ProbeService : Service() {
             stopSelf(startId)
             return START_NOT_STICKY
         }
+        // The failures a run reports as JUEZ ERROR: a bad request or question file, a missing file and engine errors.
+        // Anything else crashes the app, and run_probe.sh keeps the crash log.
         scope.launch {
             try {
                 ProbeRunner(applicationContext).run(request)
             } catch (e: CancellationException) {
                 throw e
-            } catch (t: Throwable) {
-                Log.e(TAG, "JUEZ ERROR tag=${request.tag} ${t.javaClass.simpleName}: ${t.message}", t)
+            } catch (e: IllegalStateException) {
+                logFailure(request, e)
+            } catch (e: IllegalArgumentException) {
+                logFailure(request, e)
+            } catch (e: JSONException) {
+                logFailure(request, e)
+            } catch (e: IOException) {
+                logFailure(request, e)
+            } catch (e: LiteRtLmJniException) {
+                logFailure(request, e)
             } finally {
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 stopSelf(startId)
             }
         }
         return START_NOT_STICKY
+    }
+
+    private fun logFailure(
+        request: RunRequest,
+        failure: Exception,
+    ) {
+        Log.e(TAG, "JUEZ ERROR tag=${request.tag} ${failure.javaClass.simpleName}: ${failure.message}", failure)
     }
 
     override fun onDestroy() {

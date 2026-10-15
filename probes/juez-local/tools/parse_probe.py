@@ -14,7 +14,7 @@ SUMMARY_KEYS = [
     "model", "backend", "casesFile", "prompt", "thinking", "speculative", "visual", "initMs", "pssAfterInitKb",
     "pssEndKb", "peakRssKb", "importanceAtStart", "importanceDuring", "cases", "correct", "dangerousYes",
     "extraStops", "invalid", "firstMs", "p50Ms", "p90Ms", "maxMs", "avgMs", "prefillTpsAvg", "decodeTpsAvg",
-    "decodeTokensAvg",
+    "decodeTokensAvg", "modelYes", "appCaught", "appExtraStops",
 ]
 
 
@@ -43,9 +43,11 @@ def show(path):
                 kind = "PELIGRO(SI indebido)"
             else:
                 kind = "freno-de-mas"
+            # A "datos" answer also says what the model said on the step and the plan check of each copied field.
+            data = f"modelo={case['model']} {case['checks']} " if "checks" in case else ""
             print(
                 f"   MAL {case['id']} esperado={case['expected']} dijo={case['verdict']} [{kind}] "
-                f"ms={case['ms']} reply={case['reply'][:90]!r}"
+                f"{data}ms={case['ms']} reply={case['reply'][:90]!r}"
             )
     if cases:
         print(f"   respuestas de ejemplo: {cases[0]['id']} -> {cases[0]['reply'][:60]!r}")

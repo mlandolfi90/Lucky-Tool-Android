@@ -11,7 +11,7 @@ import java.io.File
 
 /**
  * One answer of the model: the reply text, the text the engine kept apart in named channels (Gemma 4's thinking)
- * and, when the run asked for them, the engine's own token counts and speeds ([ProbeMetrics.benchRecord]).
+ * and, when the run asked for them, the engine's own token counts and speeds ([BenchStats.record]).
  */
 data class JudgeAnswer(
     val reply: String,
@@ -34,6 +34,68 @@ data class RunSetup(
     val modelSpeculative: Boolean?,
 )
 
+/** The memory and the priority of this app's process. */
+object ProcessStats {
+    fun importance(): Int {
+        val info = ActivityManager.RunningAppProcessInfo()
+        ActivityManager.getMyMemoryState(info)
+        return info.importance
+    }
+
+    fun pssKb(): Int = Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }.totalPss
+
+    fun peakRssKb(): Long =
+        File("/proc/self/status")
+            .readLines()
+            .firstOrNull { it.startsWith("VmHWM:") }
+            ?.filter { it.isDigit() }
+            ?.toLongOrNull() ?: -1L
+}
+
+/** The engine's own token counts and speeds for each answer (benchmark mode) and their averages for a run. */
+object BenchStats {
+    private const val TENTHS = 10.0
+    private const val MILLIS_PER_SECOND = 1000.0
+    private const val TTFT_MS = "ttftMs"
+    private const val PREFILL_TOKENS = "prefillTokens"
+    private const val DECODE_TOKENS = "decodeTokens"
+    private const val PREFILL_TPS = "prefillTps"
+    private const val DECODE_TPS = "decodeTps"
+
+    /** The counts are the engine's last prefill and decode of the answer. */
+    fun record(info: BenchmarkInfo): JSONObject =
+        JSONObject()
+            .put(TTFT_MS, Math.round(info.timeToFirstTokenInSecond * MILLIS_PER_SECOND))
+            .put(PREFILL_TOKENS, info.lastPrefillTokenCount)
+            .put(DECODE_TOKENS, info.lastDecodeTokenCount)
+            .put(PREFILL_TPS, tenths(info.lastPrefillTokensPerSecond))
+            .put(DECODE_TPS, tenths(info.lastDecodeTokensPerSecond))
+
+    /** Stands in for [record] when the engine could not give its counts, so the answer itself is kept. */
+    fun failure(e: Throwable): JSONObject = JSONObject().put("error", "${e.javaClass.simpleName}: ${e.message}")
+
+    /** Adds the run's average speeds and decoded tokens to [summary], when some answers carry them. */
+    fun putAverages(
+        summary: JSONObject,
+        outcomes: List<JSONObject>,
+    ) {
+        val benches = outcomes.mapNotNull { it.optJSONObject("bench") }.filter { it.has(DECODE_TPS) }
+        if (benches.isNotEmpty()) {
+            summary
+                .put("prefillTpsAvg", average(benches, PREFILL_TPS))
+                .put("decodeTpsAvg", average(benches, DECODE_TPS))
+                .put("decodeTokensAvg", average(benches, DECODE_TOKENS))
+        }
+    }
+
+    private fun average(
+        benches: List<JSONObject>,
+        key: String,
+    ): Double = tenths(benches.sumOf { it.getDouble(key) } / benches.size)
+
+    private fun tenths(value: Double): Double = Math.round(value * TENTHS) / TENTHS
+}
+
 /** The measurements of a run and its records: one JUEZ CASE line per answer, the summary and the stored JSON. */
 object ProbeMetrics {
     private const val TAG = ProbeService.TAG
@@ -47,27 +109,7 @@ object ProbeMetrics {
     private const val DEFAULT = "default"
     private const val NONE = "none"
     private const val UNKNOWN = "unknown"
-    private const val TENTHS = 10.0
-    private const val MILLIS_PER_SECOND = 1000.0
-    private const val BENCH_TTFT_MS = "ttftMs"
-    private const val BENCH_PREFILL_TOKENS = "prefillTokens"
-    private const val BENCH_DECODE_TOKENS = "decodeTokens"
-    private const val BENCH_PREFILL_TPS = "prefillTps"
-    private const val BENCH_DECODE_TPS = "decodeTps"
-
-    fun thinkingOn(request: RunRequest): Boolean = request.thinking == RunRequest.THINKING_ON
-
-    fun maxOutputTokens(
-        request: RunRequest,
-        prompt: JudgePrompt,
-    ): Int = if (thinkingOn(request)) prompt.maxTokensThinking else prompt.maxTokens
-
-    fun imageFile(
-        context: Context,
-        name: String,
-    ): File =
-        File(ProbeFiles.imagesDir(context), name).takeIf { it.isFile }
-            ?: error("image $name not found in ${ProbeFiles.imagesDir(context)}")
+    private const val STEP_ANSWER = "stepAnswer"
 
     fun logInit(
         request: RunRequest,
@@ -82,6 +124,7 @@ object ProbeMetrics {
                 "casesFile=${request.casesFile} casesVersion=${setup.casesVersion} " +
                 "casesSha256=${setup.casesSha256} set=${request.set} questions=${setup.questions} " +
                 "prompt=${request.prompt} answer=${setup.prompt.answer} marker=${setup.prompt.marker ?: NONE} " +
+                "fields=${setup.prompt.fields.joinToString(",") { it.replace(' ', '_') }.ifEmpty { NONE }} " +
                 "maxTokens=${setup.maxOutputTokens} thinking=${request.thinking} sampler=${request.sampler} " +
                 "speculative=${request.speculativeMode} modelSpeculative=${setup.modelSpeculative ?: UNKNOWN} " +
                 "visual=${request.visualBudget ?: DEFAULT} vision=${setup.vision} bench=${request.benchMode} " +
@@ -90,56 +133,44 @@ object ProbeMetrics {
     }
 
     /**
-     * The engine's own counts and speeds for one answer (only filled when the engine started in benchmark mode).
-     * The token counts are the engine's last prefill and decode of the answer.
-     */
-    fun benchRecord(info: BenchmarkInfo): JSONObject =
-        JSONObject()
-            .put(BENCH_TTFT_MS, Math.round(info.timeToFirstTokenInSecond * MILLIS_PER_SECOND))
-            .put(BENCH_PREFILL_TOKENS, info.lastPrefillTokenCount)
-            .put(BENCH_DECODE_TOKENS, info.lastDecodeTokenCount)
-            .put(BENCH_PREFILL_TPS, tenths(info.lastPrefillTokensPerSecond))
-            .put(BENCH_DECODE_TPS, tenths(info.lastDecodeTokensPerSecond))
-
-    /** Stands in for [benchRecord] when the engine could not give its counts, so the answer itself is kept. */
-    fun benchError(error: Throwable): JSONObject =
-        JSONObject().put("error", "${error.javaClass.simpleName}: ${error.message}")
-
-    /**
      * Logs one answer as a JUEZ CASE line and returns its record. `thoughtChars` counts the text the engine kept
-     * apart from the reply (Gemma 4's thinking); the reply always goes last in the line.
+     * apart from the reply (Gemma 4's thinking); a "datos" answer adds what the model said on the step and the plan
+     * check of each copied field; the reply always goes last in the line.
      */
     fun caseResult(
         request: RunRequest,
         round: Int,
         case: JudgeCase,
         answer: JudgeAnswer,
-        verdict: String,
+        judgement: Judgement,
         elapsedMs: Long,
     ): JSONObject {
-        val importance = importance()
+        val importance = ProcessStats.importance()
         val reply = answer.reply
         val shortReply = reply.replace('\n', ' ').take(REPLY_LOG_CHARS)
         val bench = answer.bench
         val benchFields = bench?.let { b -> b.keys().asSequence().joinToString("") { " $it=${b.get(it)}" } }.orEmpty()
+        val check = judgement.check
         Log.i(
             TAG,
             "JUEZ CASE tag=${request.tag} round=$round id=${case.id} expected=${case.expected} " +
-                "verdict=$verdict ms=$elapsedMs importance=$importance chars=${reply.length} " +
-                "thoughtChars=${answer.channels.values.sumOf { it.length }}$benchFields reply=$shortReply",
+                "verdict=${judgement.verdict} ms=$elapsedMs importance=$importance chars=${reply.length} " +
+                "thoughtChars=${answer.channels.values.sumOf { it.length }}$benchFields" +
+                "${check?.let(::checkLog).orEmpty()} reply=$shortReply",
         )
         val record =
             JSONObject()
                 .put("round", round)
                 .put("id", case.id)
                 .put("expected", case.expected)
-                .put("verdict", verdict)
+                .put("verdict", judgement.verdict)
                 .put("ms", elapsedMs)
                 .put("importance", importance)
                 .put("reply", shortReply)
                 .put("raw", reply.take(RAW_REPLY_CHARS))
                 .put("channels", JSONObject(answer.channels.mapValues { it.value.take(RAW_REPLY_CHARS) }))
         bench?.let { record.put("bench", it) }
+        check?.let { record.put(STEP_ANSWER, it.stepAnswer).put("checks", checkRecord(it)) }
         return record
     }
 
@@ -152,7 +183,6 @@ object ProbeMetrics {
         outcomes: List<JSONObject>,
     ): JSONObject {
         val times = outcomes.map { it.getLong("ms") }.sorted()
-        val benches = outcomes.mapNotNull { it.optJSONObject("bench") }.filter { it.has(BENCH_DECODE_TPS) }
         val summary =
             JSONObject()
                 .put("tag", request.tag)
@@ -163,6 +193,7 @@ object ProbeMetrics {
                 .put("prompt", request.prompt)
                 .put("answer", setup.prompt.answer)
                 .put("marker", setup.prompt.marker ?: NONE)
+                .put("fields", JSONArray(setup.prompt.fields))
                 .put("maxTokens", setup.maxOutputTokens)
                 .put("casesFile", request.casesFile)
                 .put("casesVersion", setup.casesVersion)
@@ -177,8 +208,8 @@ object ProbeMetrics {
                 .put("delaySec", request.delaySec)
                 .put("initMs", initMs)
                 .put("pssAfterInitKb", pssAfterInitKb)
-                .put("pssEndKb", pssKb())
-                .put("peakRssKb", peakRssKb())
+                .put("pssEndKb", ProcessStats.pssKb())
+                .put("peakRssKb", ProcessStats.peakRssKb())
                 .put("importanceAtStart", importanceAtStart)
                 .put("importanceDuring", JSONArray(outcomes.map { it.getInt("importance") }.distinct()))
                 .put("cases", outcomes.size)
@@ -191,12 +222,8 @@ object ProbeMetrics {
                 .put("p90Ms", percentile(times, P90))
                 .put("maxMs", times.lastOrNull() ?: 0L)
                 .put("avgMs", if (times.isEmpty()) 0L else times.sum() / times.size)
-        if (benches.isNotEmpty()) {
-            summary
-                .put("prefillTpsAvg", average(benches, BENCH_PREFILL_TPS))
-                .put("decodeTpsAvg", average(benches, BENCH_DECODE_TPS))
-                .put("decodeTokensAvg", average(benches, BENCH_DECODE_TOKENS))
-        }
+        BenchStats.putAverages(summary, outcomes)
+        putDataCounts(summary, outcomes)
         return summary.put("results", JSONArray(outcomes))
     }
 
@@ -211,24 +238,43 @@ object ProbeMetrics {
         Log.i(TAG, "JUEZ SUMMARY $summary")
     }
 
-    fun importance(): Int =
-        ActivityManager.RunningAppProcessInfo().also { ActivityManager.getMyMemoryState(it) }.importance
+    /** ` model=SI checks=APP:ok,MONTO:NO`: the model's SI/NO on the step and the plan check of each copied field. */
+    private fun checkLog(check: DataCheck): String =
+        " model=${check.stepAnswer} checks=" +
+            check.fields.entries.joinToString(",") { (field, result) ->
+                val outcome =
+                    when {
+                        result.read == null -> "falta"
+                        result.accepted -> "ok"
+                        else -> JudgeConfig.NO
+                    }
+                "${field.replace(' ', '_')}:$outcome"
+            }
 
-    fun pssKb(): Int = Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }.totalPss
+    private fun checkRecord(check: DataCheck): JSONObject =
+        JSONObject().also { record ->
+            check.fields.forEach { (field, result) ->
+                val values = JSONObject().put("read", result.read ?: JSONObject.NULL).put("accepted", result.accepted)
+                record.put(field, values)
+            }
+        }
 
-    private fun peakRssKb(): Long =
-        File("/proc/self/status")
-            .readLines()
-            .firstOrNull { it.startsWith("VmHWM:") }
-            ?.filter { it.isDigit() }
-            ?.toLongOrNull() ?: -1L
-
-    private fun average(
-        benches: List<JSONObject>,
-        key: String,
-    ): Double = tenths(benches.sumOf { it.getDouble(key) } / benches.size)
-
-    private fun tenths(value: Double): Double = Math.round(value * TENTHS) / TENTHS
+    /**
+     * For a "datos" run: how often the model said SI, the NO questions where the app's comparison stopped that SI
+     * (`appCaught`) and the SI questions it stopped (`appExtraStops`).
+     */
+    private fun putDataCounts(
+        summary: JSONObject,
+        outcomes: List<JSONObject>,
+    ) {
+        val modelYes = outcomes.filter { it.has(STEP_ANSWER) && it.getString(STEP_ANSWER) == JudgeConfig.YES }
+        if (outcomes.any { it.has(STEP_ANSWER) }) {
+            summary
+                .put("modelYes", modelYes.size)
+                .put("appCaught", modelYes.count { it.isExpected(JudgeConfig.NO) && it.isVerdict(JudgeConfig.NO) })
+                .put("appExtraStops", modelYes.count { it.isExpected(JudgeConfig.YES) && it.isVerdict(JudgeConfig.NO) })
+        }
+    }
 
     private fun JSONObject.isExpected(label: String): Boolean = getString("expected") == label
 

@@ -41,18 +41,19 @@ class ProbeRunner(
         val cases = config.casesFor(request.set)
         require(cases.isNotEmpty()) { "${request.casesFile} has no cases for set ${request.set}" }
         // A missing screenshot fails now, not after the answers before it (results are stored at the end).
-        cases.mapNotNull { it.image }.distinct().forEach { ProbeMetrics.imageFile(context, it) }
+        cases.mapNotNull { it.image }.distinct().forEach { ProbeFiles.imageFile(context, it) }
         val modelFile =
             ProbeFiles.findModel(context, request.model)
                 ?: error("model ${request.model} not found in ${ProbeFiles.modelDirs(context)}")
         val withImages = cases.any { it.image != null }
+        val thinkingOn = request.thinking == RunRequest.THINKING_ON
         val setup =
             RunSetup(
                 questions = cases.size,
                 casesVersion = config.version,
                 casesSha256 = sha256(configFile),
                 prompt = prompt,
-                maxOutputTokens = ProbeMetrics.maxOutputTokens(request, prompt),
+                maxOutputTokens = if (thinkingOn) prompt.maxTokensThinking else prompt.maxTokens,
                 vision = withImages,
                 modelSpeculative = modelSpeculativeSupport(modelFile),
             )
@@ -70,13 +71,13 @@ class ProbeRunner(
                 maxNumImages = if (withImages) 1 else null,
                 cacheDir = context.cacheDir.path,
             )
-        val importanceAtStart = ProbeMetrics.importance()
+        val importanceAtStart = ProcessStats.importance()
         val summary =
             Engine(engineConfig).use { engine ->
                 val initStarted = SystemClock.elapsedRealtime()
                 engine.initialize()
                 val initMs = SystemClock.elapsedRealtime() - initStarted
-                val pssAfterInitKb = ProbeMetrics.pssKb()
+                val pssAfterInitKb = ProcessStats.pssKb()
                 ProbeMetrics.logInit(request, setup, initMs, pssAfterInitKb, importanceAtStart)
                 val outcomes =
                     (1..request.repeat).flatMap { round ->
@@ -121,7 +122,7 @@ class ProbeRunner(
                 enableSpeculativeDecoding = request.speculative,
             )
         val question = config.questionFor(prompt, case)
-        val imageBytes = case.image?.let { ProbeMetrics.imageFile(context, it).readBytes() }
+        val imageBytes = case.image?.let { ProbeFiles.imageFile(context, it).readBytes() }
         val started = SystemClock.elapsedRealtime()
         val answer =
             engine.createConversation(conversationConfig).use { conversation ->
@@ -133,16 +134,16 @@ class ProbeRunner(
                     }
                 val bench =
                     if (request.benchmark) {
-                        runCatching { ProbeMetrics.benchRecord(conversation.getBenchmarkInfo()) }
-                            .getOrElse { ProbeMetrics.benchError(it) }
+                        runCatching { BenchStats.record(conversation.getBenchmarkInfo()) }
+                            .getOrElse { BenchStats.failure(it) }
                     } else {
                         null
                     }
                 JudgeAnswer(reply = message.toString(), channels = message.channels, bench = bench)
             }
         val elapsedMs = SystemClock.elapsedRealtime() - started
-        val verdict = JudgeConfig.verdict(prompt, case, answer.reply)
-        return ProbeMetrics.caseResult(request, round, case, answer, verdict, elapsedMs)
+        val judgement = ReplyReader.judge(prompt, case, answer.reply)
+        return ProbeMetrics.caseResult(request, round, case, answer, judgement, elapsedMs)
     }
 
     private fun backendFor(request: RunRequest): Backend =
