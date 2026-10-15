@@ -1,0 +1,3 @@
+# Modo pensar del kit con la marca <|think|> escrita a mano (el SDK 0.8.0 ignoró enableThinking).
+e4b-geniex-pensar-marca gemma4-e4b-geniex.zip geniex 6 bg on sino texto greedy
+e4b-geniex-img-pensar-marca gemma4-e4b-geniex.zip geniex 6 bg on sino imagenes greedy

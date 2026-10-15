@@ -14,6 +14,9 @@ object ProbeMetrics {
     private const val MAX_OUTPUT_TOKENS = 16
     private const val MAX_OUTPUT_TOKENS_THINKING = 1024
     private const val REPLY_LOG_CHARS = 120
+
+    /** Whole replies, thinking included, are kept in the result record (1024 tokens fit well within this). */
+    private const val RAW_REPLY_CHARS = 8000
     private const val P50 = 50
     private const val P90 = 90
     private const val HUNDRED = 100
@@ -75,7 +78,7 @@ object ProbeMetrics {
         Log.i(
             TAG,
             "JUEZ CASE tag=${request.tag} round=$round id=${case.id} expected=${case.expectedLabel} " +
-                "verdict=$verdict ms=$elapsedMs importance=$importance reply=$shortReply",
+                "verdict=$verdict ms=$elapsedMs importance=$importance chars=${reply.length} reply=$shortReply",
         )
         return JSONObject()
             .put("round", round)
@@ -85,6 +88,7 @@ object ProbeMetrics {
             .put("ms", elapsedMs)
             .put("importance", importance)
             .put("reply", shortReply)
+            .put("raw", reply.take(RAW_REPLY_CHARS))
     }
 
     fun summarize(

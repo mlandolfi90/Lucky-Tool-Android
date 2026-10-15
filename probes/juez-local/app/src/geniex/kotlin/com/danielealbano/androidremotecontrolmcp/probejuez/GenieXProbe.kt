@@ -26,6 +26,13 @@ import org.json.JSONObject
 object GenieXProbe {
     private const val SEED = 42
 
+    /**
+     * Gemma 4's thinking switch. GenieX 0.8.0 leaves it out even with applyChatTemplate(enableThinking = true)
+     * (measured: same prompt tokens with and without), so it is written at the top of the system turn, where the
+     * bundle's own chat template puts it.
+     */
+    private const val THINK_HEADER = "<|think|>\n"
+
     suspend fun run(
         context: Context,
         request: RunRequest,
@@ -110,9 +117,11 @@ object GenieXProbe {
                 case.image?.let { add(VlmContent("image", ProbeMetrics.imageFile(context, it).absolutePath)) }
                 add(VlmContent("text", ProbeMetrics.promptFor(request, case)))
             }
+        val thinkHeader = if (ProbeMetrics.thinkingOn(request)) THINK_HEADER else ""
+        val system = thinkHeader + ProbeMetrics.systemFor(request)
         val messages =
             arrayOf(
-                VlmChatMessage(role = "system", contents = listOf(VlmContent("text", ProbeMetrics.systemFor(request)))),
+                VlmChatMessage(role = "system", contents = listOf(VlmContent("text", system))),
                 VlmChatMessage(role = "user", contents = userContents),
             )
         val started = SystemClock.elapsedRealtime()
