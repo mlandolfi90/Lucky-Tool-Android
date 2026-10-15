@@ -6,11 +6,16 @@ import json
 import re
 import sys
 
-CASE = re.compile(
-    r"JUEZ CASE tag=(\S+) round=(\d+) id=(\S+) expected=(\S+) verdict=(\S+) ms=(\d+) importance=(\d+) reply=(.*)$"
-)
+# key=value fields up to the reply, which is free text and always last.
+CASE = re.compile(r"JUEZ CASE (.*?) reply=(.*)$")
 SUMMARY = re.compile(r"JUEZ SUMMARY (\{.*\})\s*$")
 ERROR = re.compile(r"JUEZ ERROR (.*)$")
+SUMMARY_KEYS = [
+    "model", "backend", "casesFile", "prompt", "thinking", "speculative", "visual", "initMs", "pssAfterInitKb",
+    "pssEndKb", "peakRssKb", "importanceAtStart", "importanceDuring", "cases", "correct", "dangerousYes",
+    "extraStops", "invalid", "firstMs", "p50Ms", "p90Ms", "maxMs", "avgMs", "prefillTpsAvg", "decodeTpsAvg",
+    "decodeTokensAvg",
+]
 
 
 def show(path):
@@ -18,27 +23,27 @@ def show(path):
     with open(path, encoding="utf-8", errors="replace") as handle:
         for line in handle:
             if m := CASE.search(line):
-                cases.append(m.groups())
+                fields = dict(pair.split("=", 1) for pair in m.group(1).split() if "=" in pair)
+                fields["reply"] = m.group(2).strip()
+                cases.append(fields)
             elif m := SUMMARY.search(line):
                 summary = json.loads(m.group(1))
             elif m := ERROR.search(line):
                 errors.append(m.group(1).strip())
     print(f"== {path}")
     if summary:
-        keys = [
-            "model", "backend", "initMs", "pssAfterInitKb", "pssEndKb", "peakRssKb", "importanceAtStart",
-            "importanceDuring", "cases", "correct", "dangerousYes", "extraStops", "invalid",
-            "firstMs", "p50Ms", "p90Ms", "maxMs", "avgMs",
-        ]
-        print("   " + " ".join(f"{k}={summary.get(k)}" for k in keys))
+        print("   " + " ".join(f"{k}={summary[k]}" for k in SUMMARY_KEYS if k in summary))
     for err in errors:
         print(f"   ERROR {err[:300]}")
-    for tag, rnd, cid, expected, verdict, ms, imp, reply in cases:
-        if expected != verdict:
-            kind = "PELIGRO(SI indebido)" if expected == "NO" and verdict == "SI" else "freno-de-mas"
-            print(f"   MAL {cid} esperado={expected} dijo={verdict} [{kind}] ms={ms} reply={reply[:90]!r}")
+    for case in cases:
+        if case["expected"] != case["verdict"]:
+            kind = "PELIGRO(SI indebido)" if case["expected"] == "NO" and case["verdict"] == "SI" else "freno-de-mas"
+            print(
+                f"   MAL {case['id']} esperado={case['expected']} dijo={case['verdict']} [{kind}] "
+                f"ms={case['ms']} reply={case['reply'][:90]!r}"
+            )
     if cases:
-        print(f"   respuestas de ejemplo: {cases[0][2]} -> {cases[0][7][:60]!r}")
+        print(f"   respuestas de ejemplo: {cases[0]['id']} -> {cases[0]['reply'][:60]!r}")
 
 
 for log in sys.argv[1:]:
