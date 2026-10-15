@@ -21,3 +21,9 @@ v5-lista-texto gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-
 v3-lista-texto-specoff gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-v3.json off 0 on
 # 5) Control con la versión revisada (1ca68f5).
 v6-control-e4b-texto gemma-4-E4B-it.litertlm gpu 6 bg config sino texto greedy casos-v1.json default 0 off
+# 6) Modo datos (07b2526): el modelo copia APP, MONTO y DESTINATARIO y dice si es el paso; la app compara con el plan.
+v6-datos-texto gemma-4-E4B-it.litertlm gpu 6 bg config datos texto greedy casos-v6.json on 0 on
+v6-datos-img gemma-4-E4B-it.litertlm gpu 6 bg config datos imagenes greedy casos-v6.json on 0 on
+# 7) Las líneas MONTO y DESTINATARIO más claras (casos-v7.json, sin compilar).
+v7-datos-img gemma-4-E4B-it.litertlm gpu 6 bg config datos imagenes greedy casos-v7.json on 0 on
+v7-datos-texto gemma-4-E4B-it.litertlm gpu 6 bg config datos texto greedy casos-v7.json on 0 on
