@@ -129,6 +129,9 @@ El PSS de la app del kit (0,2 GB) no cuenta la memoria de la NPU; por eso se mid
 - 00:48 · v4 (MONTO «que se mueve» + 13 preguntas nuevas h01–h13, escritas después de ajustar con las 31): la línea nueva de MONTO empeoró (frena s07 y h13); sino en las 35: 33/35 con 2 peligrosos (h03 «juanp2p_», h10 chat con «Ana María»).
 - 00:51 · v5 (la lista de v3 en las 35): 32/35, 2 peligrosos (h03, h10) y 1 freno (s02). En las 13 nuevas, lista y sino empatan: 11/13 con los mismos 2 peligrosos. En h03 el modelo copió bien «juanp2p_» y la dio por igual a «juanp2p»: **lee bien el dato, compara mal**. h10 no tiene línea en la lista (el chat no es dinero).
 - 01:03 · Control de la especulativa en el modo lista (v3-lista-texto-specoff, apagada): mismas respuestas en 22 de 22, decode 18,5 tok/s y p50 4,77 s; encendida (v3-lista-texto) eran 48,1 tok/s y 2,31 s: ×2,6 en velocidad y la mitad del tiempo.
+- 01:05 · El E4B `-gpu` pasó al disco de descartados (SHA-256 verificado) y se borró del teléfono; el E4B genérico salió de la carpeta temporal de la sesión a una carpeta fija de la PC (anotada en la nota local).
+- 01:12 · Revisión de código de 8bcff51 y 2dd5f1f: 0 críticos, 3 advertencias y 10 notas, todas atendidas en 1ca68f5 (cada corrida anota versión y SHA-256 del archivo de preguntas, el marcador, el límite de salida, si cargó visión y si el modelo trae borrador; el archivo se valida; palabras desconocidas fallan; pruebas JVM en el CI). CI 38684761028 verde con las 8 pruebas; corridas también en la PC, y al quitar a mano cada guarda nueva falla su prueba (4 de 4).
+- 01:15 · Control con la versión revisada (v6-control-e4b-texto): 22/22, respuestas idénticas a ayer en 22 de 22, p50 614 ms; el INIT anota casesSha256=7ef07ba4… (el de `casos-v1.json`) y modelSpeculative=true.
 
 ## Resumen del 2026-10-15
 

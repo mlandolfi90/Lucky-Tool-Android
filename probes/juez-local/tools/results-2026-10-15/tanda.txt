@@ -19,3 +19,5 @@ v4-lista-img gemma-4-E4B-it.litertlm gpu 6 bg config lista imagenes greedy casos
 v4-sino-texto gemma-4-E4B-it.litertlm gpu 6 bg config sino texto greedy casos-v4.json default 0 off
 v5-lista-texto gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-v5.json on 0 on
 v3-lista-texto-specoff gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-v3.json off 0 on
+# 5) Control con la versión revisada (1ca68f5).
+v6-control-e4b-texto gemma-4-E4B-it.litertlm gpu 6 bg config sino texto greedy casos-v1.json default 0 off
