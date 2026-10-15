@@ -1,0 +1,21 @@
+# Corridas del 2026-10-15, en orden (argumentos de run_probe.sh, una por fila; run_batch.sh las corre).
+# tag model backend delaySec mode thinking prompt set sampler questions-file speculative visual bench
+# 1) Control de la versión de una sola compilación: debe dar lo mismo que ayer.
+v1-e4b-texto gemma-4-E4B-it.litertlm gpu 6 bg config sino texto greedy casos-v1.json default 0 off
+v1-e4b-img gemma-4-E4B-it.litertlm gpu 6 bg config sino imagenes greedy casos-v1.json default 0 off
+# 2) Velocidades del motor y el archivo -gpu de Google.
+v1-e4b-texto-bench gemma-4-E4B-it.litertlm gpu 6 bg config sino texto greedy casos-v1.json default 0 on
+v1-e4bgpu-texto-bench gemma-4-E4B-it-gpu.litertlm gpu 6 bg config sino texto greedy casos-v1.json default 0 on
+# 3) Decodificación especulativa al pensar (cortada tras la 4ª respuesta que piensa) y su control apagada.
+v1-e4b-pensar-spec gemma-4-E4B-it.litertlm gpu 6 bg on sino texto greedy casos-v1.json on 0 on
+v1-pensar4-spec-off gemma-4-E4B-it.litertlm gpu 6 bg on sino texto greedy muestra-pensar-v1.json off 0 on
+# 4) Modo lista (4 líneas y VEREDICTO), versiones v2 a v5 de las preguntas.
+v2-lista-texto gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-v2.json on 0 on
+v2-lista-img gemma-4-E4B-it.litertlm gpu 6 bg config lista imagenes greedy casos-v2.json on 0 on
+v3-lista-texto gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-v3.json on 0 on
+v3-lista-img gemma-4-E4B-it.litertlm gpu 6 bg config lista imagenes greedy casos-v3.json on 0 on
+v4-lista-texto gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-v4.json on 0 on
+v4-lista-img gemma-4-E4B-it.litertlm gpu 6 bg config lista imagenes greedy casos-v4.json on 0 on
+v4-sino-texto gemma-4-E4B-it.litertlm gpu 6 bg config sino texto greedy casos-v4.json default 0 off
+v5-lista-texto gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-v5.json on 0 on
+v3-lista-texto-specoff gemma-4-E4B-it.litertlm gpu 6 bg config lista texto greedy casos-v3.json off 0 on
