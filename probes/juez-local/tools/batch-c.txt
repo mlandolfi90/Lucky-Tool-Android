@@ -1,0 +1,3 @@
+# Referencia de memoria: E4B en GPU con la misma muestra de MemAvailable que el kit.
+e4b-gpu-mem gemma-4-E4B-it.litertlm gpu 6 bg config sino texto greedy
+e4b-gpu-img-mem gemma-4-E4B-it.litertlm gpu 6 bg config sino imagenes greedy

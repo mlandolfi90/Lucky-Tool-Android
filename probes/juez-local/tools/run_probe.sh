@@ -19,10 +19,15 @@ if [ "$MODE" = bg ]; then
     sleep 1
 fi
 echo "top: $(adb shell dumpsys activity activities | grep -m1 topResumedActivity | sed 's/.*u0 //')"
-for _ in $(seq 1 1200); do
+for i in $(seq 1 1200); do
     if adb logcat -d -s JUEZ:* | grep -qE "JUEZ (SUMMARY|ERROR)"; then break; fi
+    # A native crash leaves no SUMMARY or ERROR line: stop waiting once the app process is gone.
+    if [ "$i" -gt 5 ] && [ -z "$(adb shell pidof "$PKG" | tr -d '\r')" ]; then echo "process $PKG is gone"; break; fi
     sleep 2
 done
 echo "top at end: $(adb shell dumpsys activity activities | grep -m1 topResumedActivity | sed 's/.*u0 //')"
 adb logcat -d -s JUEZ:* > "$OUT/$TAG.log"
+# Diagnosis: crashes plus the runtime and NPU lines, for runs that fail.
+adb logcat -d -b crash > "$OUT/$TAG.diag.log"
+adb logcat -d -v time | grep -iE "litert|qnn|dispatch|geniex|genie|htp|fastrpc|AndroidRuntime|FATAL|tflite" | tail -400 >> "$OUT/$TAG.diag.log"
 grep -E "JUEZ (INIT|SUMMARY|ERROR)" "$OUT/$TAG.log" | sed 's/^.*JUEZ /JUEZ /'

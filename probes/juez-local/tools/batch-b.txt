@@ -1,0 +1,5 @@
+# tag model backend delaySec mode thinking prompt set sampler
+e4b-geniex gemma4-e4b-geniex.zip geniex 6 bg config sino texto greedy
+e4b-geniex-img gemma4-e4b-geniex.zip geniex 6 bg config sino imagenes greedy
+e4b-geniex-paso gemma4-e4b-geniex.zip geniex 6 bg config paso texto greedy
+e4b-geniex-pensar gemma4-e4b-geniex.zip geniex 6 bg on sino texto greedy

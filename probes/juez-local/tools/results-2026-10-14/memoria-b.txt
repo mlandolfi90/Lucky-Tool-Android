@@ -1,0 +1,32 @@
+# MemAvailable cada 10 s (kB). Base sin apps de prueba 22:16: 7243560
+22:16:27 MemAvailable: 7253956 kB SwapFree: 8939896 kB 
+22:16:37 MemAvailable: 6767748 kB SwapFree: 8982696 kB 14721 
+22:16:47 MemAvailable: 2093756 kB SwapFree: 9037872 kB 14721 
+22:16:58 MemAvailable: 2077504 kB SwapFree: 9038420 kB 14721 
+22:17:08 MemAvailable: 2075636 kB SwapFree: 9040480 kB 14721 
+22:17:18 MemAvailable: 7029352 kB SwapFree: 9120824 kB 15170 
+22:17:28 MemAvailable: 5407848 kB SwapFree: 9117248 kB 15170 
+22:17:39 MemAvailable: 2103764 kB SwapFree: 9124200 kB 15170 
+22:17:49 MemAvailable: 2090048 kB SwapFree: 9126256 kB 15170 
+22:17:59 MemAvailable: 7000564 kB SwapFree: 9279792 kB 15636 
+22:18:09 MemAvailable: 2695724 kB SwapFree: 9237512 kB 15636 
+22:18:20 MemAvailable: 2085880 kB SwapFree: 9241116 kB 15636 
+22:18:30 MemAvailable: 7001036 kB SwapFree: 9263688 kB 15636 
+22:18:40 MemAvailable: 6984584 kB SwapFree: 9264208 kB 15636 
+22:18:50 MemAvailable: 6967832 kB SwapFree: 9267024 kB 15636 
+22:19:01 MemAvailable: 6951784 kB SwapFree: 9267560 kB 15636 
+22:19:11 MemAvailable: 6976804 kB SwapFree: 9268592 kB 15636 
+22:19:21 MemAvailable: 6950668 kB SwapFree: 9269120 kB 15636 
+22:19:31 MemAvailable: 7015392 kB SwapFree: 9204352 kB 15636 
+22:19:41 MemAvailable: 7011360 kB SwapFree: 9245476 kB 15636 
+22:19:52 MemAvailable: 6993264 kB SwapFree: 9261028 kB 15636 
+22:20:02 MemAvailable: 6974296 kB SwapFree: 9261836 kB 15636 
+22:20:12 MemAvailable: 4362032 kB SwapFree: 9226320 kB 15636 16106 
+22:20:23 MemAvailable: 3740348 kB SwapFree: 9085132 kB 15636 16106 
+22:20:33 MemAvailable: 3613748 kB SwapFree: 9124288 kB 15636 16106 
+22:20:43 MemAvailable: 6897116 kB SwapFree: 9183664 kB 15636 16604 
+22:20:53 MemAvailable: 3192808 kB SwapFree: 9039760 kB 15636 16604 
+22:21:04 MemAvailable: 2915356 kB SwapFree: 8481504 kB 15636 16604 
+22:21:14 MemAvailable: 7168392 kB SwapFree: 8779464 kB 15636 16604 
+22:21:24 MemAvailable: 7142748 kB SwapFree: 8789600 kB 15636 16604 
+22:21:34 MemAvailable: 7128136 kB SwapFree: 8791952 kB 15636 16604 

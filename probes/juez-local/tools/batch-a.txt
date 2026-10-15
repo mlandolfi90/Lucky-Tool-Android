@@ -1,0 +1,20 @@
+# tag model backend delaySec mode thinking prompt set sampler
+# NPU primero (obligatoria, decidido 2026-10-14).
+# 1) Motor de Google con el archivo E2B hecho para el SM8750 (app litert). Si 'greedy' falla, 'none' usa el muestreo del modelo.
+e2b-npu gemma-4-E2B-it_qualcomm_sm8750.litertlm npu 6 bg config sino texto greedy
+e2b-npu-libre gemma-4-E2B-it_qualcomm_sm8750.litertlm npu 6 bg config sino texto none
+e2b-npu-img gemma-4-E2B-it_qualcomm_sm8750.litertlm npu 6 bg config sino imagenes greedy
+# Plan del humano (2026-10-14): Gemma 4 E2B contra E4B, en modo sencillo y en modo pensar (GPU).
+# Extra ya aceptado: la pregunta "paso" (la IA dice el numero de paso y la app lo compara).
+e2b-sencillo gemma-4-E2B-it.litertlm gpu 6 bg config sino texto greedy
+e2b-pensar gemma-4-E2B-it.litertlm gpu 6 bg on sino texto greedy
+e4b-sencillo gemma-4-E4B-it.litertlm gpu 6 bg config sino texto greedy
+e4b-pensar gemma-4-E4B-it.litertlm gpu 6 bg on sino texto greedy
+e2b-paso gemma-4-E2B-it.litertlm gpu 6 bg config paso texto greedy
+e2b-paso-pensar gemma-4-E2B-it.litertlm gpu 6 bg on paso texto greedy
+e4b-paso gemma-4-E4B-it.litertlm gpu 6 bg config paso texto greedy
+e4b-paso-pensar gemma-4-E4B-it.litertlm gpu 6 bg on paso texto greedy
+# Capturas inventadas (tools/make_screens.py): 3 SI y 6 NO; los datos solo estan en la imagen.
+e2b-img gemma-4-E2B-it.litertlm gpu 6 bg config sino imagenes greedy
+e4b-img gemma-4-E4B-it.litertlm gpu 6 bg config sino imagenes greedy
+e4b-img-pensar gemma-4-E4B-it.litertlm gpu 6 bg on sino imagenes greedy
