@@ -1,6 +1,5 @@
 package com.danielealbano.androidremotecontrolmcp.probejuez
 
-import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
@@ -25,8 +24,9 @@ data class JudgeCase(
 /**
  * One way of asking: the system instruction, the question template ({plan}, {step}, {action} and {imageNote} are
  * filled per case), how the reply is read ([answer] is "sino", "paso" or "datos", see [ReplyReader]), the optional
- * [marker] after which the verdict is read, the output limits without and with thinking, and for "datos" the
- * [fields]: the lines (`APP: …`) the model copies from the action and the app compares with the plan.
+ * [marker] (`LABEL:`) whose line holds the verdict, the output limits without and with thinking, and for "datos" the
+ * [fields]: the lines (`APP: …`) the model copies from the action and the app compares with the plan, of which
+ * [amountFields] hold amounts (compared by number and currency, see [PlanValues]).
  */
 data class JudgePrompt(
     val system: String,
@@ -36,6 +36,7 @@ data class JudgePrompt(
     val maxTokens: Int,
     val maxTokensThinking: Int,
     val fields: List<String> = emptyList(),
+    val amountFields: List<String> = emptyList(),
 )
 
 /** The questions and the ways of asking them, read from a JSON file on the phone: changing them needs no build. */
@@ -81,18 +82,26 @@ class JudgeConfig(
         private val ANSWERS = setOf(ANSWER_YES_NO, ANSWER_STEP, ANSWER_DATA)
         private const val DEFAULT_MAX_TOKENS = 16
         private const val DEFAULT_MAX_TOKENS_THINKING = 1024
+        private const val FILE = "the question file"
+        private const val FIELDS = "fields"
+        private const val AMOUNT_FIELDS = "amountFields"
+        private const val LABEL_END = ":"
         private val ROOT_KEYS = setOf("version", "note", "imageNote", "plans", "stepData", "prompts", "cases")
         private val PROMPT_KEYS =
-            setOf("system", "question", "answer", "marker", "fields", "maxTokens", "maxTokensThinking")
+            setOf("system", "question", "answer", "marker", FIELDS, AMOUNT_FIELDS, "maxTokens", "maxTokensThinking")
         private val CASE_KEYS = setOf("id", "plan", "step", "action", "expected", "image")
         private val REQUIRED_PLACEHOLDERS = listOf("{plan}", "{action}")
         private val PLACEHOLDER = Regex("\\{[A-Za-z]+\\}")
 
+        /** A step key as the plans number their steps: `6`, never `06` (both would be step 6). */
+        private val STEP_KEY = Regex("[1-9]\\d*")
+
         fun load(file: File): JudgeConfig = parse(JSONObject(file.readText()))
 
         fun parse(root: JSONObject): JudgeConfig {
-            root.requireKnownKeys("the question file", ROOT_KEYS)
-            val plans = root.getJSONObject("plans").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }
+            root.requireKnownKeys(FILE, ROOT_KEYS)
+            val plansJson = root.getJSONObject("plans")
+            val plans = plansJson.keys().asSequence().associateWith { plansJson.textAt(it, "plans") }
             val stepData = root.optJSONObject("stepData")?.let { stepDataOf(it, plans.keys) }.orEmpty()
             val prompts =
                 root.getJSONObject("prompts").let { o ->
@@ -102,34 +111,73 @@ class JudgeConfig(
             val cases = (0 until list.length()).map { caseOf(list.getJSONObject(it), plans, stepData) }
             require(cases.map { it.id }.toSet().size == cases.size) { "case ids must be unique" }
             prompts.forEach { (name, prompt) -> requirePlanValues(name, prompt, cases) }
-            return JudgeConfig(root.optInt("version", 0), prompts, root.optString("imageNote", ""), cases)
+            val imageNote = root.textOrNullAt("imageNote", FILE).orEmpty()
+            return JudgeConfig(root.intAt("version", FILE, default = 0), prompts, imageNote, cases)
         }
 
         private fun promptOf(
             name: String,
             o: JSONObject,
         ): JudgePrompt {
-            o.requireKnownKeys("prompt '$name'", PROMPT_KEYS)
-            val answer = o.optString("answer", ANSWER_YES_NO)
-            require(answer in ANSWERS) { "prompt '$name': answer must be one of $ANSWERS" }
-            val question = o.getString("question")
-            REQUIRED_PLACEHOLDERS.forEach { require(it in question) { "prompt '$name': the question has no $it" } }
-            val marker = o.textOrNull("marker")
-            val fields = o.optJSONArray("fields")?.let { textsOf(it, "prompt '$name' fields") }.orEmpty()
-            if (answer == ANSWER_DATA) {
-                require(marker != null && fields.isNotEmpty()) { "prompt '$name': datos needs a marker and fields" }
-            } else {
-                require(fields.isEmpty()) { "prompt '$name': only the datos answer reads fields" }
+            val where = "prompt '$name'"
+            o.requireKnownKeys(where, PROMPT_KEYS)
+            val answer = if (o.has("answer")) o.textAt("answer", where) else ANSWER_YES_NO
+            require(answer in ANSWERS) { "$where: answer must be one of $ANSWERS" }
+            val question = o.textAt("question", where)
+            REQUIRED_PLACEHOLDERS.forEach { require(it in question) { "$where: the question has no $it" } }
+            val marker = o.textOrNullAt("marker", where)
+            require(marker == null || (marker.endsWith(LABEL_END) && marker in question)) {
+                "$where: the marker must end with '$LABEL_END' and be written in the question"
             }
-            return JudgePrompt(
-                system = o.getString("system"),
-                question = question,
-                answer = answer,
-                marker = marker,
-                maxTokens = o.optInt("maxTokens", DEFAULT_MAX_TOKENS),
-                maxTokensThinking = o.optInt("maxTokensThinking", DEFAULT_MAX_TOKENS_THINKING),
-                fields = fields,
-            )
+            val fields = if (o.has(FIELDS)) textsOf(o.getJSONArray(FIELDS), "$where $FIELDS") else null
+            val amounts =
+                if (o.has(AMOUNT_FIELDS)) {
+                    textsOf(o.getJSONArray(AMOUNT_FIELDS), "$where $AMOUNT_FIELDS", allowEmpty = true)
+                } else {
+                    null
+                }
+            val prompt =
+                JudgePrompt(
+                    system = o.textAt("system", where),
+                    question = question,
+                    answer = answer,
+                    marker = marker,
+                    maxTokens = o.intAt("maxTokens", where, DEFAULT_MAX_TOKENS),
+                    maxTokensThinking = o.intAt("maxTokensThinking", where, DEFAULT_MAX_TOKENS_THINKING),
+                    fields = fields.orEmpty(),
+                    amountFields = amounts.orEmpty(),
+                )
+            requireDataLines(where, prompt, amounts != null)
+            return prompt
+        }
+
+        /**
+         * A "datos" prompt asks for each field as a `FIELD:` line of its question and for the verdict on the marker
+         * line, and says which fields hold amounts ([AMOUNT_FIELDS], which may be empty); other answers read no fields.
+         */
+        private fun requireDataLines(
+            where: String,
+            prompt: JudgePrompt,
+            declaresAmounts: Boolean,
+        ) {
+            val fields = prompt.fields
+            if (prompt.answer != ANSWER_DATA) {
+                require(fields.isEmpty() && !declaresAmounts) { "$where: only the datos answer reads fields" }
+                return
+            }
+            require(prompt.marker != null && fields.isNotEmpty() && declaresAmounts) {
+                "$where: datos needs a marker, fields and $AMOUNT_FIELDS"
+            }
+            require(fields.toSet().size == fields.size && fields.all { it == it.trim() && LABEL_END !in it }) {
+                "$where: fields must be unique and have no spaces around them and no '$LABEL_END'"
+            }
+            fields.forEach { field ->
+                require("$field$LABEL_END" in prompt.question) { "$where: the question has no '$field$LABEL_END' line" }
+            }
+            val amounts = prompt.amountFields
+            require(amounts.toSet().size == amounts.size && amounts.all { it in fields }) {
+                "$where: $AMOUNT_FIELDS must be fields of the prompt, each one once"
+            }
         }
 
         private fun caseOf(
@@ -137,19 +185,21 @@ class JudgeConfig(
             plans: Map<String, String>,
             stepData: StepData,
         ): JudgeCase {
-            val id = o.getString("id")
-            o.requireKnownKeys("case $id", CASE_KEYS)
-            val expected = o.getString("expected").uppercase()
-            require(expected == YES || expected == NO) { "case $id: expected must be SI or NO" }
-            val plan = o.getString("plan")
-            val step = o.getInt("step")
+            val id = o.textAt("id", "a case")
+            val where = "case $id"
+            o.requireKnownKeys(where, CASE_KEYS)
+            val expected = o.textAt("expected", where).uppercase()
+            require(expected == YES || expected == NO) { "$where: expected must be SI or NO" }
+            val plan = o.textAt("plan", where)
+            val step = o.intAt("step", where)
+            require(step >= 1) { "$where: step must be 1 or more" }
             return JudgeCase(
                 id = id,
-                plan = plans[plan] ?: error("case $id: unknown plan $plan"),
+                plan = plans[plan] ?: error("$where: unknown plan $plan"),
                 step = step,
-                action = o.getString("action"),
+                action = o.textAt("action", where),
                 expected = expected,
-                image = o.textOrNull("image"),
+                image = o.textOrNullAt("image", where),
                 allowed = stepData[plan]?.get(step).orEmpty(),
             )
         }
@@ -162,8 +212,8 @@ class JudgeConfig(
                 require(plan in plans) { "stepData: unknown plan $plan" }
                 val steps = o.getJSONObject(plan)
                 steps.keys().asSequence().associate { step ->
-                    val number = requireNotNull(step.toIntOrNull()) { "stepData $plan: step '$step' is not a number" }
-                    number to fieldsOf(steps.getJSONObject(step), "stepData $plan $step")
+                    require(STEP_KEY.matches(step)) { "stepData $plan: step '$step' must be a whole number from 1" }
+                    step.toInt() to fieldsOf(steps.getJSONObject(step), "stepData $plan $step")
                 }
             }
 
@@ -172,16 +222,10 @@ class JudgeConfig(
             at: String,
         ): Map<String, List<String>> = o.keys().asSequence().associateWith { textsOf(o.getJSONArray(it), "$at $it") }
 
-        private fun textsOf(
-            array: JSONArray,
-            at: String,
-        ): List<String> {
-            val texts = (0 until array.length()).map { array.getString(it) }
-            require(texts.isNotEmpty() && texts.none { it.isBlank() }) { "$at: needs values, none of them blank" }
-            return texts
-        }
-
-        /** A "datos" prompt needs the plan's values of every field for every case, or its verdicts are INVALIDO. */
+        /**
+         * A "datos" prompt needs the plan's values of every field for every case (without them every copied value
+         * would be refused: verdict NO), and an amount field's values must be NINGUNO or amounts with their currency.
+         */
         private fun requirePlanValues(
             name: String,
             prompt: JudgePrompt,
@@ -189,23 +233,14 @@ class JudgeConfig(
         ) {
             cases.forEach { case ->
                 prompt.fields.forEach { field ->
-                    require(!case.allowed[field].isNullOrEmpty()) {
-                        "prompt '$name': case ${case.id} (step ${case.step}) has no plan values for $field"
+                    val values = case.allowed[field].orEmpty()
+                    val where = "prompt '$name': case ${case.id} (step ${case.step}) $field"
+                    require(values.isNotEmpty()) { "$where has no plan values" }
+                    require(field !in prompt.amountFields || values.all(PlanValues::isAmountOrNone)) {
+                        "$where: each value must be NINGUNO or an amount with its currency"
                     }
                 }
             }
         }
-
-        /** A misspelled key would otherwise be ignored and its default used without notice. */
-        private fun JSONObject.requireKnownKeys(
-            where: String,
-            known: Set<String>,
-        ) {
-            val unknown = keys().asSequence().filterNot { it in known }.toList()
-            require(unknown.isEmpty()) { "$where: unknown keys $unknown" }
-        }
-
-        private fun JSONObject.textOrNull(name: String): String? =
-            if (has(name) && !isNull(name)) getString(name).takeIf { it.isNotBlank() } else null
     }
 }

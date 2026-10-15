@@ -115,26 +115,85 @@ class JudgeConfigTest {
     fun `a datos prompt needs a marker, fields and the plan values of every case`() {
         // Arrange
         val v6 = File(configDir, "casos-v6.json").readText()
-        val datos = { root: JSONObject -> root.getJSONObject("prompts").getJSONObject("datos") }
-        val noMarker = JSONObject(v6).apply { datos(this).remove("marker") }
-        val noFields = JSONObject(v6).apply { datos(this).remove("fields") }
-        val unknownField = JSONObject(v6).apply { datos(this).put("fields", JSONArray(listOf("APP", "MONEDA"))) }
+        val noMarker = JSONObject(v6).apply { datos().remove("marker") }
+        val noFields = JSONObject(v6).apply { datos().remove("fields") }
+        val unknownField = JSONObject(v6).apply { datos().put("fields", JSONArray(listOf("APP", "MONEDA"))) }
         val stepWithoutValues = JSONObject(v6).apply { getJSONObject("stepData").getJSONObject("venta").remove("6") }
         val unknownPlan = JSONObject(v6).apply { getJSONObject("stepData").put("compra", JSONObject()) }
-        val noValues =
-            JSONObject(v6).apply {
-                getJSONObject("stepData").getJSONObject("chat").getJSONObject("3").put("APP", JSONArray())
-            }
-        val fieldsInSino =
-            JSONObject(File(configDir, "casos-v1.json").readText()).apply {
-                getJSONObject("prompts").getJSONObject("sino").put("fields", JSONArray(listOf("APP")))
-            }
+        val noValues = JSONObject(v6).apply { stepValues("chat", "3").put("APP", JSONArray()) }
+        val fieldsInSino = JSONObject(load1()).apply { sino().put("fields", JSONArray(listOf("APP"))) }
 
         // Act & Assert
         listOf(noMarker, noFields, unknownField, stepWithoutValues, unknownPlan, noValues, fieldsInSino).forEach {
             assertThrows<IllegalArgumentException> { JudgeConfig.parse(it) }
         }
     }
+
+    @Test
+    fun `a datos prompt asks for each field and the marker, and names its amount fields`() {
+        // Arrange
+        val v6 = File(configDir, "casos-v6.json").readText()
+        val question = JSONObject(v6).datos().getString("question")
+        val broken =
+            listOf(
+                JSONObject(v6).apply { datos().remove("amountFields") },
+                JSONObject(v6).apply { datos().put("amountFields", texts("MONEDA")) },
+                JSONObject(v6).apply { datos().put("amountFields", texts("MONTO", "MONTO")) },
+                JSONObject(v6).apply { datos().put("fields", texts("APP", "APP", "MONTO", "DESTINATARIO")) },
+                JSONObject(v6).apply { datos().put("fields", texts("APP:", "MONTO", "DESTINATARIO")) },
+                JSONObject(v6).apply { datos().put("fields", texts(" APP", "MONTO", "DESTINATARIO")) },
+                JSONObject(v6).apply { datos().put("question", question.replace("\nAPP:", "\nAPLI:")) },
+                JSONObject(v6).apply { datos().put("marker", "VEREDICTO:") },
+                JSONObject(v6).apply { datos().put("marker", "ES EL PASO") },
+                JSONObject(v6).apply { stepValues("venta", "3").put("MONTO", texts("20000")) },
+                JSONObject(load1()).apply { sino().put("amountFields", JSONArray()) },
+            )
+
+        // Act & Assert
+        broken.forEachIndexed { index, root ->
+            assertThrows<IllegalArgumentException>("broken file $index") { JudgeConfig.parse(root) }
+        }
+        assertEquals(listOf("MONTO"), load("casos-v6.json").prompt("datos").amountFields)
+    }
+
+    @Test
+    fun `values must be written with their own JSON type and steps as plain numbers`() {
+        // Arrange
+        val v6 = File(configDir, "casos-v6.json").readText()
+        val firstCase = { root: JSONObject -> root.getJSONArray("cases").getJSONObject(0) }
+        val broken =
+            listOf(
+                JSONObject(v6).apply { stepValues("venta", "6").put("DESTINATARIO", JSONArray(listOf(20000))) },
+                JSONObject(load1()).apply { firstCase(this).put("step", 0) },
+                JSONObject(v6).apply {
+                    val venta = getJSONObject("stepData").getJSONObject("venta")
+                    venta.put("06", venta.remove("6"))
+                },
+                JSONObject(v6).apply { firstCase(this).put("step", "6") },
+                JSONObject(v6).apply { firstCase(this).put("step", 0) },
+                JSONObject(v6).apply { firstCase(this).put("id", 7) },
+                JSONObject(v6).apply { datos().put("maxTokens", "200") },
+                JSONObject(v6).apply { getJSONObject("plans").put("venta", 1) },
+            )
+
+        // Act & Assert
+        broken.forEachIndexed { index, root ->
+            assertThrows<IllegalArgumentException>("broken file $index") { JudgeConfig.parse(root) }
+        }
+    }
+
+    private fun texts(vararg values: String): JSONArray = JSONArray(values.toList())
+
+    private fun load1(): String = File(configDir, "casos-v1.json").readText()
+
+    private fun JSONObject.datos(): JSONObject = getJSONObject("prompts").getJSONObject("datos")
+
+    private fun JSONObject.sino(): JSONObject = getJSONObject("prompts").getJSONObject("sino")
+
+    private fun JSONObject.stepValues(
+        plan: String,
+        step: String,
+    ): JSONObject = getJSONObject("stepData").getJSONObject(plan).getJSONObject(step)
 
     private companion object {
         val PLAN_HEAD =

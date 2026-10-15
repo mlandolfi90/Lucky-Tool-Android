@@ -28,6 +28,15 @@ if ! adb shell ls "$CONFIG_DIR" >/dev/null 2>&1; then
     adb shell am start -W -n "$PKG/$ACTIVITY" >/dev/null
     sleep 1
 fi
+# Android's JSON reader keeps the last of two equal keys without a word; the tests' reader and this check refuse them.
+python -I -c 'import json, sys
+def pairs(items):
+    keys = [key for key, _ in items]
+    twice = sorted({key for key in keys if keys.count(key) > 1})
+    if twice:
+        sys.exit(f"{sys.argv[1]}: keys written twice: {twice}")
+    return dict(items)
+json.load(open(sys.argv[1], encoding="utf-8"), object_pairs_hook=pairs)' "$LOCAL_CASES" || exit 1
 adb push "$LOCAL_CASES" "$CONFIG_DIR/$CASES" >/dev/null || { echo "could not push $CASES"; exit 1; }
 adb logcat -c
 STARTED=$(adb shell am start -S -n "$PKG/$ACTIVITY" --es model "$MODEL" --es backend "$BACKEND" --ei delay "$DELAY" \

@@ -118,13 +118,16 @@ object ProbeMetrics {
         pssKb: Int,
         importance: Int,
     ) {
+        val prompt = setup.prompt
+        val fields = prompt.fields.joinToString(",") { it.replace(' ', '_') }.ifEmpty { NONE }
+        val amountFields = prompt.amountFields.joinToString(",") { it.replace(' ', '_') }.ifEmpty { NONE }
         Log.i(
             TAG,
             "JUEZ INIT tag=${request.tag} model=${request.model} backend=${request.backend} " +
                 "casesFile=${request.casesFile} casesVersion=${setup.casesVersion} " +
                 "casesSha256=${setup.casesSha256} set=${request.set} questions=${setup.questions} " +
                 "prompt=${request.prompt} answer=${setup.prompt.answer} marker=${setup.prompt.marker ?: NONE} " +
-                "fields=${setup.prompt.fields.joinToString(",") { it.replace(' ', '_') }.ifEmpty { NONE }} " +
+                "fields=$fields amountFields=$amountFields " +
                 "maxTokens=${setup.maxOutputTokens} thinking=${request.thinking} sampler=${request.sampler} " +
                 "speculative=${request.speculativeMode} modelSpeculative=${setup.modelSpeculative ?: UNKNOWN} " +
                 "visual=${request.visualBudget ?: DEFAULT} vision=${setup.vision} bench=${request.benchMode} " +
@@ -134,8 +137,8 @@ object ProbeMetrics {
 
     /**
      * Logs one answer as a JUEZ CASE line and returns its record. `thoughtChars` counts the text the engine kept
-     * apart from the reply (Gemma 4's thinking); a "datos" answer adds what the model said on the step and the plan
-     * check of each copied field; the reply always goes last in the line.
+     * apart from the reply (Gemma 4's thinking); a "datos" answer adds what the model said on the step, the checks of
+     * each copied field and whether the reply was out of format; the reply always goes last in the line.
      */
     fun caseResult(
         request: RunRequest,
@@ -170,7 +173,12 @@ object ProbeMetrics {
                 .put("raw", reply.take(RAW_REPLY_CHARS))
                 .put("channels", JSONObject(answer.channels.mapValues { it.value.take(RAW_REPLY_CHARS) }))
         bench?.let { record.put("bench", it) }
-        check?.let { record.put(STEP_ANSWER, it.stepAnswer).put("checks", checkRecord(it)) }
+        check?.let {
+            record
+                .put(STEP_ANSWER, it.stepAnswer)
+                .put("checks", checkRecord(it))
+                .put("formatError", it.formatError ?: JSONObject.NULL)
+        }
         return record
     }
 
@@ -194,6 +202,7 @@ object ProbeMetrics {
                 .put("answer", setup.prompt.answer)
                 .put("marker", setup.prompt.marker ?: NONE)
                 .put("fields", JSONArray(setup.prompt.fields))
+                .put("amountFields", JSONArray(setup.prompt.amountFields))
                 .put("maxTokens", setup.maxOutputTokens)
                 .put("casesFile", request.casesFile)
                 .put("casesVersion", setup.casesVersion)
@@ -238,41 +247,57 @@ object ProbeMetrics {
         Log.i(TAG, "JUEZ SUMMARY $summary")
     }
 
-    /** ` model=SI checks=APP:ok,MONTO:NO`: the model's SI/NO on the step and the plan check of each copied field. */
+    /**
+     * ` stepAnswer=SI checks=APP:ok,MONTO:NO,DESTINATARIO:fuera`: the model's SI/NO on the step and, per copied field,
+     * `falta` (missing or repeated), `NO` (the plan does not accept it), `fuera` (not written in the action) or `ok`;
+     * then ` formato=…` when the reply is out of the asked format.
+     */
     private fun checkLog(check: DataCheck): String =
-        " model=${check.stepAnswer} checks=" +
+        " $STEP_ANSWER=${check.stepAnswer} checks=" +
             check.fields.entries.joinToString(",") { (field, result) ->
-                val outcome =
-                    when {
-                        result.read == null -> "falta"
-                        result.accepted -> "ok"
-                        else -> JudgeConfig.NO
-                    }
+                val problems =
+                    listOfNotNull(
+                        JudgeConfig.NO.takeUnless { result.accepted },
+                        "fuera".takeIf { result.inAction == false },
+                    )
+                val outcome = if (result.read == null) "falta" else problems.joinToString("+").ifEmpty { "ok" }
                 "${field.replace(' ', '_')}:$outcome"
-            }
+            } + check.formatError?.let { " formato=$it" }.orEmpty()
 
     private fun checkRecord(check: DataCheck): JSONObject =
         JSONObject().also { record ->
             check.fields.forEach { (field, result) ->
-                val values = JSONObject().put("read", result.read ?: JSONObject.NULL).put("accepted", result.accepted)
+                val values =
+                    JSONObject()
+                        .put("read", result.read ?: JSONObject.NULL)
+                        .put("accepted", result.accepted)
+                        .put("inAction", result.inAction ?: JSONObject.NULL)
                 record.put(field, values)
             }
         }
 
     /**
-     * For a "datos" run: how often the model said SI, the NO questions where the app's comparison stopped that SI
-     * (`appCaught`) and the SI questions it stopped (`appExtraStops`).
+     * For a "datos" run: how often the model said SI, the NO questions where the app's checks stopped that SI
+     * (`appCaught`), the SI questions they stopped (`appExtraStops`) and the answers with a copied value that is not
+     * written in the action (`copyNotInAction`).
      */
     private fun putDataCounts(
         summary: JSONObject,
         outcomes: List<JSONObject>,
     ) {
         val modelYes = outcomes.filter { it.has(STEP_ANSWER) && it.getString(STEP_ANSWER) == JudgeConfig.YES }
+        val notInAction =
+            outcomes.count { outcome ->
+                val checks = outcome.optJSONObject("checks")
+                checks != null &&
+                    checks.keys().asSequence().any { checks.getJSONObject(it).opt("inAction") == false }
+            }
         if (outcomes.any { it.has(STEP_ANSWER) }) {
             summary
                 .put("modelYes", modelYes.size)
                 .put("appCaught", modelYes.count { it.isExpected(JudgeConfig.NO) && it.isVerdict(JudgeConfig.NO) })
                 .put("appExtraStops", modelYes.count { it.isExpected(JudgeConfig.YES) && it.isVerdict(JudgeConfig.NO) })
+                .put("copyNotInAction", notInAction)
         }
     }
 

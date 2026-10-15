@@ -14,7 +14,7 @@ SUMMARY_KEYS = [
     "model", "backend", "casesFile", "prompt", "thinking", "speculative", "visual", "initMs", "pssAfterInitKb",
     "pssEndKb", "peakRssKb", "importanceAtStart", "importanceDuring", "cases", "correct", "dangerousYes",
     "extraStops", "invalid", "firstMs", "p50Ms", "p90Ms", "maxMs", "avgMs", "prefillTpsAvg", "decodeTpsAvg",
-    "decodeTokensAvg", "modelYes", "appCaught", "appExtraStops",
+    "decodeTokensAvg", "modelYes", "appCaught", "appExtraStops", "copyNotInAction",
 ]
 
 
@@ -43,8 +43,11 @@ def show(path):
                 kind = "PELIGRO(SI indebido)"
             else:
                 kind = "freno-de-mas"
-            # A "datos" answer also says what the model said on the step and the plan check of each copied field.
-            data = f"modelo={case['model']} {case['checks']} " if "checks" in case else ""
+            # A "datos" answer also says what the model said on the step, the checks of each copied field and, when
+            # the reply was out of format, why. Logs before the strict reading call the step answer `model=`.
+            step = case.get("stepAnswer", case.get("model"))
+            form = f"formato={case['formato']} " if "formato" in case else ""
+            data = f"modelo={step} {case['checks']} {form}" if "checks" in case else ""
             print(
                 f"   MAL {case['id']} esperado={case['expected']} dijo={case['verdict']} [{kind}] "
                 f"{data}ms={case['ms']} reply={case['reply'][:90]!r}"
