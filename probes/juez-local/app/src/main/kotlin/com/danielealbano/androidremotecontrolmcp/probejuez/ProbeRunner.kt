@@ -13,10 +13,13 @@ import com.google.ai.edge.litertlm.EngineConfig
 import com.google.ai.edge.litertlm.ExperimentalApi
 import com.google.ai.edge.litertlm.ExperimentalFlags
 import com.google.ai.edge.litertlm.LogSeverity
+import com.google.ai.edge.litertlm.ModelInfo
 import com.google.ai.edge.litertlm.SamplerConfig
 import com.google.ai.edge.litertlm.ThinkingConfig
 import kotlinx.coroutines.delay
 import org.json.JSONObject
+import java.io.File
+import java.security.MessageDigest
 
 /**
  * Loads one model with one backend, asks every question of the question file pushed to the phone ([JudgeConfig])
@@ -26,6 +29,9 @@ class ProbeRunner(
     private val context: Context,
 ) {
     suspend fun run(request: RunRequest) {
+        // Unknown words fail here, before the model is loaded.
+        val speculative = request.speculative
+        val benchmark = request.benchmark
         delay(request.delaySec * MILLIS_PER_SECOND)
         val configFile =
             ProbeFiles.findConfig(context, request.casesFile)
@@ -34,15 +40,27 @@ class ProbeRunner(
         val prompt = config.prompt(request.prompt)
         val cases = config.casesFor(request.set)
         require(cases.isNotEmpty()) { "${request.casesFile} has no cases for set ${request.set}" }
+        // A missing screenshot fails now, not after the answers before it (results are stored at the end).
+        cases.mapNotNull { it.image }.distinct().forEach { ProbeMetrics.imageFile(context, it) }
         val modelFile =
             ProbeFiles.findModel(context, request.model)
                 ?: error("model ${request.model} not found in ${ProbeFiles.modelDirs(context)}")
+        val withImages = cases.any { it.image != null }
+        val setup =
+            RunSetup(
+                questions = cases.size,
+                casesVersion = config.version,
+                casesSha256 = sha256(configFile),
+                prompt = prompt,
+                maxOutputTokens = ProbeMetrics.maxOutputTokens(request, prompt),
+                vision = withImages,
+                modelSpeculative = modelSpeculativeSupport(modelFile),
+            )
         Engine.setNativeMinLogSeverity(LogSeverity.WARNING)
         // Process-wide flags, read when the engine is created and on every message: set again on every run.
-        ExperimentalFlags.enableSpeculativeDecoding = request.speculative
+        ExperimentalFlags.enableSpeculativeDecoding = speculative
         ExperimentalFlags.visualTokenBudget = request.visualBudget
-        ExperimentalFlags.enableBenchmark = request.benchmark
-        val withImages = cases.any { it.image != null }
+        ExperimentalFlags.enableBenchmark = benchmark
         val engineConfig =
             EngineConfig(
                 modelPath = modelFile.absolutePath,
@@ -59,12 +77,12 @@ class ProbeRunner(
                 engine.initialize()
                 val initMs = SystemClock.elapsedRealtime() - initStarted
                 val pssAfterInitKb = ProbeMetrics.pssKb()
-                ProbeMetrics.logInit(request, cases.size, initMs, pssAfterInitKb, importanceAtStart)
+                ProbeMetrics.logInit(request, setup, initMs, pssAfterInitKb, importanceAtStart)
                 val outcomes =
                     (1..request.repeat).flatMap { round ->
-                        cases.map { case -> judge(engine, config, prompt, case, request, round) }
+                        cases.map { case -> judge(engine, config, setup, case, request, round) }
                     }
-                ProbeMetrics.summarize(request, initMs, pssAfterInitKb, importanceAtStart, outcomes)
+                ProbeMetrics.summarize(request, setup, initMs, pssAfterInitKb, importanceAtStart, outcomes)
             }
         ProbeMetrics.publish(context, request, summary)
     }
@@ -72,11 +90,12 @@ class ProbeRunner(
     private fun judge(
         engine: Engine,
         config: JudgeConfig,
-        prompt: JudgePrompt,
+        setup: RunSetup,
         case: JudgeCase,
         request: RunRequest,
         round: Int,
     ): JSONObject {
+        val prompt = setup.prompt
         val conversationConfig =
             ConversationConfig(
                 systemInstruction = Contents.of(prompt.system),
@@ -86,7 +105,7 @@ class ProbeRunner(
                     } else {
                         SamplerConfig(topK = 1, topP = 1.0, temperature = 0.0)
                     },
-                maxOutputToken = ProbeMetrics.maxOutputTokens(request, prompt),
+                maxOutputToken = setup.maxOutputTokens,
                 thinkingConfig =
                     when (request.thinking) {
                         "config" -> ThinkingConfig(enableThinking = false)
@@ -112,11 +131,14 @@ class ProbeRunner(
                     } else {
                         conversation.sendMessage(Contents.of(Content.ImageBytes(imageBytes), Content.Text(question)))
                     }
-                JudgeAnswer(
-                    reply = message.toString(),
-                    channels = message.channels,
-                    bench = if (request.benchmark) ProbeMetrics.benchRecord(conversation.getBenchmarkInfo()) else null,
-                )
+                val bench =
+                    if (request.benchmark) {
+                        runCatching { ProbeMetrics.benchRecord(conversation.getBenchmarkInfo()) }
+                            .getOrElse { ProbeMetrics.benchError(it) }
+                    } else {
+                        null
+                    }
+                JudgeAnswer(reply = message.toString(), channels = message.channels, bench = bench)
             }
         val elapsedMs = SystemClock.elapsedRealtime() - started
         val verdict = JudgeConfig.verdict(prompt, case, answer.reply)
@@ -132,6 +154,18 @@ class ProbeRunner(
 
     private fun visionBackendFor(request: RunRequest): Backend =
         if (request.backend == BACKEND_GPU) Backend.GPU() else Backend.CPU(threadCount = request.threads)
+
+    /** Whether the model file carries a draft model; null when its metadata cannot be read. */
+    private fun modelSpeculativeSupport(modelFile: File): Boolean? =
+        runCatching {
+            ModelInfo.from(modelFile.absolutePath).use { (it as? ModelInfo.Llm)?.hasSpeculativeDecodingSupport() }
+        }.getOrNull()
+
+    private fun sha256(file: File): String =
+        MessageDigest
+            .getInstance("SHA-256")
+            .digest(file.readBytes())
+            .joinToString("") { "%02x".format(it) }
 
     private companion object {
         const val MILLIS_PER_SECOND = 1000L

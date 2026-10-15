@@ -11,20 +11,29 @@ PKG=com.danielealbano.androidremotecontrolmcp.probejuez
 ACTIVITY=com.danielealbano.androidremotecontrolmcp.probejuez.ProbeActivity
 TAG=$1; MODEL=$2; BACKEND=$3; DELAY=${4:-0}; MODE=${5:-fg}; THINK=${6:-config}; PROMPT=${7:-sino}; SET=${8:-texto}; SAMPLER=${9:-greedy}
 CASES=${10:-casos-v1.json}; SPEC=${11:-default}; VISUAL=${12:-0}; BENCH=${13:-off}
+# Bad values would make `am start` fail after the app was opened, and the wait below would run for its full time.
+[[ "$CASES" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "questions file name '$CASES': letters, digits, . _ - only"; exit 1; }
+[[ "$SPEC" =~ ^(default|on|off)$ ]] || { echo "speculative '$SPEC' is not default, on or off"; exit 1; }
+[[ "$VISUAL" =~ ^[0-9]+$ ]] || { echo "visual token budget '$VISUAL' is not a number (0 = the model's own)"; exit 1; }
+[[ "$BENCH" =~ ^(on|off)$ ]] || { echo "bench '$BENCH' is not on or off"; exit 1; }
 DIR="$(dirname "$0")"
 OUT="$DIR/probe-results"
 CONFIG_DIR="/sdcard/Android/data/$PKG/files/config"
+# adb.exe is a Windows program: with path conversion off, a /c/... path must be converted by hand.
+LOCAL_CASES="$DIR/../config/$CASES"
+command -v cygpath >/dev/null && LOCAL_CASES="$(cygpath -m "$LOCAL_CASES")"
 mkdir -p "$OUT"
 # The app creates its question folder when it opens; a folder made by adb could stay unreadable for the app.
 if ! adb shell ls "$CONFIG_DIR" >/dev/null 2>&1; then
     adb shell am start -W -n "$PKG/$ACTIVITY" >/dev/null
     sleep 1
 fi
-adb push "$DIR/../config/$CASES" "$CONFIG_DIR/$CASES" >/dev/null || { echo "could not push $CASES"; exit 1; }
+adb push "$LOCAL_CASES" "$CONFIG_DIR/$CASES" >/dev/null || { echo "could not push $CASES"; exit 1; }
 adb logcat -c
-adb shell am start -S -n "$PKG/$ACTIVITY" --es model "$MODEL" --es backend "$BACKEND" --ei delay "$DELAY" \
+STARTED=$(adb shell am start -S -n "$PKG/$ACTIVITY" --es model "$MODEL" --es backend "$BACKEND" --ei delay "$DELAY" \
     --es tag "$TAG" --es thinking "$THINK" --es prompt "$PROMPT" --es set "$SET" --es sampler "$SAMPLER" \
-    --es cases "$CASES" --es speculative "$SPEC" --ei visual "$VISUAL" --es bench "$BENCH" >/dev/null
+    --es cases "$CASES" --es speculative "$SPEC" --ei visual "$VISUAL" --es bench "$BENCH" 2>&1)
+if echo "$STARTED" | grep -q "Error"; then echo "am start failed: $STARTED"; exit 1; fi
 if [ "$MODE" = bg ]; then
     sleep 2
     adb shell am start -n com.sec.android.app.popupcalculator/.Calculator >/dev/null

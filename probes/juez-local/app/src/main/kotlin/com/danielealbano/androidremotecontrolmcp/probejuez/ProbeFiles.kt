@@ -34,8 +34,8 @@ object ProbeFiles {
 }
 
 /**
- * One probe run, read from the launching intent's extras. [speculative] null leaves the model's own default;
- * [visualBudget] null leaves the image token budget of the model.
+ * One probe run, read from the launching intent's extras. [speculativeMode] and [benchMode] keep the words as
+ * given ([speculative] and [benchmark] read them); [visualBudget] null leaves the image token budget of the model.
  */
 data class RunRequest(
     val model: String,
@@ -49,10 +49,28 @@ data class RunRequest(
     val set: String,
     val sampler: String,
     val casesFile: String,
-    val speculative: Boolean?,
+    val speculativeMode: String,
     val visualBudget: Int?,
-    val benchmark: Boolean,
+    val benchMode: String,
 ) {
+    /** null leaves the model's own setting; an unknown word fails the run instead of falling back without notice. */
+    val speculative: Boolean?
+        get() =
+            when (speculativeMode) {
+                DEFAULT -> null
+                ON -> true
+                OFF -> false
+                else -> error("speculative '$speculativeMode' is not $DEFAULT, $ON or $OFF")
+            }
+
+    val benchmark: Boolean
+        get() =
+            when (benchMode) {
+                ON -> true
+                OFF -> false
+                else -> error("bench '$benchMode' is not $ON or $OFF")
+            }
+
     companion object {
         const val EXTRA_MODEL = "model"
         const val EXTRA_BACKEND = "backend"
@@ -74,6 +92,7 @@ data class RunRequest(
         const val SET_ALL = "todo"
         const val SAMPLER_NONE = "none"
         const val DEFAULT_CASES_FILE = "casos-v1.json"
+        private const val DEFAULT = "default"
         private const val ON = "on"
         private const val OFF = "off"
         private const val DEFAULT_THREADS = 4
@@ -92,14 +111,9 @@ data class RunRequest(
                 set = intent.getStringExtra(EXTRA_SET) ?: SET_TEXT,
                 sampler = intent.getStringExtra(EXTRA_SAMPLER) ?: "greedy",
                 casesFile = intent.getStringExtra(EXTRA_CASES_FILE) ?: DEFAULT_CASES_FILE,
-                speculative =
-                    when (intent.getStringExtra(EXTRA_SPECULATIVE)) {
-                        ON -> true
-                        OFF -> false
-                        else -> null
-                    },
+                speculativeMode = intent.getStringExtra(EXTRA_SPECULATIVE) ?: DEFAULT,
                 visualBudget = intent.getIntExtra(EXTRA_VISUAL_BUDGET, 0).takeIf { it > 0 },
-                benchmark = intent.getStringExtra(EXTRA_BENCHMARK) == ON,
+                benchMode = intent.getStringExtra(EXTRA_BENCHMARK) ?: OFF,
             )
         }
     }

@@ -19,6 +19,21 @@ data class JudgeAnswer(
     val bench: JSONObject?,
 )
 
+/**
+ * What a run asked and how, beyond the request: the question file's version and SHA-256 (the file changes without a
+ * build), the prompt's reading rules and output limit, whether the vision encoder was loaded (in set `todo` also for
+ * the text questions) and whether the model file carries a draft model for speculative decoding (null: unknown).
+ */
+data class RunSetup(
+    val questions: Int,
+    val casesVersion: Int,
+    val casesSha256: String,
+    val prompt: JudgePrompt,
+    val maxOutputTokens: Int,
+    val vision: Boolean,
+    val modelSpeculative: Boolean?,
+)
+
 /** The measurements of a run and its records: one JUEZ CASE line per answer, the summary and the stored JSON. */
 object ProbeMetrics {
     private const val TAG = ProbeService.TAG
@@ -30,6 +45,8 @@ object ProbeMetrics {
     private const val P90 = 90
     private const val HUNDRED = 100
     private const val DEFAULT = "default"
+    private const val NONE = "none"
+    private const val UNKNOWN = "unknown"
     private const val TENTHS = 10.0
     private const val MILLIS_PER_SECOND = 1000.0
     private const val BENCH_TTFT_MS = "ttftMs"
@@ -54,7 +71,7 @@ object ProbeMetrics {
 
     fun logInit(
         request: RunRequest,
-        questions: Int,
+        setup: RunSetup,
         initMs: Long,
         pssKb: Int,
         importance: Int,
@@ -62,14 +79,20 @@ object ProbeMetrics {
         Log.i(
             TAG,
             "JUEZ INIT tag=${request.tag} model=${request.model} backend=${request.backend} " +
-                "casesFile=${request.casesFile} set=${request.set} questions=$questions prompt=${request.prompt} " +
-                "thinking=${request.thinking} sampler=${request.sampler} " +
-                "speculative=${request.speculative ?: DEFAULT} visual=${request.visualBudget ?: DEFAULT} " +
-                "bench=${request.benchmark} initMs=$initMs pssKb=$pssKb importance=$importance",
+                "casesFile=${request.casesFile} casesVersion=${setup.casesVersion} " +
+                "casesSha256=${setup.casesSha256} set=${request.set} questions=${setup.questions} " +
+                "prompt=${request.prompt} answer=${setup.prompt.answer} marker=${setup.prompt.marker ?: NONE} " +
+                "maxTokens=${setup.maxOutputTokens} thinking=${request.thinking} sampler=${request.sampler} " +
+                "speculative=${request.speculativeMode} modelSpeculative=${setup.modelSpeculative ?: UNKNOWN} " +
+                "visual=${request.visualBudget ?: DEFAULT} vision=${setup.vision} bench=${request.benchMode} " +
+                "initMs=$initMs pssKb=$pssKb importance=$importance",
         )
     }
 
-    /** The engine's own counts and speeds for one answer (only filled when the engine started in benchmark mode). */
+    /**
+     * The engine's own counts and speeds for one answer (only filled when the engine started in benchmark mode).
+     * The token counts are the engine's last prefill and decode of the answer.
+     */
     fun benchRecord(info: BenchmarkInfo): JSONObject =
         JSONObject()
             .put(BENCH_TTFT_MS, Math.round(info.timeToFirstTokenInSecond * MILLIS_PER_SECOND))
@@ -77,6 +100,10 @@ object ProbeMetrics {
             .put(BENCH_DECODE_TOKENS, info.lastDecodeTokenCount)
             .put(BENCH_PREFILL_TPS, tenths(info.lastPrefillTokensPerSecond))
             .put(BENCH_DECODE_TPS, tenths(info.lastDecodeTokensPerSecond))
+
+    /** Stands in for [benchRecord] when the engine could not give its counts, so the answer itself is kept. */
+    fun benchError(error: Throwable): JSONObject =
+        JSONObject().put("error", "${error.javaClass.simpleName}: ${error.message}")
 
     /**
      * Logs one answer as a JUEZ CASE line and returns its record. `thoughtChars` counts the text the engine kept
@@ -118,13 +145,14 @@ object ProbeMetrics {
 
     fun summarize(
         request: RunRequest,
+        setup: RunSetup,
         initMs: Long,
         pssAfterInitKb: Int,
         importanceAtStart: Int,
         outcomes: List<JSONObject>,
     ): JSONObject {
         val times = outcomes.map { it.getLong("ms") }.sorted()
-        val benches = outcomes.mapNotNull { it.optJSONObject("bench") }
+        val benches = outcomes.mapNotNull { it.optJSONObject("bench") }.filter { it.has(BENCH_DECODE_TPS) }
         val summary =
             JSONObject()
                 .put("tag", request.tag)
@@ -133,11 +161,19 @@ object ProbeMetrics {
                 .put("threads", request.threads)
                 .put("thinking", request.thinking)
                 .put("prompt", request.prompt)
+                .put("answer", setup.prompt.answer)
+                .put("marker", setup.prompt.marker ?: NONE)
+                .put("maxTokens", setup.maxOutputTokens)
                 .put("casesFile", request.casesFile)
+                .put("casesVersion", setup.casesVersion)
+                .put("casesSha256", setup.casesSha256)
                 .put("set", request.set)
                 .put("sampler", request.sampler)
-                .put("speculative", request.speculative ?: DEFAULT)
+                .put("speculative", request.speculativeMode)
+                .put("modelSpeculative", setup.modelSpeculative ?: UNKNOWN)
                 .put("visual", request.visualBudget ?: DEFAULT)
+                .put("vision", setup.vision)
+                .put("bench", request.benchMode)
                 .put("delaySec", request.delaySec)
                 .put("initMs", initMs)
                 .put("pssAfterInitKb", pssAfterInitKb)

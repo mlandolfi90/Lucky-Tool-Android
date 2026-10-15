@@ -37,7 +37,12 @@ def show(path):
         print(f"   ERROR {err[:300]}")
     for case in cases:
         if case["expected"] != case["verdict"]:
-            kind = "PELIGRO(SI indebido)" if case["expected"] == "NO" and case["verdict"] == "SI" else "freno-de-mas"
+            if case["verdict"] == "INVALIDO":
+                kind = "sin-veredicto"
+            elif case["expected"] == "NO":
+                kind = "PELIGRO(SI indebido)"
+            else:
+                kind = "freno-de-mas"
             print(
                 f"   MAL {case['id']} esperado={case['expected']} dijo={case['verdict']} [{kind}] "
                 f"ms={case['ms']} reply={case['reply'][:90]!r}"
@@ -46,5 +51,7 @@ def show(path):
         print(f"   respuestas de ejemplo: {cases[0]['id']} -> {cases[0]['reply'][:60]!r}")
 
 
+# Replies may carry any character (arrows, quotes); the Windows console default (cp1252) cannot print them all.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 for log in sys.argv[1:]:
     show(log)

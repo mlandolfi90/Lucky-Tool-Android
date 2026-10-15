@@ -32,6 +32,7 @@ data class JudgePrompt(
 
 /** The questions and the ways of asking them, read from a JSON file on the phone: changing them needs no build. */
 class JudgeConfig(
+    val version: Int,
     private val prompts: Map<String, JudgePrompt>,
     private val imageNote: String,
     private val cases: List<JudgeCase>,
@@ -47,15 +48,20 @@ class JudgeConfig(
             else -> error("set '$set' is not ${RunRequest.SET_TEXT}, ${RunRequest.SET_IMAGES} or ${RunRequest.SET_ALL}")
         }
 
+    /** The filled question; a placeholder left unfilled (a misspelled one) fails instead of reaching the model. */
     fun questionFor(
         prompt: JudgePrompt,
         case: JudgeCase,
-    ): String =
-        prompt.question
-            .replace("{plan}", case.plan)
-            .replace("{step}", case.step.toString())
-            .replace("{action}", case.action)
-            .replace("{imageNote}", if (case.image != null) imageNote else "")
+    ): String {
+        val question =
+            prompt.question
+                .replace("{plan}", case.plan)
+                .replace("{step}", case.step.toString())
+                .replace("{action}", case.action)
+                .replace("{imageNote}", if (case.image != null) imageNote else "")
+        PLACEHOLDER.find(question)?.let { error("case ${case.id}: unknown placeholder ${it.value} in the question") }
+        return question
+    }
 
     companion object {
         const val YES = "SI"
@@ -65,18 +71,24 @@ class JudgeConfig(
         private const val ANSWER_STEP = "paso"
         private const val DEFAULT_MAX_TOKENS = 16
         private const val DEFAULT_MAX_TOKENS_THINKING = 1024
+        private val ROOT_KEYS = setOf("version", "note", "imageNote", "plans", "prompts", "cases")
+        private val PROMPT_KEYS = setOf("system", "question", "answer", "marker", "maxTokens", "maxTokensThinking")
+        private val CASE_KEYS = setOf("id", "plan", "step", "action", "expected", "image")
+        private val REQUIRED_PLACEHOLDERS = listOf("{plan}", "{action}")
+        private val PLACEHOLDER = Regex("\\{[A-Za-z]+\\}")
 
         /**
-         * Gemma 4's thought channel, should it ever reach the reply text (LiteRT-LM keeps it apart); it runs to the
-         * end when the reply was cut.
+         * Thinking written inside the reply text: `<think>` blocks and Gemma 4's thought channel, which runs to the
+         * end when the reply was cut. LiteRT-LM keeps Gemma's thinking apart; this guards any reply that carries it.
          */
-        private val THINK_BLOCK = Regex("(?s)<\\|channel>.*?(?:<channel\\|>|\\z)")
+        private val THINK_BLOCK = Regex("(?s)<think>.*?</think>|<\\|channel>.*?(?:<channel\\|>|\\z)")
         private val YES_NO = Regex("(?<!\\p{L})(SÍ|SI|NO)(?!\\p{L})")
         private val NUMBER = Regex("\\d+")
 
         fun load(file: File): JudgeConfig = parse(JSONObject(file.readText()))
 
         fun parse(root: JSONObject): JudgeConfig {
+            root.requireKnownKeys("the question file", ROOT_KEYS)
             val plans = root.getJSONObject("plans").let { o -> o.keys().asSequence().associateWith { o.getString(it) } }
             val prompts =
                 root.getJSONObject("prompts").let { o ->
@@ -85,7 +97,7 @@ class JudgeConfig(
             val list = root.getJSONArray("cases")
             val cases = (0 until list.length()).map { caseOf(list.getJSONObject(it), plans) }
             require(cases.map { it.id }.toSet().size == cases.size) { "case ids must be unique" }
-            return JudgeConfig(prompts, root.optString("imageNote", ""), cases)
+            return JudgeConfig(root.optInt("version", 0), prompts, root.optString("imageNote", ""), cases)
         }
 
         /**
@@ -118,11 +130,14 @@ class JudgeConfig(
             name: String,
             o: JSONObject,
         ): JudgePrompt {
+            o.requireKnownKeys("prompt '$name'", PROMPT_KEYS)
             val answer = o.optString("answer", ANSWER_YES_NO)
             require(answer == ANSWER_YES_NO || answer == ANSWER_STEP) { "prompt '$name': answer must be sino or paso" }
+            val question = o.getString("question")
+            REQUIRED_PLACEHOLDERS.forEach { require(it in question) { "prompt '$name': the question has no $it" } }
             return JudgePrompt(
                 system = o.getString("system"),
-                question = o.getString("question"),
+                question = question,
                 answer = answer,
                 marker = o.textOrNull("marker"),
                 maxTokens = o.optInt("maxTokens", DEFAULT_MAX_TOKENS),
@@ -135,6 +150,7 @@ class JudgeConfig(
             plans: Map<String, String>,
         ): JudgeCase {
             val id = o.getString("id")
+            o.requireKnownKeys("case $id", CASE_KEYS)
             val expected = o.getString("expected").uppercase()
             require(expected == YES || expected == NO) { "case $id: expected must be SI or NO" }
             return JudgeCase(
@@ -145,6 +161,15 @@ class JudgeConfig(
                 expected = expected,
                 image = o.textOrNull("image"),
             )
+        }
+
+        /** A misspelled key would otherwise be ignored and its default used without notice. */
+        private fun JSONObject.requireKnownKeys(
+            where: String,
+            known: Set<String>,
+        ) {
+            val unknown = keys().asSequence().filterNot { it in known }.toList()
+            require(unknown.isEmpty()) { "$where: unknown keys $unknown" }
         }
 
         private fun JSONObject.textOrNull(name: String): String? =

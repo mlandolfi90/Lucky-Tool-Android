@@ -6,6 +6,8 @@ DIR="$(dirname "$0")"
 REG="$2"
 LOGS=()
 while read -r line; do
+    # A batch file saved with CRLF would pass "on\r" as the last argument of every row.
+    line=${line%$'\r'}
     case "$line" in ''|'#'*) continue ;; esac
     tag="${line%% *}"
     # shellcheck disable=SC2086
