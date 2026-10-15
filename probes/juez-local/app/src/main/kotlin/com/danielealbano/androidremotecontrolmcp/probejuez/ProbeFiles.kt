@@ -18,23 +18,25 @@ object ProbeFiles {
     fun imagesDir(context: Context): File =
         context.getExternalFilesDir("images") ?: File(context.filesDir, "images").apply { mkdirs() }
 
+    /** The question files ([JudgeConfig]), pushed before every run so that the questions change without a build. */
+    fun configDir(context: Context): File =
+        context.getExternalFilesDir("config") ?: File(context.filesDir, "config").apply { mkdirs() }
+
     fun findModel(
         context: Context,
         name: String,
     ): File? = modelDirs(context).map { File(it, name) }.firstOrNull { it.isFile }
 
-    /** Where a GenieX bundle (.zip or extracted folder) may be: the model folders or the adb push folder. */
-    fun bundleDirs(context: Context): List<File> = modelDirs(context) + File(ADB_PUSH_DIR)
-
-    fun findBundle(
+    fun findConfig(
         context: Context,
         name: String,
-    ): File? = bundleDirs(context).map { File(it, name) }.firstOrNull { it.exists() }
-
-    private const val ADB_PUSH_DIR = "/data/local/tmp/juez"
+    ): File? = File(configDir(context), name).takeIf { it.isFile }
 }
 
-/** One probe run, read from the launching intent's extras. */
+/**
+ * One probe run, read from the launching intent's extras. [speculative] null leaves the model's own default;
+ * [visualBudget] null leaves the image token budget of the model.
+ */
 data class RunRequest(
     val model: String,
     val backend: String,
@@ -46,6 +48,10 @@ data class RunRequest(
     val prompt: String,
     val set: String,
     val sampler: String,
+    val casesFile: String,
+    val speculative: Boolean?,
+    val visualBudget: Int?,
+    val benchmark: Boolean,
 ) {
     companion object {
         const val EXTRA_MODEL = "model"
@@ -58,11 +64,18 @@ data class RunRequest(
         const val EXTRA_PROMPT = "prompt"
         const val EXTRA_SET = "set"
         const val EXTRA_SAMPLER = "sampler"
+        const val EXTRA_CASES_FILE = "cases"
+        const val EXTRA_SPECULATIVE = "speculative"
+        const val EXTRA_VISUAL_BUDGET = "visual"
+        const val EXTRA_BENCHMARK = "bench"
         const val THINKING_ON = "on"
-        const val PROMPT_STEP = "paso"
+        const val SET_TEXT = "texto"
         const val SET_IMAGES = "imagenes"
+        const val SET_ALL = "todo"
         const val SAMPLER_NONE = "none"
-        const val BACKEND_GENIEX = "geniex"
+        const val DEFAULT_CASES_FILE = "casos-v1.json"
+        private const val ON = "on"
+        private const val OFF = "off"
         private const val DEFAULT_THREADS = 4
 
         fun from(intent: Intent): RunRequest? {
@@ -76,8 +89,17 @@ data class RunRequest(
                 thinking = intent.getStringExtra(EXTRA_THINKING) ?: "config",
                 repeat = intent.getIntExtra(EXTRA_REPEAT, 1),
                 prompt = intent.getStringExtra(EXTRA_PROMPT) ?: "sino",
-                set = intent.getStringExtra(EXTRA_SET) ?: "texto",
+                set = intent.getStringExtra(EXTRA_SET) ?: SET_TEXT,
                 sampler = intent.getStringExtra(EXTRA_SAMPLER) ?: "greedy",
+                casesFile = intent.getStringExtra(EXTRA_CASES_FILE) ?: DEFAULT_CASES_FILE,
+                speculative =
+                    when (intent.getStringExtra(EXTRA_SPECULATIVE)) {
+                        ON -> true
+                        OFF -> false
+                        else -> null
+                    },
+                visualBudget = intent.getIntExtra(EXTRA_VISUAL_BUDGET, 0).takeIf { it > 0 },
+                benchmark = intent.getStringExtra(EXTRA_BENCHMARK) == ON,
             )
         }
     }

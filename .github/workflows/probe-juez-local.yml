@@ -46,14 +46,14 @@ jobs:
           mkdir -p "$HOME/.android"
           printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
 
-      - name: Build debug APKs (litert and geniex flavors)
+      - name: Build debug APK
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
 
-      - name: Upload APKs
+      - name: Upload APK
         uses: actions/upload-artifact@v7
         with:
           name: probe-juez-local-debug
-          path: probes/juez-local/app/build/outputs/apk/*/debug/*.apk
+          path: probes/juez-local/app/build/outputs/apk/debug/*.apk
           if-no-files-found: error

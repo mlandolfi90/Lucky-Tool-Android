@@ -6,7 +6,7 @@ import android.os.Bundle
 import android.widget.ScrollView
 import android.widget.TextView
 
-/** Shows where the models must be pushed and forwards a run request (intent extras) to [ProbeService]. */
+/** Shows where models and question files go (adb push) and forwards a run request (intent extras) to [ProbeService]. */
 class ProbeActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -24,6 +24,8 @@ class ProbeActivity : Activity() {
                 }
                 val images = ProbeFiles.imagesDir(this@ProbeActivity)
                 appendLine("Imágenes: ${images.absolutePath}: ${images.list()?.joinToString().orEmpty()}")
+                val questions = ProbeFiles.configDir(this@ProbeActivity)
+                appendLine("Preguntas: ${questions.absolutePath}: ${questions.list()?.joinToString().orEmpty()}")
                 appendLine("Resultados: ${ProbeFiles.resultsDir(this@ProbeActivity).absolutePath}")
             }
         val model = intent.getStringExtra(RunRequest.EXTRA_MODEL)
