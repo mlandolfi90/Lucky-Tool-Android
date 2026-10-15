@@ -1,4 +1,5 @@
 {
+  "note": "Valores del plan (stepData) reescritos antes de correr, por una regla: cada paso acepta solo lo que hace su acción. MONTO: el monto del plan solo en los pasos que lo crean, escriben, confirman, envían, pagan o liberan; en los demás (abrir, navegar, elegir, mirar, leer), solo NINGUNO. DESTINATARIO: en los pasos que mandan dinero, monedas o un mensaje, solo la contraparte del plan; en los que la eligen, la escriben o crean algo con ella sin mandar nada, NINGUNO o la contraparte; en los demás, solo NINGUNO. El borrador del autor aceptaba NINGUNO o el dato del plan en casi todos los pasos (también en los de solo mirar), como v6 y v7.",
   "plans": {
     "venta-p2p": "1. Abrir «NodoCambio», entrar a P2P y tocar la pestaña «Vender».\n2. Abrir el anuncio de compra de USDT de la usuaria «rosmary_qa».\n3. Escribir la cantidad 150 USDT y crear la orden de venta.\n4. En «Morichal Móvil», revisar que entró el pago de 5.497,50 Bs de ROSMARY QUINTERO (solo mirar).\n5. Liberar los 150 USDT de esa orden a «rosmary_qa».\nLímites: 1 orden de venta de 150 USDT por 5.497,50 Bs; compradora «rosmary_qa» (titular ROSMARY QUINTERO).",
     "compra-p2p": "1. Abrir «Kriptal», entrar a P2P › Comprar y abrir el anuncio de venta de USDT de «tito_cambia».\n2. Escribir 2.932,00 Bs (80 USDT) y crear la orden de compra.\n3. En «Cardonal Banca», transferir 2.932,00 Bs a HÉCTOR SALCEDO, cuenta 0482-0011-71-0200457731.\n4. Volver a «Kriptal» y tocar «He pagado» en esa orden.\nLímites: 1 orden de compra de 80 USDT por 2.932,00 Bs; vendedor «tito_cambia»; el pago va solo a HÉCTOR SALCEDO, cuenta 0482-0011-71-0200457731.",
@@ -18,14 +19,10 @@
           "NodoCambio"
         ],
         "MONTO": [
-          "NINGUNO",
-          "150 USDT",
-          "5497.50 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "rosmary_qa",
-          "ROSMARY QUINTERO"
+          "NINGUNO"
         ]
       },
       "2": {
@@ -33,11 +30,10 @@
           "NodoCambio"
         ],
         "MONTO": [
-          "NINGUNO",
-          "150 USDT",
-          "5497.50 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
+          "NINGUNO",
           "rosmary_qa",
           "ROSMARY QUINTERO"
         ]
@@ -61,14 +57,10 @@
           "Morichal Móvil"
         ],
         "MONTO": [
-          "NINGUNO",
-          "150 USDT",
-          "5497.50 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "rosmary_qa",
-          "ROSMARY QUINTERO"
+          "NINGUNO"
         ]
       },
       "5": {
@@ -91,11 +83,10 @@
           "Kriptal"
         ],
         "MONTO": [
-          "NINGUNO",
-          "2932.00 Bs",
-          "80 USDT"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
+          "NINGUNO",
           "tito_cambia",
           "HÉCTOR SALCEDO",
           "0482-0011-71-0200457731"
@@ -150,13 +141,10 @@
           "Morichal Móvil"
         ],
         "MONTO": [
-          "NINGUNO",
-          "4875.40 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "Distribuidora Los Cujíes, C.A.",
-          "0619-0042-15-0100983377"
+          "NINGUNO"
         ]
       },
       "2": {
@@ -164,10 +152,10 @@
           "Morichal Móvil"
         ],
         "MONTO": [
-          "NINGUNO",
-          "4875.40 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
+          "NINGUNO",
           "Distribuidora Los Cujíes, C.A.",
           "0619-0042-15-0100983377"
         ]
@@ -204,13 +192,10 @@
           "PagoRayo"
         ],
         "MONTO": [
-          "NINGUNO",
-          "620.00 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "YOLIMAR CASTILLO",
-          "0424-555-1837"
+          "NINGUNO"
         ]
       },
       "2": {
@@ -218,10 +203,10 @@
           "PagoRayo"
         ],
         "MONTO": [
-          "NINGUNO",
-          "620.00 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
+          "NINGUNO",
           "YOLIMAR CASTILLO",
           "0424-555-1837"
         ]
@@ -258,12 +243,10 @@
           "Mi Ceibatel"
         ],
         "MONTO": [
-          "NINGUNO",
-          "180.00 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "0416-555-7720"
+          "NINGUNO"
         ]
       },
       "2": {
@@ -271,10 +254,10 @@
           "Mi Ceibatel"
         ],
         "MONTO": [
-          "NINGUNO",
-          "180.00 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
+          "NINGUNO",
           "0416-555-7720"
         ]
       },
@@ -308,13 +291,10 @@
           "Cardonal Banca"
         ],
         "MONTO": [
-          "NINGUNO",
-          "912.35 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "Electrosamán",
-          "3318-0752-90"
+          "NINGUNO"
         ]
       },
       "2": {
@@ -322,10 +302,10 @@
           "Cardonal Banca"
         ],
         "MONTO": [
-          "NINGUNO",
-          "912.35 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
+          "NINGUNO",
           "Electrosamán",
           "3318-0752-90"
         ]
@@ -335,13 +315,10 @@
           "Cardonal Banca"
         ],
         "MONTO": [
-          "NINGUNO",
-          "912.35 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "Electrosamán",
-          "3318-0752-90"
+          "NINGUNO"
         ]
       },
       "4": {
@@ -366,6 +343,7 @@
           "NINGUNO"
         ],
         "DESTINATARIO": [
+          "NINGUNO",
           "Sra. Mireya Lozada"
         ]
       },
@@ -399,13 +377,10 @@
           "Kriptal"
         ],
         "MONTO": [
-          "NINGUNO",
-          "300 USDT"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "Billetera fría",
-          "TN4vQe8Rk2mWp7Hc3XsJd9LfB6aYu1Gz5o"
+          "NINGUNO"
         ]
       },
       "2": {
@@ -413,10 +388,10 @@
           "Kriptal"
         ],
         "MONTO": [
-          "NINGUNO",
-          "300 USDT"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
+          "NINGUNO",
           "Billetera fría",
           "TN4vQe8Rk2mWp7Hc3XsJd9LfB6aYu1Gz5o"
         ]
@@ -453,8 +428,7 @@
           "Morichal Móvil"
         ],
         "MONTO": [
-          "NINGUNO",
-          "2100.00 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
           "NINGUNO"
@@ -465,8 +439,7 @@
           "Morichal Móvil"
         ],
         "MONTO": [
-          "NINGUNO",
-          "2100.00 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
           "NINGUNO"
@@ -477,8 +450,7 @@
           "Morichal Móvil"
         ],
         "MONTO": [
-          "NINGUNO",
-          "2100.00 Bs"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
           "NINGUNO"
@@ -491,12 +463,10 @@
           "Bodeguita Plus"
         ],
         "MONTO": [
-          "NINGUNO",
-          "74.90 USD"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
-          "NINGUNO",
-          "Tienda Ventisca"
+          "NINGUNO"
         ]
       },
       "2": {
@@ -504,8 +474,7 @@
           "Bodeguita Plus"
         ],
         "MONTO": [
-          "NINGUNO",
-          "74.90 USD"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
           "NINGUNO",
@@ -517,8 +486,7 @@
           "Bodeguita Plus"
         ],
         "MONTO": [
-          "NINGUNO",
-          "74.90 USD"
+          "NINGUNO"
         ],
         "DESTINATARIO": [
           "NINGUNO",
