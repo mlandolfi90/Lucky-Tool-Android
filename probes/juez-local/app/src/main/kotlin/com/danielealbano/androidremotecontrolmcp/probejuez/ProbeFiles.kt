@@ -22,6 +22,16 @@ object ProbeFiles {
         context: Context,
         name: String,
     ): File? = modelDirs(context).map { File(it, name) }.firstOrNull { it.isFile }
+
+    /** Where a GenieX bundle (.zip or extracted folder) may be: the model folders or the adb push folder. */
+    fun bundleDirs(context: Context): List<File> = modelDirs(context) + File(ADB_PUSH_DIR)
+
+    fun findBundle(
+        context: Context,
+        name: String,
+    ): File? = bundleDirs(context).map { File(it, name) }.firstOrNull { it.exists() }
+
+    private const val ADB_PUSH_DIR = "/data/local/tmp/juez"
 }
 
 /** One probe run, read from the launching intent's extras. */
@@ -52,6 +62,7 @@ data class RunRequest(
         const val PROMPT_STEP = "paso"
         const val SET_IMAGES = "imagenes"
         const val SAMPLER_NONE = "none"
+        const val BACKEND_GENIEX = "geniex"
         private const val DEFAULT_THREADS = 4
 
         fun from(intent: Intent): RunRequest? {

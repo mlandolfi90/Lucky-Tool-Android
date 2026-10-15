@@ -34,14 +34,26 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
 
-      - name: Build debug APK
+      - name: Use the fixed debug signing key
+        env:
+          DEBUG_KEYSTORE_BASE64: ${{ secrets.DEBUG_KEYSTORE_BASE64 }}
+        run: |
+          # The same key on every run lets a new probe APK install over the previous one and keep the pushed models.
+          if [ -z "$DEBUG_KEYSTORE_BASE64" ]; then
+            echo "::warning::DEBUG_KEYSTORE_BASE64 is not set; the probe APKs get a new key on every run"
+            exit 0
+          fi
+          mkdir -p "$HOME/.android"
+          printf '%s' "$DEBUG_KEYSTORE_BASE64" | base64 -d > "$HOME/.android/debug.keystore"
+
+      - name: Build debug APKs (litert and geniex flavors)
         run: |
           chmod +x gradlew
           ./gradlew --no-daemon assembleDebug
 
-      - name: Upload APK
+      - name: Upload APKs
         uses: actions/upload-artifact@v7
         with:
           name: probe-juez-local-debug
-          path: probes/juez-local/app/build/outputs/apk/debug/app-debug.apk
+          path: probes/juez-local/app/build/outputs/apk/*/debug/*.apk
           if-no-files-found: error

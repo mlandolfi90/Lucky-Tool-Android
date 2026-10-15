@@ -1,9 +1,13 @@
 # tag model backend delaySec mode thinking prompt set sampler
-# NPU primero (obligatoria, decidido 2026-10-14): motor de Google con el archivo E2B hecho para el SM8750.
-# Si 'greedy' falla en la NPU, la fila 'none' deja el muestreo del modelo.
+# NPU primero (obligatoria, decidido 2026-10-14).
+# 1) Motor de Google con el archivo E2B hecho para el SM8750 (app litert). Si 'greedy' falla, 'none' usa el muestreo del modelo.
 e2b-npu gemma-4-E2B-it_qualcomm_sm8750.litertlm npu 6 bg config sino texto greedy
 e2b-npu-libre gemma-4-E2B-it_qualcomm_sm8750.litertlm npu 6 bg config sino texto none
 e2b-npu-img gemma-4-E2B-it_qualcomm_sm8750.litertlm npu 6 bg config sino imagenes greedy
+# 2) Kit de Qualcomm (GenieX) con el E4B (app geniex). La primera fila importa el paquete: copia ~10,5 GB a la app.
+e4b-geniex gemma4-e4b-geniex.zip geniex 6 bg config sino texto greedy
+e4b-geniex-img gemma4-e4b-geniex.zip geniex 6 bg config sino imagenes greedy
+e4b-geniex-paso gemma4-e4b-geniex.zip geniex 6 bg config paso texto greedy
 # Plan del humano (2026-10-14): Gemma 4 E2B contra E4B, en modo sencillo y en modo pensar (GPU).
 # Extra ya aceptado: la pregunta "paso" (la IA dice el numero de paso y la app lo compara).
 e2b-sencillo gemma-4-E2B-it.litertlm gpu 6 bg config sino texto greedy
@@ -18,3 +22,5 @@ e4b-paso-pensar gemma-4-E4B-it.litertlm gpu 6 bg on paso texto greedy
 e2b-img gemma-4-E2B-it.litertlm gpu 6 bg config sino imagenes greedy
 e4b-img gemma-4-E4B-it.litertlm gpu 6 bg config sino imagenes greedy
 e4b-img-pensar gemma-4-E4B-it.litertlm gpu 6 bg on sino imagenes greedy
+# Al final, por lento (~9,5 tok/s pensando): E4B en la NPU con modo pensar.
+e4b-geniex-pensar gemma4-e4b-geniex.zip geniex 6 bg on sino texto greedy

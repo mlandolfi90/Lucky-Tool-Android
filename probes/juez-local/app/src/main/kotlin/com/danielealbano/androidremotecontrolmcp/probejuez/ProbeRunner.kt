@@ -1,10 +1,7 @@
 package com.danielealbano.androidremotecontrolmcp.probejuez
 
-import android.app.ActivityManager
 import android.content.Context
-import android.os.Debug
 import android.os.SystemClock
-import android.util.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
@@ -15,22 +12,26 @@ import com.google.ai.edge.litertlm.LogSeverity
 import com.google.ai.edge.litertlm.SamplerConfig
 import com.google.ai.edge.litertlm.ThinkingConfig
 import kotlinx.coroutines.delay
-import org.json.JSONArray
 import org.json.JSONObject
-import java.io.File
 
-/** Loads one model with one backend, asks every [JudgeCases] question and logs and stores the measurements. */
+/**
+ * Loads one model with one backend, asks every [JudgeCases] question and logs and stores the measurements.
+ * The `geniex` backend goes to [GenieXProbe] (Qualcomm's kit, only in the geniex build flavor).
+ */
 class ProbeRunner(
     private val context: Context,
 ) {
     suspend fun run(request: RunRequest) {
         delay(request.delaySec * MILLIS_PER_SECOND)
+        if (request.backend == RunRequest.BACKEND_GENIEX) {
+            GenieXProbe.run(context, request)
+            return
+        }
         val modelFile =
             ProbeFiles.findModel(context, request.model)
                 ?: error("model ${request.model} not found in ${ProbeFiles.modelDirs(context)}")
         Engine.setNativeMinLogSeverity(LogSeverity.WARNING)
         val withImages = request.set == RunRequest.SET_IMAGES
-        val cases = if (withImages) JudgeCases.imageCases else JudgeCases.all
         val engineConfig =
             EngineConfig(
                 modelPath = modelFile.absolutePath,
@@ -40,7 +41,7 @@ class ProbeRunner(
                 maxNumImages = if (withImages) 1 else null,
                 cacheDir = context.cacheDir.path,
             )
-        val importanceAtStart = ownImportance()
+        val importanceAtStart = ProbeMetrics.importance()
         val chatTemplate =
             if (request.model.startsWith(QWEN3_PREFIX)) {
                 context.assets.open(QWEN3_TEMPLATE_ASSET).bufferedReader().use { it.readText() }
@@ -53,23 +54,17 @@ class ProbeRunner(
                 val initStarted = SystemClock.elapsedRealtime()
                 engine.initialize()
                 val initMs = SystemClock.elapsedRealtime() - initStarted
-                val pssAfterInitKb = pssKb()
-                Log.i(
-                    TAG,
-                    "JUEZ INIT tag=${request.tag} model=${request.model} backend=${request.backend} " +
-                        "set=${request.set} prompt=${request.prompt} thinking=${request.thinking} " +
-                        "sampler=${request.sampler} " +
-                        "template=$templateLabel initMs=$initMs pssKb=$pssAfterInitKb importance=$importanceAtStart",
-                )
+                val pssAfterInitKb = ProbeMetrics.pssKb()
+                ProbeMetrics.logInit(request, "template=$templateLabel", initMs, pssAfterInitKb, importanceAtStart)
                 val outcomes =
                     (1..request.repeat).flatMap { round ->
-                        cases.map { case -> judge(engine, case, request, round, chatTemplate) }
+                        ProbeMetrics.casesFor(request).map { case -> judge(engine, case, request, round, chatTemplate) }
                     }
-                summarize(request, initMs, pssAfterInitKb, importanceAtStart, outcomes).put("template", templateLabel)
+                ProbeMetrics
+                    .summarize(request, initMs, pssAfterInitKb, importanceAtStart, outcomes)
+                    .put("template", templateLabel)
             }
-        File(ProbeFiles.resultsDir(context), "${request.tag}.json").writeText(summary.toString(2))
-        summary.remove("results")
-        Log.i(TAG, "JUEZ SUMMARY $summary")
+        ProbeMetrics.publish(context, request, summary)
     }
 
     private fun judge(
@@ -79,18 +74,16 @@ class ProbeRunner(
         round: Int,
         chatTemplate: String?,
     ): JSONObject {
-        val stepMode = request.prompt == RunRequest.PROMPT_STEP
-        val thinkingOn = request.thinking == RunRequest.THINKING_ON
         val config =
             ConversationConfig(
-                systemInstruction = Contents.of(if (stepMode) JudgeCases.SYSTEM_STEP else JudgeCases.SYSTEM),
+                systemInstruction = Contents.of(ProbeMetrics.systemFor(request)),
                 samplerConfig =
                     if (request.sampler == RunRequest.SAMPLER_NONE) {
                         null
                     } else {
                         SamplerConfig(topK = 1, topP = 1.0, temperature = 0.0)
                     },
-                maxOutputToken = if (thinkingOn) MAX_OUTPUT_TOKENS_THINKING else MAX_OUTPUT_TOKENS,
+                maxOutputToken = ProbeMetrics.maxOutputTokens(request),
                 thinkingConfig =
                     when (request.thinking) {
                         "config" -> ThinkingConfig(enableThinking = false)
@@ -105,14 +98,8 @@ class ProbeRunner(
                     },
                 chatTemplate = chatTemplate,
             )
-        val prompt = if (stepMode) case.stepPrompt() else case.prompt()
-        val imageBytes =
-            case.image?.let { name ->
-                File(ProbeFiles.imagesDir(context), name)
-                    .takeIf { it.isFile }
-                    ?.readBytes()
-                    ?: error("image $name not found in ${ProbeFiles.imagesDir(context)}")
-            }
+        val prompt = ProbeMetrics.promptFor(request, case)
+        val imageBytes = case.image?.let { ProbeMetrics.imageFile(context, it).readBytes() }
         val started = SystemClock.elapsedRealtime()
         val reply =
             engine.createConversation(config).use { conversation ->
@@ -123,69 +110,8 @@ class ProbeRunner(
                 }
             }
         val elapsedMs = SystemClock.elapsedRealtime() - started
-        val verdict = if (stepMode) JudgeCases.stepVerdict(reply, case.step) else JudgeCases.verdictOf(reply)
-        val importance = ownImportance()
-        val shortReply = reply.replace('\n', ' ').take(REPLY_LOG_CHARS)
-        Log.i(
-            TAG,
-            "JUEZ CASE tag=${request.tag} round=$round id=${case.id} expected=${case.expectedLabel} " +
-                "verdict=$verdict ms=$elapsedMs importance=$importance reply=$shortReply",
-        )
-        return JSONObject()
-            .put("round", round)
-            .put("id", case.id)
-            .put("expected", case.expectedLabel)
-            .put("verdict", verdict)
-            .put("ms", elapsedMs)
-            .put("importance", importance)
-            .put("reply", shortReply)
+        return ProbeMetrics.caseResult(request, round, case, reply, elapsedMs)
     }
-
-    private fun summarize(
-        request: RunRequest,
-        initMs: Long,
-        pssAfterInitKb: Int,
-        importanceAtStart: Int,
-        outcomes: List<JSONObject>,
-    ): JSONObject {
-        val times = outcomes.map { it.getLong("ms") }.sorted()
-        return JSONObject()
-            .put("tag", request.tag)
-            .put("model", request.model)
-            .put("backend", request.backend)
-            .put("threads", request.threads)
-            .put("thinking", request.thinking)
-            .put("prompt", request.prompt)
-            .put("set", request.set)
-            .put("sampler", request.sampler)
-            .put("delaySec", request.delaySec)
-            .put("initMs", initMs)
-            .put("pssAfterInitKb", pssAfterInitKb)
-            .put("pssEndKb", pssKb())
-            .put("peakRssKb", peakRssKb())
-            .put("importanceAtStart", importanceAtStart)
-            .put("importanceDuring", JSONArray(outcomes.map { it.getInt("importance") }.distinct()))
-            .put("cases", outcomes.size)
-            .put("correct", outcomes.count { it.getString("verdict") == it.getString("expected") })
-            .put("dangerousYes", outcomes.count { it.isExpected(JudgeCases.NO) && it.isVerdict(JudgeCases.YES) })
-            .put("extraStops", outcomes.count { it.isExpected(JudgeCases.YES) && !it.isVerdict(JudgeCases.YES) })
-            .put("invalid", outcomes.count { it.isVerdict(JudgeCases.INVALID) })
-            .put("firstMs", outcomes.firstOrNull()?.getLong("ms") ?: 0L)
-            .put("p50Ms", percentile(times, P50))
-            .put("p90Ms", percentile(times, P90))
-            .put("maxMs", times.lastOrNull() ?: 0L)
-            .put("avgMs", if (times.isEmpty()) 0L else times.sum() / times.size)
-            .put("results", JSONArray(outcomes))
-    }
-
-    private fun JSONObject.isExpected(label: String): Boolean = getString("expected") == label
-
-    private fun JSONObject.isVerdict(label: String): Boolean = getString("verdict") == label
-
-    private fun percentile(
-        sorted: List<Long>,
-        percent: Int,
-    ): Long = if (sorted.isEmpty()) 0L else sorted[(sorted.size - 1) * percent / HUNDRED]
 
     private fun backendFor(request: RunRequest): Backend =
         when (request.backend) {
@@ -198,32 +124,13 @@ class ProbeRunner(
     private fun visionBackendFor(request: RunRequest): Backend =
         if (request.backend == "gpu") Backend.GPU() else Backend.CPU(threadCount = request.threads)
 
-    private fun ownImportance(): Int =
-        ActivityManager.RunningAppProcessInfo().also { ActivityManager.getMyMemoryState(it) }.importance
-
-    private fun pssKb(): Int = Debug.MemoryInfo().also { Debug.getMemoryInfo(it) }.totalPss
-
-    private fun peakRssKb(): Long =
-        File("/proc/self/status")
-            .readLines()
-            .firstOrNull { it.startsWith("VmHWM:") }
-            ?.filter { it.isDigit() }
-            ?.toLongOrNull() ?: -1L
-
     private companion object {
-        const val TAG = ProbeService.TAG
         const val MILLIS_PER_SECOND = 1000L
         const val MAX_NUM_TOKENS = 2048
         const val MAX_NUM_TOKENS_IMAGES = 4096
-        const val MAX_OUTPUT_TOKENS = 16
-        const val MAX_OUTPUT_TOKENS_THINKING = 1024
-        const val REPLY_LOG_CHARS = 120
         const val QWEN3_PREFIX = "qwen3"
 
         /** LiteRT-LM's canonical Qwen3 template: the one inside the model file cannot render list contents. */
         const val QWEN3_TEMPLATE_ASSET = "qwen3_chat_template.jinja"
-        const val P50 = 50
-        const val P90 = 90
-        const val HUNDRED = 100
     }
 }
