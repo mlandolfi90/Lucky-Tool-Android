@@ -610,6 +610,12 @@ Local development requires Android SDK, emulator/device, and standard Android de
 - Check Gradle daemon status: `./gradlew --status`.
 - Clear Gradle cache if needed: `./gradlew clean --no-daemon`.
 
+### Code graph (codebase-memory-mcp, when configured)
+- The graph is reindexed in the background after edits and git operations; a reindex takes about a minute, and until it finishes the graph still answers with the previous version.
+- After editing a file, do NOT rely on the graph for that file: read the file itself. Before relying on any file, call `check_index_coverage` for it.
+- `search_code` is case-sensitive by default; use `regex: true` with a `(?i)` prefix for a case-insensitive search.
+- `.cbmignore` keeps local-only folders and `docs/plans/` out of the graph: read plans with `Read`/`Grep`.
+
 ---
 
 ## 11) Deployment Rules (Android APK Building)
