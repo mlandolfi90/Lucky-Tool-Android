@@ -1,0 +1,113 @@
+// BLOQUE 01 · Arrancar el servidor. La franja, sus piezas y su vista.
+// El flujo paso a paso irá en flujos.c4 de esta misma carpeta, cuando se dibuje.
+// Cada pieza: su función y su archivo:línea (bajo app/src/main/kotlin/com/danielealbano/
+// androidremotecontrolmcp/), verificados el 2026-10-16 con codebase-memory y el código, en la rama
+// feat/approval-profiles (la punta de nuestra versión). Todas están hechas.
+model {
+  extend app {
+    arranque = bloque 'Arrancar el servidor' {
+      #hecho
+      description 'Hecho en nuestra versión'
+
+      entrada = entrada 'Un pedido de arranque' {
+        description 'El toque en «Iniciar», el teléfono que se enciende con el inicio automático prendido, una actualización de la app con el servidor prendido, una orden por adb, o Android que revive el servicio.'
+      }
+      quiere = objetivo 'El servidor MCP escuchando, en primer plano' {
+        #hecho
+        description 'Uno solo aunque lleguen dos pedidos juntos, con las herramientas que los permisos dejan, y vivo aunque la app no esté a la vista.'
+        technology 'McpServerService · servicio en primer plano'
+      }
+      obtiene = resultado 'El servidor corriendo y su dirección' {
+        description 'La notificación fija, el estado «corriendo» con puerto y dirección, y, si hay túnel, la dirección pública para el agente. Si algo falla, el estado «error» con el motivo.'
+      }
+      entrada -[entra]-> quiere
+      quiere -[da]-> obtiene
+
+      // Las puertas de entrada: todas mandan ACTION_START al servicio.
+      botonIniciar = pieza 'El botón «Iniciar»' {
+        description 'Pone el estado en «arrancando» y pide el servicio en primer plano.'
+        technology 'MainViewModel.startServer · ui/viewmodels/MainViewModel.kt:276'
+      }
+      autoinicio = pieza 'El inicio automático al encender' {
+        description 'Al encender, lee los ajustes (con tiempo límite) y, si el inicio automático está prendido, arranca el servicio.'
+        technology 'BootCompletedReceiver.onReceive · services/mcp/BootCompletedReceiver.kt:29'
+      }
+      trasActualizar = pieza 'La vuelta tras actualizar la app' {
+        description 'Después de instalar una versión nueva, lo vuelve a arrancar sólo si el servidor había quedado prendido.'
+        technology 'PackageReplacedReceiver.onReceive · services/mcp/PackageReplacedReceiver.kt:34 · McpServerRestart.kt:67'
+      }
+      ordenAdb = pieza 'La orden por adb' {
+        description 'Una actividad invisible que arranca el servicio desde la PC, aunque la app esté en segundo plano.'
+        technology 'AdbServiceTrampolineActivity.onCreate · services/mcp/AdbServiceTrampolineActivity.kt:45 · AdbConfigHandler.handleStartServer :410'
+      }
+
+      // El arranque en sí.
+      servicio = pieza 'El servicio en primer plano' {
+        description 'Muestra la notificación primero, anota que el servidor quedó prendido e ignora un segundo arranque si ya hay uno. START_STICKY: Android lo revive.'
+        technology 'McpServerService.onStartCommand · services/mcp/McpServerService.kt:219'
+      }
+      armado = pieza 'Armar y levantar el servidor' {
+        description 'Lee los ajustes, prepara el HTTPS si está prendido, registra las herramientas, levanta el servidor web y empieza a vigilar el túnel y las aprobaciones.'
+        technology 'McpServerService.startServer · services/mcp/McpServerService.kt:255'
+      }
+      herramientas = pieza 'Registrar las herramientas' {
+        description 'Sólo las que dejan los permisos dados (cámara, micrófono, ubicación, notificaciones) y los ajustes de cada herramienta.'
+        technology 'McpServerService.registerAllTools · services/mcp/McpServerService.kt:460'
+      }
+      servidorWeb = pieza 'El servidor web' {
+        description 'Ktor, por HTTP (por defecto) o HTTPS, con la autenticación y el OAuth propios.'
+        technology 'McpServer.start · mcp/McpServer.kt:70'
+      }
+      tunel = pieza 'El túnel' {
+        description 'Si está prendido y no hay HTTPS: Cloudflare o ngrok. Si falla, el servidor sigue sin túnel.'
+        technology 'TunnelManager.start · services/tunnel/TunnelManager.kt:47'
+      }
+      relay = pieza 'El túnel por el relay' {
+        description 'El tercer proveedor del túnel: un WebSocket al relay de VPS-A.'
+        technology 'RelayTunnelProvider.start · services/tunnel/RelayTunnelProvider.kt:80'
+      }
+
+      botonIniciar -> servicio 'ACTION_START'
+      autoinicio -> servicio 'ACTION_START'
+      trasActualizar -> servicio 'ACTION_START'
+      ordenAdb -> servicio 'ACTION_START'
+      servicio -> armado 'si no hay otro arranque en curso'
+      armado -> herramientas 'según los permisos'
+      armado -> servidorWeb 'lo crea y lo levanta'
+      armado -> tunel 'si está prendido y no hay HTTPS'
+      tunel -> relay 'si el proveedor es el relay'
+    }
+  }
+
+  app.arranque.armado -[usa]-> ajustes 'lee la configuración'
+  app.arranque.servicio -[usa]-> ajustes 'anota «servidor prendido»'
+  app.arranque.autoinicio -[usa]-> ajustes '¿inicio automático?'
+  app.arranque.trasActualizar -[usa]-> ajustes '¿había quedado prendido?'
+  app.arranque.armado -[usa]-> certificado 'lo crea o lo lee, sólo con HTTPS'
+  app.arranque.tunel -[usa]-> tunelExterno 'abre la dirección pública'
+  usuario -> app.arranque.botonIniciar 'toca «Iniciar»'
+  android -> app.arranque.autoinicio 'BOOT_COMPLETED'
+  android -> app.arranque.trasActualizar 'MY_PACKAGE_REPLACED'
+  android -> app.arranque.servicio 'lo revive (START_STICKY)'
+  pc -> app.arranque.ordenAdb 'am start (adb)'
+
+  // La capa de afuera: quién pide el arranque y quién usa lo que sale. Es lo que dibuja la franja.
+  usuario -> app.arranque.entrada 'toca «Iniciar»'
+  android -> app.arranque.entrada 'al encender, al actualizar la app o al revivir el servicio'
+  pc -> app.arranque.entrada 'una orden por adb'
+  app.arranque.obtiene -> agente 'la dirección para conectarse'
+}
+
+views '01 · Arrancar el servidor' {
+
+  // La franja: sólo la capa de afuera, sin piezas. Las piezas, paso a paso, están en el flujo.
+  view bloque-arranque of app.arranque {
+    title 'Franja: quién lo pide, qué se quiere, qué sale'
+    description 'Un clic en «El servidor MCP escuchando» abre el flujo, paso a paso y con las piezas.'
+    include app.arranque, app.arranque.entrada, app.arranque.obtiene
+    include app.arranque.quiere with { navigateTo flujo-arranque }
+    include usuario, android, pc, agente
+    global style estados
+    autoLayout LeftRight
+  }
+}

@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "MagicNumber", "UnusedPrivateMember", "LongMethod", "LongParameterList")
+@file:Suppress("MagicNumber", "UnusedPrivateMember", "LongMethod", "LongParameterList")
 
 package com.danielealbano.androidremotecontrolmcp.ui.components
 
@@ -25,7 +25,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -58,6 +61,7 @@ fun ServerStatusCard(
             Text(
                 text = "Services Status",
                 style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.semantics { heading() },
             )
 
             Spacer(Modifier.height(12.dp))
@@ -68,6 +72,7 @@ fun ServerStatusCard(
                 statusText = serverStatusToText(serverStatus),
                 statusColor = serverStatusToColor(serverStatus, isSystemInDarkTheme()),
                 buttonText = if (serverStatus is ServerStatus.Running) "Stop" else "Start",
+                buttonStops = serverStatus is ServerStatus.Running,
                 buttonEnabled = mcpStartStopButtonEnabled(serverStatus, startEnabled),
                 onButtonClick = if (serverStatus is ServerStatus.Running) onMcpStopClick else onMcpStartClick,
             )
@@ -80,6 +85,7 @@ fun ServerStatusCard(
                 statusText = channelStatusToText(channelStatus, channelEnabled),
                 statusColor = channelStatusToColor(channelStatus, channelEnabled, isSystemInDarkTheme()),
                 buttonText = if (channelEnabled) "Stop" else "Start",
+                buttonStops = channelEnabled,
                 buttonEnabled = channelStartStopButtonEnabled(channelEnabled, startEnabled),
                 onButtonClick = if (channelEnabled) onChannelStopClick else onChannelStartClick,
             )
@@ -116,9 +122,13 @@ private fun ServiceRow(
     statusText: String,
     statusColor: Color,
     buttonText: String,
+    buttonStops: Boolean,
     buttonEnabled: Boolean,
     onButtonClick: () -> Unit,
 ) {
+    // TalkBack names the service the button acts on ("Stop MCP Server"), not just "Stop".
+    val buttonDescription =
+        stringResource(if (buttonStops) R.string.server_action_stop_cd else R.string.server_action_start_cd, label)
     val animatedColor by animateColorAsState(
         targetValue = statusColor,
         animationSpec = tween(durationMillis = ANIMATION_DURATION_MS),
@@ -130,17 +140,14 @@ private fun ServiceRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // One TalkBack stop reads "label, status" (announced politely when the status changes);
+        // the dot is decorative (the status text carries it).
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
         ) {
             Canvas(
-                modifier =
-                    Modifier
-                        .size(STATUS_DOT_SIZE_DP.dp)
-                        .semantics {
-                            contentDescription = "$label status: $statusText"
-                        },
+                modifier = Modifier.size(STATUS_DOT_SIZE_DP.dp),
             ) {
                 drawCircle(color = animatedColor)
             }
@@ -161,6 +168,7 @@ private fun ServiceRow(
         FilledTonalButton(
             onClick = onButtonClick,
             enabled = buttonEnabled,
+            modifier = Modifier.semantics { contentDescription = buttonDescription },
         ) {
             Text(text = buttonText)
         }

@@ -1,0 +1,77 @@
+// LO COMÚN: quién usa la app, lo que está afuera, los datos que tocan los bloques y la caja del
+// sistema. Cada bloque se suma a `app` desde su carpeta (01-arranque/, …) con `extend app { … }`,
+// junto con sus piezas, sus relaciones y sus vistas.
+// Sale del código y de docs/ARCHITECTURE.md; cada pieza dice su función y su archivo:línea.
+model {
+
+  // ── Quiénes y con qué ──────────────────────────────────────────────────────────────────────
+
+  usuario = persona 'Quien usa el teléfono' {
+    description 'Abre la app, da los permisos, toca «Iniciar» y aprueba lo que el agente pide.'
+  }
+
+  humano = persona 'Quien conversa con el agente' {
+    description 'La persona del chat. No es el dueño del teléfono (aunque puede ser la misma): el agente le pregunta, y su «sí» vale sólo para las acciones que se aprueban en el chat.'
+  }
+
+  agente = externo 'El agente' {
+    description 'Un cliente MCP (una sesión de Claude, por ejemplo) que maneja el teléfono por la red.'
+  }
+
+  android = externo 'Android' {
+    description 'El sistema del teléfono: avisa al encender y al actualizar la app, y revive el servicio si lo mata.'
+  }
+
+  pc = externo 'La PC, por adb' {
+    description 'Una computadora con el teléfono conectado: puede arrancar, parar y configurar la app con comandos.'
+  }
+
+  appsDelTelefono = externo 'Las apps del teléfono' {
+    description 'Lo que está en la pantalla: el banco, el chat, la calculadora… La app las toca y las lee por accesibilidad.'
+  }
+
+  tunelExterno = externo 'El túnel de afuera' {
+    description 'Cloudflare, ngrok o el relay de VPS-A: da una dirección pública que llega al teléfono.'
+  }
+
+  // ── Los datos ──────────────────────────────────────────────────────────────────────────────
+
+  ajustes = datos 'Los ajustes' {
+    description 'Puerto, dirección, HTTPS, túnel, inicio automático, permisos de las herramientas y si el servidor quedó prendido.'
+    technology 'DataStore · SettingsRepository'
+  }
+
+  certificado = datos 'El certificado' {
+    description 'El almacén de claves del HTTPS, autofirmado. Sólo existe si se prendió HTTPS.'
+    technology 'KeyStore · CertificateManager'
+  }
+
+  agentesConectados = datos 'Los agentes conectados' {
+    description 'Los agentes que se registraron por OAuth: nombre, direcciones de vuelta y fecha de último uso. Si un agente sale de la lista, su token deja de valer al instante.'
+    technology 'DataStore oauth_clients · OAuthClientRepository'
+  }
+
+  perfiles = datos 'Los perfiles de aprobación' {
+    description 'Por cada app con perfil: una regla para leer, navegar, escribir y tocar un botón de acción (correr, preguntar en el chat, avisar al dueño o prohibir), un tope de monto con escalones y las excepciones que el dueño fue aprobando.'
+    technology 'DataStore approval_profiles · ApprovalProfileRepository'
+  }
+
+  planes = datos 'Los planes firmados' {
+    #idea
+    description 'Cada plan que el dueño firmó con la huella: sus pasos y sus límites, el dato que acepta cada paso, en qué estado está (en espera, en marcha o en el historial) y cuánto dinero ya usó. Idea del 2026-10-14, sin plan escrito.'
+    technology 'idea · sin código'
+  }
+
+  registroServidor = datos 'El registro del servidor' {
+    description 'Una línea por evento: cada llamada a una herramienta con su duración, las fallas de autenticación, el túnel. Se ve en la app.'
+    technology 'ServerLogRepository'
+  }
+
+  // ── El sistema: los bloques se suman desde sus carpetas ────────────────────────────────────
+
+  app = sistema 'Lucky-Tool-Android' {
+    description 'La app de Android que convierte el teléfono en un servidor MCP para un agente.'
+  }
+
+  usuario -> app 'la configura y la prende'
+}

@@ -1,0 +1,114 @@
+// BLOQUE 02 · Atender un pedido del agente. La franja (sólo la capa de afuera), las piezas que usa el
+// flujo y su vista. El flujo, en flujos.c4 de esta misma carpeta.
+// Cada pieza: su función y su archivo:línea (bajo app/src/main/kotlin/com/danielealbano/
+// androidremotecontrolmcp/), verificados el 2026-10-16 con codebase-memory y el código, en la rama
+// feat/approval-profiles (la punta de nuestra versión). Todas están hechas.
+model {
+  extend app {
+    atender = bloque 'Atender un pedido del agente' {
+      #hecho
+      description 'Hecho en nuestra versión'
+
+      entrada = entrada 'Un pedido del agente' {
+        description 'Un tools/call por la red a /mcp: el nombre de una herramienta (tocar, leer la pantalla, escribir…), sus argumentos y la credencial.'
+      }
+      quiere = objetivo 'Hacer en el teléfono lo que pide, sólo si está permitido' {
+        #hecho
+        description 'Sólo con una credencial válida, sólo herramientas registradas, y sólo lo que los perfiles de aprobación dejan.'
+        technology 'el servidor web · el SDK de MCP · las herramientas'
+      }
+      obtiene = resultado 'La respuesta' {
+        description 'Lo que pasó (el toque hecho) o lo que se ve en la pantalla, con la advertencia de contenido no confiable. O un error, o «hace falta aprobación».'
+      }
+      entrada -[entra]-> quiere
+      quiere -[da]-> obtiene
+
+      // Las piezas: las usa el flujo, en el orden en que pasa el pedido.
+      llave = pieza 'La puerta con llave' {
+        description 'Deja pasar el pedido sólo con el token fijo o con un token de OAuth emitido por la app. Si no, 401. Con los dos apagados, el servidor queda abierto (la app avisa).'
+        technology 'McpAuthPlugin · mcp/auth/BearerTokenAuth.kt:76'
+      }
+      ruta = pieza 'La ruta /mcp' {
+        description 'Recibe el JSON-RPC por HTTP, sin streaming (SSE), y se lo pasa al SDK.'
+        technology 'installMcpStatelessTransport · mcp/McpStatelessTransport.kt:32'
+      }
+      sdk = pieza 'El SDK de MCP' {
+        description 'Lee el método (tools/call), busca la herramienta por su nombre y la llama con sus argumentos.'
+        technology 'MCP Kotlin SDK · Server · registrado con LoggedToolRegistrar.addTool, mcp/tools/LoggedToolRegistration.kt:147'
+      }
+      registro = pieza 'El registro de la llamada' {
+        description 'La primera capa de cada herramienta: mide la duración y anota la llamada en el registro del servidor, salga como salga.'
+        technology 'loggedToolHandler · mcp/tools/LoggedToolRegistration.kt:52'
+      }
+      porton = pieza 'El portón de aprobación' {
+        description 'La segunda capa: según los perfiles de cada app, deja correr, pide aprobación en el chat, avisa al dueño y espera, o prohíbe.'
+        technology 'ToolPolicyGateImpl.guard · policy/gate/ToolPolicyGateImpl.kt:52'
+      }
+      indicador = pieza 'El aviso de herramienta en uso' {
+        description 'La tercera capa: muestra en la pantalla que una herramienta está corriendo, y lo saca al terminar. Nunca se ve mientras se espera una aprobación.'
+        technology 'indicatedToolHandler · mcp/tools/LoggedToolRegistration.kt:96'
+      }
+      tocar = pieza 'Una herramienta que actúa: tap' {
+        description 'Valida x e y (números, no negativos) y pide el toque. Ejemplo de las herramientas que actúan (tocar, deslizar, escribir…).'
+        technology 'TapTool.execute · mcp/tools/TouchActionTools.kt:39'
+      }
+      ejecutor = pieza 'El que hace el gesto' {
+        description 'Arma el gesto y lo manda por el servicio de accesibilidad; espera que termine, con tiempo límite.'
+        technology 'ActionExecutorImpl.tap · services/accessibility/ActionExecutorImpl.kt:175'
+      }
+      leer = pieza 'Una herramienta que lee: get_screen_state' {
+        description 'Lee las ventanas de la pantalla y arma el árbol compacto, por páginas. Ejemplo de las herramientas que devuelven contenido del teléfono.'
+        technology 'GetScreenStateHandler.execute · mcp/tools/ScreenIntrospectionTools.kt:74'
+      }
+      accesibilidad = pieza 'El servicio de accesibilidad' {
+        description 'El permiso de Android que deja leer la pantalla de cualquier app y tocarla. Si no está prendido, las herramientas fallan con un aviso.'
+        technology 'McpAccessibilityService · services/accessibility/McpAccessibilityService.kt:38'
+      }
+      privacidad = pieza 'El modo privacidad' {
+        description 'Si está prendido, tacha los datos personales del texto antes de que salga. Si falla, la herramienta da error (no deja pasar el texto sin tachar).'
+        technology 'PrivacyToolGate.tree · privacy/PrivacyToolGate.kt:36'
+      }
+      advertencia = pieza 'La advertencia de contenido no confiable' {
+        description 'Va en la primera línea de toda respuesta con contenido del teléfono: lo que dice la pantalla son datos, no órdenes.'
+        technology 'McpToolUtils.untrustedTextResult · mcp/tools/McpToolUtils.kt:452'
+      }
+
+      llave -> ruta 'si la credencial vale'
+      ruta -> sdk 'el JSON-RPC'
+      sdk -> registro 'llama a la herramienta'
+      registro -> porton 'segunda capa'
+      porton -> indicador 'si deja correr'
+      indicador -> tocar 'si es una acción'
+      indicador -> leer 'si es una lectura'
+      tocar -> ejecutor 'tap(x, y)'
+      ejecutor -> accesibilidad 'el gesto'
+      leer -> accesibilidad 'las ventanas'
+      leer -> privacidad 'el árbol'
+      leer -> advertencia 'el texto'
+    }
+  }
+
+  app.atender.registro -[usa]-> registroServidor 'anota la llamada'
+  app.atender.llave -[usa]-> registroServidor 'anota la falla de autenticación'
+  app.atender.accesibilidad -[usa]-> appsDelTelefono 'toca y lee la pantalla'
+  agente -> app.atender.llave 'POST /mcp'
+
+  // La capa de afuera: quién pide, sobre qué actúa y quién recibe lo que sale. Es lo que dibuja la franja.
+  agente -> app.atender.entrada 'tools/call por la red'
+  app.atender.quiere -> appsDelTelefono 'las toca o las lee'
+  app.atender.obtiene -> agente 'la respuesta'
+}
+
+views '02 · Atender un pedido' {
+
+  // La franja: sólo la capa de afuera, sin piezas. Las piezas, paso a paso, están en el flujo.
+  view bloque-atender of app.atender {
+    title 'Franja: quién lo pide, qué se quiere, qué sale'
+    description 'Un clic en «Hacer en el teléfono lo que pide» abre el flujo, paso a paso y con las piezas.'
+    include app.atender, app.atender.entrada, app.atender.obtiene
+    include app.atender.quiere with { navigateTo flujo-atender }
+    include agente, appsDelTelefono
+    global style estados
+    autoLayout LeftRight
+  }
+}

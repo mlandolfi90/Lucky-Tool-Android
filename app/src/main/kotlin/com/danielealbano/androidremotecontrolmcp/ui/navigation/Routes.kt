@@ -1,5 +1,7 @@
 package com.danielealbano.androidremotecontrolmcp.ui.navigation
 
+import com.danielealbano.androidremotecontrolmcp.policy.model.ProfileTemplate
+
 sealed class TopLevelRoute(
     val route: String,
 ) {
@@ -38,6 +40,22 @@ sealed class SettingsRoute(
     data object NotificationFilter : SettingsRoute("settings/channel/notification_filter")
 
     data object WifiMonitor : SettingsRoute("settings/channel/wifi_monitor")
+
+    data object ApprovalProfiles : SettingsRoute("settings/approval_profiles")
+
+    data object ApprovalProfileAdd : SettingsRoute("settings/approval_profiles/add")
+
+    data object ApprovalProfileEdit : SettingsRoute("settings/approval_profiles/edit/{packageName}/{template}") {
+        const val ARG_PACKAGE_NAME = "packageName"
+        const val ARG_TEMPLATE = "template"
+        private const val EXISTING = "existing"
+
+        /** [template] null opens the stored profile; non-null starts a new unsaved one. */
+        fun build(
+            packageName: String,
+            template: ProfileTemplate?,
+        ): String = "settings/approval_profiles/edit/$packageName/${template?.name ?: EXISTING}"
+    }
 }
 
 sealed class ServerRoute(

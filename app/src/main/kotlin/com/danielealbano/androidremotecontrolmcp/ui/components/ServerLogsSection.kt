@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "UnusedPrivateMember", "LongMethod")
+@file:Suppress("UnusedPrivateMember", "LongMethod")
 
 package com.danielealbano.androidremotecontrolmcp.ui.components
 
@@ -116,7 +116,7 @@ private fun ServerLogEntryRow(entry: ServerLogEntry) {
             }
             if (entry.message.isNotEmpty()) {
                 Text(
-                    text = entry.message,
+                    text = logMessageText(entry.type, entry.message),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     maxLines = 1,
@@ -132,6 +132,7 @@ private fun ServerLogEntryRow(entry: ServerLogEntry) {
         ServerLogEntry.Type.CHANNEL,
         ServerLogEntry.Type.SETTINGS,
         ServerLogEntry.Type.PRIVACY,
+        ServerLogEntry.Type.APPROVAL,
         -> {
             Row(
                 modifier =
@@ -147,7 +148,7 @@ private fun ServerLogEntryRow(entry: ServerLogEntry) {
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = entry.message,
+                    text = logMessageText(entry.type, entry.message),
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.weight(1f),
                     maxLines = 2,

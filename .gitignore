@@ -85,3 +85,6 @@ app/replay_*.log
 .dbip-cache/
 
 privacy-benchmark/.cache/
+
+# Local operator notes (never versioned)
+docs/local/

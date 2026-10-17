@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import com.danielealbano.androidremotecontrolmcp.data.repository.ApprovalProfileRepository
+import com.danielealbano.androidremotecontrolmcp.data.repository.ApprovalProfileRepositoryImpl
 import com.danielealbano.androidremotecontrolmcp.data.repository.EventChannelSettings
 import com.danielealbano.androidremotecontrolmcp.data.repository.EventChannelSettingsImpl
 import com.danielealbano.androidremotecontrolmcp.data.repository.OAuthClientRepository
@@ -22,6 +24,10 @@ import com.danielealbano.androidremotecontrolmcp.mcp.oauth.JwtTokenService
 import com.danielealbano.androidremotecontrolmcp.mcp.oauth.JwtTokenServiceImpl
 import com.danielealbano.androidremotecontrolmcp.mcp.oauth.OAuthApprovalCoordinator
 import com.danielealbano.androidremotecontrolmcp.mcp.oauth.OAuthApprovalCoordinatorImpl
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinatorImpl
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibility
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ApprovalScreenVisibilityImpl
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyPipeline
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyPipelineImpl
 import com.danielealbano.androidremotecontrolmcp.privacy.model.PrivacyModelStore
@@ -87,6 +93,11 @@ import javax.inject.Singleton
 @Retention(AnnotationRetention.BINARY)
 annotation class OAuthClientsDataStore
 
+/** Qualifier for the dedicated approval-profiles Preferences DataStore. */
+@Qualifier
+@Retention(AnnotationRetention.BINARY)
+annotation class ApprovalProfilesDataStore
+
 /** Extension property for creating the Preferences DataStore on [Context]. */
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "settings",
@@ -95,6 +106,11 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 /** Extension property for the dedicated OAuth-clients Preferences DataStore on [Context]. */
 private val Context.oauthClientsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "oauth_clients",
+)
+
+/** Extension property for the dedicated approval-profiles Preferences DataStore on [Context]. */
+private val Context.approvalProfilesDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "approval_profiles",
 )
 
 @Module
@@ -118,6 +134,16 @@ object AppModule {
     fun provideOAuthClientsDataStore(
         @ApplicationContext context: Context,
     ): DataStore<Preferences> = context.oauthClientsDataStore
+
+    /**
+     * Provides the dedicated application-scoped [DataStore] for per-app approval profiles.
+     */
+    @Provides
+    @Singleton
+    @ApprovalProfilesDataStore
+    fun provideApprovalProfilesDataStore(
+        @ApplicationContext context: Context,
+    ): DataStore<Preferences> = context.approvalProfilesDataStore
 
     /**
      * Provides [Dispatchers.IO] for background work.
@@ -168,6 +194,11 @@ abstract class RepositoryModule {
     @Singleton
     abstract fun bindOAuthClientRepository(impl: OAuthClientRepositoryImpl): OAuthClientRepository
 
+    /** Binds the persisted per-app approval profiles. */
+    @Binds
+    @Singleton
+    abstract fun bindApprovalProfileRepository(impl: ApprovalProfileRepositoryImpl): ApprovalProfileRepository
+
     /** Binds the offline IP-geolocation resolver used to annotate connection requests. */
     @Binds
     @Singleton
@@ -177,6 +208,16 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindServerLogRepository(impl: ServerLogRepositoryImpl): ServerLogRepository
+
+    /** Binds the in-memory ledger of per-app action approvals. */
+    @Binds
+    @Singleton
+    abstract fun bindActionApprovalCoordinator(impl: ActionApprovalCoordinatorImpl): ActionApprovalCoordinator
+
+    /** Binds the tracker of the owner's approval screen, which approved NOTIFY calls wait on before re-checking. */
+    @Binds
+    @Singleton
+    abstract fun bindApprovalScreenVisibility(impl: ApprovalScreenVisibilityImpl): ApprovalScreenVisibility
 }
 
 @Suppress("TooManyFunctions")

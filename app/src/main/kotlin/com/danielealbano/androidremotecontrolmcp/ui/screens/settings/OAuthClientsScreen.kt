@@ -1,5 +1,3 @@
-@file:Suppress("FunctionNaming")
-
 package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
 
 import androidx.compose.foundation.background
@@ -39,6 +37,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -68,10 +68,13 @@ fun OAuthClientsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.oauth_clients_title)) },
+            title = { Text(stringResource(R.string.oauth_clients_title), modifier = Modifier.semantics { heading() }) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.approval_profiles_back),
+                    )
                 }
             },
             windowInsets = WindowInsets(0),
@@ -120,6 +123,7 @@ private fun ClientRow(
         )
     }
 
+    val clientLabel = client.clientName ?: hostOf(client.redirectUris.firstOrNull()) ?: "Unknown"
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -128,7 +132,7 @@ private fun ClientRow(
         Spacer(Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = client.clientName ?: hostOf(client.redirectUris.firstOrNull()) ?: "Unknown",
+                text = clientLabel,
                 style = MaterialTheme.typography.bodyLarge,
             )
             Text(
@@ -148,7 +152,10 @@ private fun ClientRow(
             )
         }
         IconButton(onClick = { showConfirm = true }) {
-            Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.oauth_clients_revoke))
+            Icon(
+                Icons.Default.Delete,
+                contentDescription = stringResource(R.string.oauth_clients_revoke_cd, clientLabel),
+            )
         }
     }
 }

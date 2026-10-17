@@ -1,5 +1,3 @@
-@file:Suppress("FunctionNaming")
-
 package com.danielealbano.androidremotecontrolmcp.ui.screens
 
 import androidx.compose.runtime.Composable

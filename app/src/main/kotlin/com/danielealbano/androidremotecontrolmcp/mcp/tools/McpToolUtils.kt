@@ -413,6 +413,16 @@ internal object McpToolUtils {
     fun textResult(text: String): CallToolResult = CallToolResult(content = listOf(TextContent(text = text)))
 
     /**
+     * Creates an error [CallToolResult] (`isError = true`) with a single server-generated [TextContent] item.
+     * Use ONLY for text that carries no device-derived content.
+     */
+    fun errorTextResult(text: String): CallToolResult =
+        CallToolResult(
+            content = listOf(TextContent(text = text)),
+            isError = true,
+        )
+
+    /**
      * Creates a [CallToolResult] containing a single [ImageContent] item.
      */
     fun imageResult(

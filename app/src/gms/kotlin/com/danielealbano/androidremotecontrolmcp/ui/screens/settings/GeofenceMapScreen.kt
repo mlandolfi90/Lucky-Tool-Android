@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "LongMethod", "CyclomaticComplexMethod", "TooManyFunctions", "MagicNumber")
+@file:Suppress("LongMethod", "CyclomaticComplexMethod", "TooManyFunctions", "MagicNumber")
 
 package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
 
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -42,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -56,10 +58,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.graphics.createBitmap
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.data.model.GeofenceZone
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.GeofenceSettingsViewModel
 import kotlinx.coroutines.Dispatchers
@@ -144,6 +153,9 @@ fun GeofenceMapScreen(
     val coroutineScope = rememberCoroutineScope()
     val context = LocalContext.current
     val markerIcon = remember { createCircleMarkerIcon(context) }
+    val radiusSliderDescription = stringResource(R.string.geofence_radius_slider_cd)
+    val notifyOnEnterDescription = stringResource(R.string.geofence_notify_on_enter_cd)
+    val notifyOnExitDescription = stringResource(R.string.geofence_notify_on_exit_cd)
 
     // Stable reference — created once, updated via `update` lambda
     val mapViewRef = remember { mutableStateOf<MapView?>(null) }
@@ -217,10 +229,15 @@ fun GeofenceMapScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (zoneId != null) "Edit Zone" else "Add Zone") },
+                title = {
+                    Text(if (zoneId != null) "Edit Zone" else "Add Zone", modifier = Modifier.semantics { heading() })
+                },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.approval_profiles_back),
+                        )
                     }
                 },
                 actions = {
@@ -346,17 +363,39 @@ fun GeofenceMapScreen(
                     Spacer(Modifier.height(4.dp))
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .toggleable(
+                                    value = notifyOnEnter,
+                                    role = Role.Switch,
+                                    onValueChange = { notifyOnEnter = it },
+                                ).semantics { contentDescription = notifyOnEnterDescription },
                     ) {
                         Text("Enter", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Switch(checked = notifyOnEnter, onCheckedChange = { notifyOnEnter = it })
+                        Switch(
+                            checked = notifyOnEnter,
+                            onCheckedChange = null,
+                            modifier = Modifier.minimumInteractiveComponentSize(),
+                        )
                     }
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .toggleable(
+                                    value = notifyOnExit,
+                                    role = Role.Switch,
+                                    onValueChange = { notifyOnExit = it },
+                                ).semantics { contentDescription = notifyOnExitDescription },
                     ) {
                         Text("Exit", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-                        Switch(checked = notifyOnExit, onCheckedChange = { notifyOnExit = it })
+                        Switch(
+                            checked = notifyOnExit,
+                            onCheckedChange = null,
+                            modifier = Modifier.minimumInteractiveComponentSize(),
+                        )
                     }
                 }
 
@@ -378,7 +417,10 @@ fun GeofenceMapScreen(
                     containerColor = MaterialTheme.colorScheme.surface,
                     elevation = FloatingActionButtonDefaults.elevation(defaultElevation = 4.dp),
                 ) {
-                    Icon(Icons.Default.MyLocation, "My location")
+                    Icon(
+                        Icons.Default.MyLocation,
+                        contentDescription = stringResource(R.string.geofence_my_location_cd),
+                    )
                 }
             }
 
@@ -403,7 +445,12 @@ fun GeofenceMapScreen(
                     },
                     valueRange = MIN_RADIUS_METERS..MAX_RADIUS_METERS,
                     steps = ((MAX_RADIUS_METERS - MIN_RADIUS_METERS) / RADIUS_STEP_METERS).toInt() - 1,
-                    modifier = Modifier.fillMaxWidth(),
+                    // TalkBack reads the slider's name and the radius itself instead of a bare percentage.
+                    modifier =
+                        Modifier.fillMaxWidth().semantics {
+                            contentDescription = radiusSliderDescription
+                            stateDescription = formatRadius(radiusMeters)
+                        },
                 )
 
                 // Search address
@@ -434,7 +481,10 @@ fun GeofenceMapScreen(
                                 }
                             }
                         }) {
-                            Icon(Icons.Default.Search, "Search")
+                            Icon(
+                                Icons.Default.Search,
+                                contentDescription = stringResource(R.string.geofence_search_address_cd),
+                            )
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),

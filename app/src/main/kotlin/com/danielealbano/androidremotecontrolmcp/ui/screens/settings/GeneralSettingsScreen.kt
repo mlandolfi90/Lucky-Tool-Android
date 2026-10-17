@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "LongMethod")
+@file:Suppress("LongMethod")
 
 package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
 
@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -28,6 +29,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -36,6 +38,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -88,10 +93,15 @@ fun GeneralSettingsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.settings_general_title)) },
+            title = {
+                Text(stringResource(R.string.settings_general_title), modifier = Modifier.semantics { heading() })
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.approval_profiles_back),
+                    )
                 }
             },
             windowInsets = WindowInsets(0),
@@ -175,7 +185,13 @@ fun GeneralSettingsScreen(
 
             // Tool-call Indicator Toggle
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth().toggleable(
+                        value = serverConfig.toolCallIndicatorEnabled,
+                        enabled = isEnabled,
+                        role = Role.Switch,
+                        onValueChange = viewModel::updateToolCallIndicatorEnabled,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -191,8 +207,9 @@ fun GeneralSettingsScreen(
                 }
                 Switch(
                     checked = serverConfig.toolCallIndicatorEnabled,
-                    onCheckedChange = viewModel::updateToolCallIndicatorEnabled,
+                    onCheckedChange = null,
                     enabled = isEnabled,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 )
             }
 
@@ -200,7 +217,13 @@ fun GeneralSettingsScreen(
 
             // Auto-Start Toggle
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth().toggleable(
+                        value = serverConfig.autoStartOnBoot,
+                        enabled = isEnabled,
+                        role = Role.Switch,
+                        onValueChange = viewModel::updateAutoStartOnBoot,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -210,8 +233,9 @@ fun GeneralSettingsScreen(
                 )
                 Switch(
                     checked = serverConfig.autoStartOnBoot,
-                    onCheckedChange = viewModel::updateAutoStartOnBoot,
+                    onCheckedChange = null,
                     enabled = isEnabled,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 )
             }
 
@@ -219,7 +243,13 @@ fun GeneralSettingsScreen(
 
             // Hide from Recents Toggle
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth().toggleable(
+                        value = serverConfig.hideFromRecents,
+                        enabled = isEnabled,
+                        role = Role.Switch,
+                        onValueChange = viewModel::updateHideFromRecents,
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
@@ -235,8 +265,9 @@ fun GeneralSettingsScreen(
                 }
                 Switch(
                     checked = serverConfig.hideFromRecents,
-                    onCheckedChange = viewModel::updateHideFromRecents,
+                    onCheckedChange = null,
                     enabled = isEnabled,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 )
             }
         }

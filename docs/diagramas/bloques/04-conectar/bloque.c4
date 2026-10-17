@@ -1,0 +1,107 @@
+// BLOQUE 04 · Conectar un agente. La franja (sólo la capa de afuera), las piezas que usa el flujo y su
+// vista. El flujo, en flujos.c4 de esta misma carpeta. Es la versión simple: lo justo para ver cómo un
+// agente consigue una credencial; el detalle fino (renovar el token, revocar un agente, las pantallas
+// de ajustes) se agrega cuando haga falta.
+// Abre por dentro lo que el bloque 02 da por hecho en la caja «La puerta con llave»: de dónde sale el
+// token que ella deja pasar.
+// Cada pieza: su función y su archivo:línea (bajo app/src/main/kotlin/com/danielealbano/
+// androidremotecontrolmcp/), verificados el 2026-10-16 con codebase-memory y el código, en la rama
+// feat/approval-profiles (la punta de nuestra versión). Todas están hechas.
+model {
+  extend app {
+    conectar = bloque 'Conectar un agente' {
+      #hecho
+      description 'Hecho en nuestra versión'
+
+      entrada = entrada 'Un agente que quiere conectarse' {
+        description 'Un agente (una sesión de Claude, por ejemplo) que todavía no tiene credencial para llamar a /mcp.'
+      }
+      quiere = objetivo 'Que el agente tenga una credencial válida' {
+        #hecho
+        description 'Dos caminos: el token fijo, que el dueño copia de la app, u OAuth, donde el agente se registra, pide permiso y el dueño lo aprueba en el teléfono con un código de 2 dígitos. Cada camino se prende y se apaga por separado.'
+        technology 'la puerta con llave · OAuth · la pantalla de aprobación'
+      }
+      obtiene = resultado 'Una credencial para /mcp' {
+        description 'El token fijo, o un token de acceso de OAuth (24 h) con su token de refresco (90 d). Con eso el agente pasa la puerta con llave del bloque 02. Si el dueño deniega o se acaba el tiempo, no hay credencial.'
+      }
+      entrada -[entra]-> quiere
+      quiere -[da]-> obtiene
+
+      // El camino del token fijo.
+      tokenFijo = pieza 'El token fijo' {
+        description 'Se crea solo, una vez, al primer arranque, y queda guardado en los ajustes. El dueño lo copia de la pantalla del servidor (viene tapado, con un botón para verlo) y se lo da al agente.'
+        technology 'SettingsRepositoryImpl.generateTokenString · data/repository/SettingsRepositoryImpl.kt:155 · ConnectionInfoCard · ui/components/ConnectionInfoCard.kt:120'
+      }
+
+      // El camino de OAuth, en el orden en que pasa.
+      registro = pieza 'El registro del agente' {
+        description 'El agente dice su nombre y a dónde vuelve, y la app le da un client_id. Sólo acepta agentes que vuelven a claude.ai, chatgpt.com o localhost.'
+        technology 'handleRegister · mcp/oauth/OAuthRoutes.kt:65 · OAuthPolicy.isAllowedRedirectUri :62'
+      }
+      permiso = pieza 'La solicitud de permiso' {
+        description 'Revisa lo que pide el agente, abre una pendiente con un código de 2 dígitos y le devuelve una página que muestra ese código y espera la aprobación.'
+        technology 'handleAuthorize · mcp/oauth/OAuthRoutes.kt:113 · consentPageHtml · mcp/oauth/OAuthConsentPage.kt:38'
+      }
+      coordinador = pieza 'El coordinador de OAuth' {
+        description 'Guarda en memoria las pendientes, cada una con su código de 2 dígitos y 5 min de vida. Puede haber 10 a la vez; si llega otra, descarta la más vieja.'
+        technology 'OAuthApprovalCoordinatorImpl.createPending · mcp/oauth/OAuthApprovalCoordinatorImpl.kt:37'
+      }
+      notificacion = pieza 'La notificación de conexión' {
+        description 'Avisa con prioridad alta que un agente pidió conectarse; al tocarla se abre la pantalla de aprobación.'
+        technology 'OAuthApprovalNotifier.post · services/mcp/OAuthApprovalNotifier.kt:23 (la llama McpServerService.kt:418)'
+      }
+      pantalla = pieza 'La pantalla de aprobación de conexión' {
+        description 'Muestra el nombre del agente, de dónde viene, el código de 2 dígitos y una cuenta regresiva. El dueño compara el código con el de la página y toca Aprobar o Denegar.'
+        technology 'ApprovalScreen · ui/screens/ApprovalScreen.kt:67 · ApprovalViewModel.approve :24 (ui/viewmodels/ApprovalViewModel.kt)'
+      }
+      estado = pieza 'La consulta del estado' {
+        description 'La página pregunta cada 2 s si el dueño ya decidió. Si aprobó, crea un código de un solo uso (60 s) y manda al agente de vuelta con él. Si denegó o venció, no hay código.'
+        technology 'handleAuthorizeStatus · mcp/oauth/OAuthRoutes.kt:208 · AuthorizationCodeStoreImpl.create :16'
+      }
+      token = pieza 'La emisión del token' {
+        description 'Cambia el código, con la prueba PKCE, por un token de acceso (24 h) y uno de refresco (90 d).'
+        technology 'handleToken · mcp/oauth/OAuthTokenGrants.kt:22 (handleAuthorizationCodeGrant :31 · JwtTokenServiceImpl.issueAccessToken :36)'
+      }
+
+      registro -> permiso 'ya registrado'
+      permiso -> coordinador 'abre la pendiente'
+      coordinador -> notificacion 'hay una pendiente'
+      notificacion -> pantalla 'al tocarla'
+      pantalla -> coordinador 'aprueba o deniega'
+      estado -> coordinador '¿ya decidió?'
+      estado -> token 'con el código'
+    }
+  }
+
+  app.conectar.registro -[usa]-> agentesConectados 'anota al agente'
+  app.conectar.token -[usa]-> agentesConectados 'guarda su token de refresco'
+  app.conectar.notificacion -> usuario 'le avisa'
+  usuario -> app.conectar.pantalla 'compara el código y aprueba'
+  usuario -> app.conectar.tokenFijo 'lo copia de la pantalla del servidor'
+  agente -> app.conectar.registro 'POST /register'
+  agente -> app.conectar.permiso 'GET /authorize'
+  agente -> app.conectar.token 'POST /token'
+
+  // El bloque 02 deja pasar lo que este bloque entrega.
+  app.atender.llave -[usa]-> app.conectar.tokenFijo 'lo compara con el que llega'
+  app.atender.llave -[usa]-> agentesConectados 'comprueba que el agente siga en la lista'
+
+  // La capa de afuera: quién pide, a quién se recurre y quién recibe lo que sale. Es lo que dibuja la franja.
+  agente -> app.conectar.entrada 'quiere conectarse'
+  app.conectar.quiere -> usuario 'si es por OAuth, le pide que apruebe'
+  app.conectar.obtiene -> agente 'su credencial'
+}
+
+views '04 · Conectar un agente' {
+
+  // La franja: sólo la capa de afuera, sin piezas. Las piezas, paso a paso, están en el flujo.
+  view bloque-conectar of app.conectar {
+    title 'Franja: quién lo pide, qué se quiere, qué sale'
+    description 'Un clic en «Que el agente tenga una credencial válida» abre el flujo, paso a paso y con las piezas.'
+    include app.conectar, app.conectar.entrada, app.conectar.obtiene
+    include app.conectar.quiere with { navigateTo flujo-conectar }
+    include agente, usuario
+    global style estados
+    autoLayout LeftRight
+  }
+}

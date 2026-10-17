@@ -1,0 +1,5 @@
+# Kept out of the codebase-memory graph so live reindexing stays fast:
+# local-only folders and the plan documents (read them with Read/Grep).
+.lifecycle/
+borradorFlujos/
+docs/plans/

@@ -1,5 +1,3 @@
-@file:Suppress("FunctionNaming")
-
 package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
 
 import androidx.compose.foundation.clickable
@@ -17,6 +15,7 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.Policy
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,6 +27,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.ui.navigation.SettingsRoute
 
@@ -39,7 +40,7 @@ fun SettingsIndexScreen(
 ) {
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.tab_settings)) },
+            title = { Text(stringResource(R.string.tab_settings), modifier = Modifier.semantics { heading() }) },
             windowInsets = WindowInsets(0),
         )
         SettingsEntriesColumn(
@@ -76,6 +77,7 @@ private fun SettingsEntriesColumn(
             subtitle = stringResource(R.string.settings_security_subtitle),
             onClick = { onNavigate(SettingsRoute.Security.route) },
         )
+        ApprovalProfilesEntry(onNavigate = onNavigate)
         SettingsEntry(
             icon = Icons.Default.Shield,
             title = stringResource(R.string.settings_privacy_title),
@@ -113,6 +115,16 @@ private fun SettingsEntriesColumn(
             onClick = { onNavigate(SettingsRoute.ChannelSettings.route) },
         )
     }
+}
+
+@Composable
+private fun ApprovalProfilesEntry(onNavigate: (String) -> Unit) {
+    SettingsEntry(
+        icon = Icons.Default.Policy,
+        title = stringResource(R.string.settings_approval_profiles_title),
+        subtitle = stringResource(R.string.settings_approval_profiles_subtitle),
+        onClick = { onNavigate(SettingsRoute.ApprovalProfiles.route) },
+    )
 }
 
 @Composable

@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "LongMethod")
+@file:Suppress("LongMethod")
 
 package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
 
@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -28,12 +29,15 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -82,10 +86,15 @@ fun PrivacySettingsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.settings_privacy_title)) },
+            title = {
+                Text(stringResource(R.string.settings_privacy_title), modifier = Modifier.semantics { heading() })
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.approval_profiles_back),
+                    )
                 }
             },
             windowInsets = WindowInsets(0),
@@ -98,8 +107,24 @@ fun PrivacySettingsScreen(
                     .padding(16.dp),
         ) {
             // 1. Master enable toggle
+            // Disabled through the WHOLE enable window (request -> download -> warm-up), not
+            // just while DownloadState reports progress; stays usable during the benchmark,
+            // which finishes and stores its result even if Privacy Mode is toggled off.
+            val masterToggleEnabled = !downloadInProgress && !enableInProgress
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier =
+                    Modifier.fillMaxWidth().toggleable(
+                        value = config.enabled,
+                        enabled = masterToggleEnabled,
+                        role = Role.Switch,
+                        onValueChange = { requested ->
+                            if (requested) {
+                                viewModel.requestEnablePrivacyMode()
+                            } else {
+                                viewModel.disablePrivacyMode()
+                            }
+                        },
+                    ),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
@@ -109,17 +134,9 @@ fun PrivacySettingsScreen(
                 )
                 Switch(
                     checked = config.enabled,
-                    onCheckedChange = { requested ->
-                        if (requested) {
-                            viewModel.requestEnablePrivacyMode()
-                        } else {
-                            viewModel.disablePrivacyMode()
-                        }
-                    },
-                    // Disabled through the WHOLE enable window (request -> download -> warm-up), not
-                    // just while DownloadState reports progress; stays usable during the benchmark,
-                    // which finishes and stores its result even if Privacy Mode is toggled off.
-                    enabled = !downloadInProgress && !enableInProgress,
+                    onCheckedChange = null,
+                    enabled = masterToggleEnabled,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 )
             }
 
@@ -142,8 +159,22 @@ fun PrivacySettingsScreen(
                 style = MaterialTheme.typography.titleSmall,
             )
             PiiCategory.entries.forEach { category ->
+                // Categories are only editable while Privacy Mode is ON and not mid-enable:
+                // toggling them while disabled or during the download would silently change
+                // what gets protected once the mode comes up.
+                val categoryToggleEnabled = config.enabled && !downloadInProgress && !enableInProgress
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .toggleable(
+                                value = config.isCategoryEnabled(category),
+                                enabled = categoryToggleEnabled,
+                                role = Role.Switch,
+                                onValueChange = { enabled ->
+                                    viewModel.updatePrivacyCategoryEnabled(category, enabled)
+                                },
+                            ).padding(vertical = 4.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
@@ -153,11 +184,9 @@ fun PrivacySettingsScreen(
                     )
                     Switch(
                         checked = config.isCategoryEnabled(category),
-                        onCheckedChange = { enabled -> viewModel.updatePrivacyCategoryEnabled(category, enabled) },
-                        // Categories are only editable while Privacy Mode is ON and not mid-enable:
-                        // toggling them while disabled or during the download would silently change
-                        // what gets protected once the mode comes up.
-                        enabled = config.enabled && !downloadInProgress && !enableInProgress,
+                        onCheckedChange = null,
+                        enabled = categoryToggleEnabled,
+                        modifier = Modifier.minimumInteractiveComponentSize(),
                     )
                 }
             }

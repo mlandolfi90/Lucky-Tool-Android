@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "LongMethod", "MagicNumber", "LongParameterList")
+@file:Suppress("LongMethod", "MagicNumber", "LongParameterList")
 
 package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
 
@@ -36,6 +36,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -91,10 +92,15 @@ fun PermissionsSettingsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.settings_permissions_title)) },
+            title = {
+                Text(stringResource(R.string.settings_permissions_title), modifier = Modifier.semantics { heading() })
+            },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.approval_profiles_back),
+                    )
                 }
             },
             windowInsets = WindowInsets(0),
@@ -231,16 +237,19 @@ internal fun PermissionRow(
     onAction: () -> Unit,
     actionEnabled: Boolean,
 ) {
+    // One TalkBack stop for "label, rationale"; the button stays its own stop and states the grant.
     Row(
         modifier =
             Modifier
                 .fillMaxWidth()
+                .semantics(mergeDescendants = true) {}
                 .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        // Decorative: the button's description already says whether the permission is granted.
         Icon(
             imageVector = if (isEnabled) Icons.Default.CheckCircle else Icons.Default.Error,
-            contentDescription = if (isEnabled) "$label enabled" else "$label disabled",
+            contentDescription = null,
             tint = if (isEnabled) enabledColor() else disabledColor(),
             modifier = Modifier.size(24.dp),
         )
@@ -254,7 +263,13 @@ internal fun PermissionRow(
             )
         }
         Spacer(modifier = Modifier.width(8.dp))
-        OutlinedButton(onClick = onAction, enabled = actionEnabled) {
+        // Several rows share "Grant"/"Enable"; TalkBack names the permission the button acts on.
+        val actionDescription = stringResource(R.string.permission_action_cd, label, buttonText)
+        OutlinedButton(
+            onClick = onAction,
+            enabled = actionEnabled,
+            modifier = Modifier.semantics { contentDescription = actionDescription },
+        ) {
             Text(text = buttonText)
         }
     }

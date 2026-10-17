@@ -31,6 +31,7 @@ import com.danielealbano.androidremotecontrolmcp.mcp.tools.McpToolUtils
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.ReferenceCountedToolCallIndicator
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.ToolCallIndicator
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerAppManagementTools
+import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerApprovalTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerCameraTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerFileTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerGestureTools
@@ -44,6 +45,8 @@ import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerSystemActionT
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerTextInputTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerTouchActionTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerUtilityTools
+import com.danielealbano.androidremotecontrolmcp.policy.approval.ActionApprovalCoordinator
+import com.danielealbano.androidremotecontrolmcp.policy.gate.ToolPolicyGate
 import com.danielealbano.androidremotecontrolmcp.privacy.PlaceholderSubstitutor
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyModeManager
 import com.danielealbano.androidremotecontrolmcp.privacy.PrivacyModeStatus
@@ -167,6 +170,8 @@ class McpServerService : Service() {
 
     @Inject lateinit var approvalCoordinator: OAuthApprovalCoordinator
 
+    @Inject lateinit var actionApprovalCoordinator: ActionApprovalCoordinator
+
     @Inject lateinit var geoIpResolver: GeoIpResolver
 
     @Inject lateinit var serverLogRepository: ServerLogRepository
@@ -183,6 +188,8 @@ class McpServerService : Service() {
 
     @Inject lateinit var nerCache: NerCache
 
+    @Inject lateinit var toolPolicyGate: ToolPolicyGate
+
     /** Config of the currently running server; used to build capability-link base URLs. */
     @Volatile
     private var activeConfig: ServerConfig? = null
@@ -192,6 +199,7 @@ class McpServerService : Service() {
     private var mcpServer: McpServer? = null
     private var tunnelObserverJob: Job? = null
     private var approvalObserverJob: Job? = null
+    private var policyApprovalObserverJob: Job? = null
 
     /**
      * Tracks whether the LAST [onStartCommand] action was an explicit stop. Lets [onDestroy] re-commit
@@ -412,6 +420,16 @@ class McpServerService : Service() {
                     }
                 }
 
+            // Observe pending action approvals; only NOTIFY entries surface, re-posted only when their ids change.
+            policyApprovalObserverJob =
+                coroutineScope.launch {
+                    PolicyApprovalNotifier
+                        .awaitingChanges(actionApprovalCoordinator.observePending(), System::currentTimeMillis)
+                        .collect { awaiting ->
+                            PolicyApprovalNotifier.update(this@McpServerService, awaiting, System.currentTimeMillis())
+                        }
+                }
+
             Log.i(TAG, "MCP server started successfully on ${config.bindingAddress.address}:${config.port}")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to start MCP server", e)
@@ -452,6 +470,7 @@ class McpServerService : Service() {
             LoggedToolRegistrar(
                 server,
                 serverLogRepository,
+                toolPolicyGate,
                 toolCallIndicator,
             )
         registerAccessibilityToolBundle(registrar, toolNamePrefix, perms)
@@ -469,6 +488,8 @@ class McpServerService : Service() {
         )
         registerLocationTools(registrar, locationProvider, privacyToolGate, toolNamePrefix, perms)
         registerSharingBundle(registrar, toolNamePrefix, perms, fileSizeLimitMb)
+        // Always registered, never subject to tool permissions: the only way past ASK_IN_CHAT and NOTIFY.
+        registerApprovalTools(registrar, actionApprovalCoordinator, System::currentTimeMillis, toolNamePrefix)
     }
 
     private fun registerAccessibilityToolBundle(
@@ -576,6 +597,14 @@ class McpServerService : Service() {
         approvalObserverJob = null
         OAuthApprovalNotifier.cancel(this)
 
+        // Cancel the action-approval observer and remove its notification before the pending entries are denied.
+        policyApprovalObserverJob?.cancel()
+        policyApprovalObserverJob = null
+        PolicyApprovalNotifier.cancel(this)
+
+        // Deny every pending action approval (waking calls still waiting) and drop unused grants.
+        runBlocking { actionApprovalCoordinator.clearAll() }
+
         // Stop tunnel first (with ANR-safe timeout).
         // Worst-case blocking time: TUNNEL_STOP_TIMEOUT_MS (3s) + SHUTDOWN_GRACE_PERIOD_MS (1s)
         // + SHUTDOWN_TIMEOUT_MS (5s) = ~9s total. This is well within the Android service
@@ -605,6 +634,9 @@ class McpServerService : Service() {
         }
         mcpServer = null
         serverActive.set(false)
+
+        // Deny any action approval a request created while the server was stopping.
+        runBlocking { actionApprovalCoordinator.clearAll() }
 
         // Cancel coroutine scope
         coroutineScope.cancel()

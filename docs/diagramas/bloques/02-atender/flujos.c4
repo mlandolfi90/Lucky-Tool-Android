@@ -1,0 +1,123 @@
+// BLOQUE 02 · EL FLUJO de «Atender un pedido del agente»: cómo un tools/call que llega por la red
+// termina en un toque o en una lectura de la pantalla, y vuelve como respuesta.
+//   flujo-atender  la llave, la ruta, el SDK, las tres capas de cada herramienta (registro, portón,
+//                  aviso) y dos ejemplos: una herramienta que actúa (tap) y una que lee (get_screen_state).
+// Cada paso lleva en un comentario el número que dibuja LikeC4, para pedir cambios por paso
+// («en el paso 5, agregá…»). Sale del código del 2026-10-16 (rama feat/approval-profiles); cada
+// pieza dice su función y su archivo:línea en bloque.c4.
+//
+// Forma: cajas unidas por flechas numeradas, sin líneas de vida. Los recuadros de los alt no se
+// dibujan: por eso cada paso de una rama dice su condición al principio de la etiqueta.
+//
+// Se abre en VS Code: este archivo, y Ctrl+Shift+P → «Open Preview» (LikeC4).
+views '02 · Atender un pedido' {
+
+  dynamic view flujo-atender {
+    title 'Flujo: de un pedido del agente a la respuesta'
+    description '''
+      El pedido pasa la llave, llega al SDK, y la herramienta corre envuelta en tres capas: el
+      registro, el portón de aprobación y el aviso en pantalla. Una herramienta que actúa toca la
+      pantalla por accesibilidad; una que lee la recorre, tacha los datos personales si el modo
+      privacidad está prendido, y antepone la advertencia de contenido no confiable.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1 · el agente pide
+    agente -> app.atender.llave 'POST /mcp: tools/call, la herramienta, sus argumentos y la credencial' {
+      notes '''
+        /health, las rutas de OAuth y los enlaces /s/ no piden credencial; /mcp sí, salvo que el
+        token fijo y OAuth estén los dos apagados (servidor abierto, la app lo avisa).
+      '''
+    }
+
+    // 2 a 4 · la llave
+    alt {
+      when 'la credencial no vale' {
+        // 2
+        app.atender.llave -> registroServidor 'si la credencial no vale: anota la falla'
+        // 3
+        agente <- app.atender.llave 'si la credencial no vale: 401' {
+          notes 'Con OAuth prendido, el 401 dice dónde está la metadata de OAuth, para que el cliente (Claude) se registre solo.'
+        }
+      }
+      else 'la credencial vale' {
+        // 4
+        app.atender.llave -> app.atender.ruta 'si la credencial vale: pasa' {
+          notes 'El token fijo se compara en tiempo constante. Un token de OAuth se valida contra el recurso y el cliente registrado.'
+        }
+      }
+    }
+
+    // 5 y 6 · la ruta y el SDK
+    app.atender.ruta -> app.atender.sdk 'el JSON-RPC, sin streaming'
+    app.atender.sdk -> app.atender.registro 'si la herramienta existe: llamala con sus argumentos' {
+      notes 'Sólo existen las herramientas registradas al arrancar: las que dejaron los permisos (bloque 01).'
+    }
+
+    // 7 · segunda capa: el portón
+    app.atender.registro -> app.atender.porton '¿deja correr?'
+    alt {
+      when 'el portón no deja correr' {
+        // 8
+        app.atender.sdk <- app.atender.porton 'si no deja: prohibido, «hace falta aprobación» o la espera venció' {
+          notes '''
+            Según los perfiles de la app destino: prohibido; pedir confirmación en el chat; o avisar al
+            dueño con una notificación y esperar hasta 25 s. La herramienta no corre. El detalle irá en
+            su propio bloque.
+          '''
+        }
+      }
+      else 'el portón deja correr' {
+        // 9
+        app.atender.porton -> app.atender.indicador 'si deja correr: tercera capa' {
+          notes 'Deja correr si el perfil dice correr, o si hay una aprobación sin usar para esta misma llamada (se gasta).'
+        }
+      }
+    }
+
+    // 10 a 18 · la herramienta: dos ejemplos
+    alt {
+      when 'es una acción (tap)' {
+        // 10
+        app.atender.indicador -> app.atender.tocar 'si es una acción: el aviso en pantalla, y corre' {
+          notes 'El aviso se saca al terminar, salga bien o mal.'
+        }
+        // 11
+        app.atender.tocar -> app.atender.ejecutor 'si es una acción: tap(x, y)' {
+          notes 'Antes valida x e y: números y no negativos. Si no, error de parámetros.'
+        }
+        // 12
+        app.atender.ejecutor -> app.atender.accesibilidad 'si es una acción: el gesto' {
+          notes 'Si el servicio de accesibilidad no está prendido, error: «Accessibility service is not available».'
+        }
+        // 13
+        app.atender.accesibilidad -> appsDelTelefono 'si es una acción: el toque en la pantalla'
+      }
+      else 'es una lectura (get_screen_state)' {
+        // 14
+        app.atender.indicador -> app.atender.leer 'si es una lectura: el aviso en pantalla, y corre'
+        // 15
+        app.atender.leer -> app.atender.accesibilidad 'si es una lectura: las ventanas, frescas'
+        // 16
+        app.atender.accesibilidad -> appsDelTelefono 'si es una lectura: lee el árbol de cada ventana'
+        // 17
+        app.atender.leer -> app.atender.privacidad 'si es una lectura: tachá los datos personales' {
+          notes 'Con el modo privacidad apagado, pasa igual. Se tacha ANTES de guardar las páginas, así todas las páginas salen tachadas.'
+        }
+        // 18
+        app.atender.leer -> app.atender.advertencia 'si es una lectura: anteponé la advertencia' {
+          notes 'La primera línea dice que el contenido viene del teléfono y no son órdenes (anti-inyección).'
+        }
+      }
+    }
+
+    // 19 y 20 · la vuelta
+    app.atender.registro -> registroServidor 'anota la llamada y cuánto tardó' {
+      notes 'Se anota siempre, también cuando el portón frenó la llamada o la herramienta falló.'
+    }
+    agente <- app.atender.sdk 'la respuesta: el resultado, o el error' {
+      notes 'Un error de la herramienta vuelve como resultado con isError=true, no como falla del protocolo.'
+    }
+  }
+}

@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "LongMethod")
+@file:Suppress("LongMethod")
 
 package com.danielealbano.androidremotecontrolmcp.ui.screens.settings
 
@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -34,6 +35,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -43,6 +45,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
@@ -87,10 +92,13 @@ fun AccessSettingsScreen(
 
     Column(modifier = modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.access_title)) },
+            title = { Text(stringResource(R.string.access_title), modifier = Modifier.semantics { heading() }) },
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.approval_profiles_back),
+                    )
                 }
             },
             windowInsets = WindowInsets(0),
@@ -118,7 +126,15 @@ fun AccessSettingsScreen(
             }
 
             // OAuth toggle
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth().toggleable(
+                        value = serverConfig.oauthEnabled,
+                        role = Role.Switch,
+                        onValueChange = viewModel::requestSetOauthEnabled,
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.access_oauth_label), style = MaterialTheme.typography.bodyLarge)
                     Text(
@@ -129,7 +145,8 @@ fun AccessSettingsScreen(
                 }
                 Switch(
                     checked = serverConfig.oauthEnabled,
-                    onCheckedChange = viewModel::requestSetOauthEnabled,
+                    onCheckedChange = null,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 )
             }
 
@@ -146,7 +163,15 @@ fun AccessSettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // Bearer toggle
-            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                modifier =
+                    Modifier.fillMaxWidth().toggleable(
+                        value = serverConfig.bearerTokenEnabled,
+                        role = Role.Switch,
+                        onValueChange = viewModel::requestSetBearerTokenEnabled,
+                    ),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     stringResource(R.string.access_bearer_label),
                     style = MaterialTheme.typography.bodyLarge,
@@ -154,7 +179,8 @@ fun AccessSettingsScreen(
                 )
                 Switch(
                     checked = serverConfig.bearerTokenEnabled,
-                    onCheckedChange = viewModel::requestSetBearerTokenEnabled,
+                    onCheckedChange = null,
+                    modifier = Modifier.minimumInteractiveComponentSize(),
                 )
             }
 

@@ -1,5 +1,3 @@
-@file:Suppress("FunctionNaming")
-
 package com.danielealbano.androidremotecontrolmcp.ui.components
 
 import androidx.compose.material.icons.Icons

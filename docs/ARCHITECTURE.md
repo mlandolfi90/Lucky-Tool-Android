@@ -18,7 +18,12 @@ graph TB
             VM["MainViewModel"]
             VM --- Settings["Settings"]
             VM --- Status["Status"]
+            Settings --- ProfEditor["ApprovalProfilesScreen / ApprovalProfileEditorScreen<br/>(Settings → Approval profiles)"]
+            Status --- PendingCard["PendingPolicyApprovalsCard<br/>(Server screen, while requests are pending)"]
         end
+
+        ApprovalAct["PolicyApprovalActivity<br/>(not exported)"]
+        Notifier["PolicyApprovalNotifier<br/>(heads-up for NOTIFY requests, no action buttons)"]
 
         subgraph AccSvc["McpAccessibilityService (System-managed)"]
             TreeParser["AccessibilityTreeParser"]
@@ -54,6 +59,25 @@ graph TB
                 SDK["SDK Server → Server.addTool()"]
                 HTTP --> StreamHTTP --> Auth --> SDK
             end
+            subgraph Policy["Approval policy (policy/)"]
+                Gate["ToolPolicyGate<br/>(every tool call)"]
+                Subject["ToolSubjectResolver<br/>(ToolPolicyCatalog + resolvers)"]
+                Engine["PolicyEngine"]
+                Coord["ActionApprovalCoordinator<br/>(in-memory)"]
+                Reeval["PendingReevaluator"]
+                ProfRepo["ApprovalProfileRepository<br/>(approval_profiles DataStore)"]
+                Logger["ApprovalEventLogger<br/>(APPROVAL server log)"]
+                Gate --> Subject
+                Gate --> Engine
+                Gate --> Coord
+                Gate --> ProfRepo
+                Reeval --> ProfRepo
+                Reeval --> Engine
+                Reeval --> Coord
+                Gate --> Logger
+                Reeval --> Logger
+            end
+            Handlers["Tool handlers<br/>(registered via LoggedToolRegistrar)"]
             subgraph Tunnel["TunnelManager (optional)"]
                 CF["CloudflareTunnelProvider\n(process-based)"]
                 Ngrok["NgrokTunnelProvider\n(in-process JNI)"]
@@ -66,11 +90,24 @@ graph TB
         end
 
         MainAct -->|"StateFlow (status)"| McpServerSvc
-        SDK -->|"Singleton\n(companion object)"| AccSvc
-        SDK --> StorageSvc
-        SDK --> LocationProv
-        SDK --> CameraSvc
-        SDK --> NotifSvc
+        ProfEditor -->|"edit profiles"| ProfRepo
+        ProfEditor -->|"profile events"| Logger
+        SDK -->|"every tools/call"| Gate
+        Gate -->|"execute()"| Handlers
+        Subject -->|"getWindows(), node lookup"| AccSvc
+        Subject -->|"notification package"| NotifProv
+        Coord -->|"observePending()"| Notifier
+        Coord -->|"observePending() (count)"| PendingCard
+        Notifier -->|"tap"| ApprovalAct
+        PendingCard -->|"tap"| ApprovalAct
+        ApprovalAct -->|"approve / deny"| Coord
+        ApprovalAct -->|"add exception"| Reeval
+        ApprovalAct -->|"owner events"| Logger
+        Handlers -->|"Singleton\n(companion object)"| AccSvc
+        Handlers --> StorageSvc
+        Handlers --> LocationProv
+        Handlers --> CameraSvc
+        Handlers --> NotifSvc
     end
 ```
 
@@ -91,7 +128,9 @@ graph TB
      b. Reads `ServerConfig` from `SettingsRepository`
      c. Gets/creates SSL keystore from `CertificateManager` (only if HTTPS enabled)
      d. Creates `McpServer` with config, keystore, and SDK `Server` (MCP Kotlin SDK)
+        - Every tool is registered through `LoggedToolRegistrar.addTool`, which composes `logged(gate(indicator(handler)))`. Registration throws `IllegalStateException` if a tool is missing from `ToolPolicyCatalog`, so the server does not start with an unclassified tool. The two approval tools are always registered, whatever the per-tool permissions say.
      e. Starts Ktor server (HTTP by default, HTTPS if enabled)
+        - Starts the action-approval observer: `PolicyApprovalNotifier.awaitingChanges(ActionApprovalCoordinator.observePending())` updates the notification only when the set of unexpired `NOTIFY` request ids changes
      f. Updates `ServerStatus.Running` via companion-level StateFlow
      g. If tunnel enabled: starts `TunnelManager` (connects to Cloudflare, ngrok or the WebSocket relay)
      h. Tunnel status and URL logged to UI via `serverLogEvents` SharedFlow
@@ -102,8 +141,10 @@ graph TB
    - Sends `ACTION_STOP` intent to `McpServerService`
    - `McpServerService.onDestroy()`:
      a. Updates `ServerStatus.Stopping` via companion-level StateFlow
+        - Cancels the action-approval observer and the `PolicyApprovalNotifier` notification, then denies every pending action approval and drops unused grants (`ActionApprovalCoordinator.clearAll()`), waking calls still waiting for the owner
      b. Stops tunnel (with 3s ANR-safe timeout) — tunnel stops BEFORE server
      c. Stops Ktor server gracefully (1s grace + 5s timeout)
+        - Calls `ActionApprovalCoordinator.clearAll()` again for any approval a request created while the server was stopping
      d. Cancels coroutine scope
      e. Clears singleton instance
      f. Updates `ServerStatus.Stopped` via companion-level StateFlow
@@ -155,6 +196,9 @@ graph TB
 - `McpNotificationListenerService.instance`: `@Volatile` singleton
 - `McpServer.running`: `AtomicBoolean`
 - Accessibility node access: Must be on main thread (Android requirement)
+- `ActionApprovalCoordinator`: in-memory state guarded by one `Mutex` (same pattern as `OAuthApprovalCoordinatorImpl`); no critical section suspends
+- `ToolPolicyGate` mutation lock: while at least one approval profile is stored (or the profile store is unreadable), every call of a tool class that is not read-only is resolved, evaluated and, when authorized, run under a single `Mutex`, one call at a time; a long mutating call (`type`, about 250 ms per character) queues the others. The `NOTIFY` wait (up to 25 s, a suspended request coroutine) releases the lock; after the owner approves, the call waits (up to 3 s) for the approval screen to close, so the re-check reads the app underneath, then re-checks under the lock and consumes the single-use grant only right before it runs, so a re-check that fails (the target app is not on screen, e.g. the owner approved from inside this app) leaves the grant for the repeat; if the screen stays open (more requests waiting) it returns `awaiting_approval` and keeps the grant.
+- `ApprovalProfileRepository`: in-memory `ProfilesSnapshot`, replaced only after the DataStore write succeeds; writes are serialized by the repository `Mutex`
 
 ---
 
@@ -167,6 +211,7 @@ sequenceDiagram
     participant Auth as BearerTokenAuth Plugin
     participant Route as McpStreamableHttp (/mcp)
     participant SDK as SDK Server (MCP Kotlin SDK)
+    participant Gate as ToolPolicyGate
     participant Tool as Tool Handler
     participant Acc as AccessibilityService (Main Thread)
 
@@ -179,14 +224,126 @@ sequenceDiagram
     Auth->>Route: Authenticated request
     Route->>SDK: StreamableHttpServerTransport<br/>(JSON-only, no SSE)
     SDK->>SDK: Route by method ("tools/call")<br/>Extract tool name + arguments<br/>Look up registered tool
-    SDK->>Tool: Execute tool lambda
+    SDK->>Gate: guard(toolName, arguments, execute)<br/>(inside the TOOL_CALL logging wrapper)
+    Gate->>Gate: Resolve subject, evaluate profiles<br/>(see Data Flow: Approval Gate)
+    alt forbidden, approval needed, denied, expired, not required, already used or too many pending
+        Gate-->>SDK: CallToolResult with the approval status JSON
+    end
+    Gate->>Tool: execute() (RUN or a consumed grant)
     Tool->>Acc: withContext(Dispatchers.Main)<br/>dispatchGesture / performAction / ...
     Acc->>Acc: Perform action on Android UI
     Acc-->>Tool: Success / Failure
-    Tool-->>SDK: CallToolResult<br/>(TextContent or ImageContent)
+    Tool-->>Gate: CallToolResult<br/>(TextContent or ImageContent)
+    Gate-->>SDK: CallToolResult
     SDK-->>Ktor: JSON-RPC response via transport
     Ktor-->>Client: HTTP 200 + JSON body
 ```
+
+---
+
+## Data Flow: Approval Gate
+
+`ToolPolicyGate.guard()` runs for every tool call, between the TOOL_CALL logging wrapper and the tool-call indicator, so the indicator overlay never shows while a call waits for approval. Specification: [PROJECT.md, Approval Profiles](PROJECT.md#approval-profiles-per-app-action-policy). Agent-facing outcomes: [MCP_TOOLS.md, Approval Profiles](MCP_TOOLS.md#approval-profiles).
+
+### Decision Flow
+
+```mermaid
+flowchart TB
+    Call["tools/call<br/>(inside the TOOL_CALL logging wrapper)"] --> Kind{"Catalog class without resolver?<br/>(not app-scoped, exempt exit)"}
+    Kind -->|"yes, profiles never read"| Exec["tool-call indicator + tool handler"]
+    Kind -->|"no"| Serial{"At least one profile (or unreadable store)<br/>and a class that is not read-only?"}
+    Serial -->|"yes"| Lock["take the mutation Mutex<br/>(held until the call ends, released only for the NOTIFY wait)"]
+    Serial -->|"no, no lock"| Load["ApprovalProfileRepository.current()"]
+    Lock --> Load
+    Load -->|"snapshot"| Resolve["ToolSubjectResolver<br/>target packages, action type, amount text"]
+    Load -->|"ProfileStoreUnreadableException"| Unreadable["fail-closed view (ProfilesView):<br/>a profile may exist, every target package is unreadable"]
+    Unreadable --> Resolve
+    Resolve -->|"Blocked (BlockCause)"| Forbidden["forbidden<br/>isError=true"]
+    Resolve -->|"ExemptExit, or Unattributed with no profile"| Exec
+    Resolve -->|"Resolved"| Eval["PolicyEngine.evaluate(subject, snapshot)<br/>strictest mode across targets"]
+    Eval --> Mode{"Decision mode"}
+    Mode -->|"FORBIDDEN"| Forbidden
+    Mode -->|"RUN"| Held{"Non-READ call under profiles<br/>and the lock not held?"}
+    Mode -->|"ASK_IN_CHAT or NOTIFY"| Grant{"Unused grant for this<br/>fingerprint that satisfies the mode?"}
+    Grant -->|"yes, consume it"| Held
+    Grant -->|"no, ASK_IN_CHAT"| Ask["create or join pending entry"]
+    Grant -->|"no, NOTIFY"| Notify["create or join pending entry<br/>release the lock, notify the owner<br/>wait up to 25 s"]
+    Ask -->|"new entry"| NeedsConfirm["needs_human_confirmation"]
+    Ask -->|"joined an entry waiting for the owner"| Awaiting["awaiting_approval"]
+    Ask -->|"10 entries already pending"| TooMany["too_many_pending<br/>isError=true"]
+    Notify -->|"10 entries already pending"| TooMany
+    Notify -->|"approved, consume grant"| Held
+    Notify -->|"denied"| Denied["denied<br/>isError=true"]
+    Notify -->|"not decided within 5 min"| Expired["expired<br/>isError=true"]
+    Notify -->|"owner exception, now RUN"| NotRequired["not_required<br/>isError=true"]
+    Notify -->|"grant used by an identical call"| AlreadyUsed["already_used<br/>isError=true"]
+    Notify -->|"still pending"| Awaiting
+    Held -->|"no"| Exec
+    Held -->|"yes"| Recheck["take the mutation Mutex<br/>re-resolve + re-evaluate, no waiting"]
+    Recheck -->|"same fingerprint, not stricter"| Exec
+    Recheck -->|"owner grant already used"| AlreadyUsed
+    Recheck -->|"changed"| Again["decide the fresh result without waiting<br/>run it or return its outcome"]
+```
+
+### ASK_IN_CHAT and NOTIFY
+
+```mermaid
+sequenceDiagram
+    participant A as MCP Client (agent)
+    participant H as Human (conversation)
+    participant G as ToolPolicyGate
+    participant C as ActionApprovalCoordinator
+    participant O as Owner (device)
+    participant T as Tool Handler
+
+    Note over A,T: ASK_IN_CHAT
+    A->>G: tools/call (type into a profiled app)
+    G->>C: createOrJoin(request, nowMs)
+    G-->>A: needs_human_confirmation + approval_id
+    A->>H: describe the action and ask
+    H-->>A: agrees
+    A->>C: android_confirm_human_approval(approval_id)<br/>confirmInChat(id, nowMs)
+    C-->>A: approved (single-use grant, 2 min)
+    A->>G: the exact same tools/call
+    G->>C: consumeGrant(fingerprint, ASK_IN_CHAT, nowMs)
+    G->>T: execute()
+    T-->>A: tool result
+
+    Note over A,T: NOTIFY
+    A->>G: tools/call (action button in a profiled app)
+    G->>C: createOrJoin(request, nowMs)
+    C->>O: heads-up notification via PolicyApprovalNotifier (no action buttons)
+    G->>C: awaitDecision(approval_id, 25 s)
+    alt owner approves within 25 s
+        O->>C: tap the notification, then Approve in PolicyApprovalActivity
+        G->>C: consumeGrant(fingerprint, NOTIFY, nowMs)
+        G->>G: take the mutation Mutex again<br/>re-resolve + re-evaluate, no waiting
+        G->>T: execute()
+        T-->>A: tool result
+    else still pending after 25 s
+        G-->>A: awaiting_approval + approval_id
+        A->>C: android_get_approval_status(approval_id, wait_ms)<br/>statusOf(id, nowMs), awaitDecision(id, budget)
+        O->>C: tap the notification, then Approve
+        C-->>A: approved
+        A->>G: the exact same tools/call
+        G->>C: consumeGrant(fingerprint, NOTIFY, nowMs)
+        G->>T: execute()
+        T-->>A: tool result
+    else owner denies
+        O->>C: tap the notification, then Deny
+        G-->>A: denied
+    else owner adds an exception and the call now runs
+        O->>C: exception, re-evaluation (applyReevaluation)
+        G-->>A: not_required
+        A->>G: the exact same tools/call
+        G->>T: execute()
+        T-->>A: tool result
+    end
+```
+
+- The approval tools (`android_get_approval_status`, `android_confirm_human_approval`) also pass through the gate. They are not app-scoped, so the gate runs them directly; the diagram draws them straight to the coordinator.
+- The notification has no action buttons: the owner always approves or denies inside `PolicyApprovalActivity`, which the own-package guard keeps out of the agent's reach. The Server screen's pending-approvals card, shown while any request is pending, opens the same activity; it is the path when notifications are off.
+- An unreadable profile store never reads as "no profiles": `ProfilesView` hands the resolver the marker `UNREADABLE_STORE_MARKER` (so unattributable calls are blocked) and the engine a snapshot in which every target package is unreadable (non-READ → `FORBIDDEN` `profile_unreadable`, READ → `RUN`). The next call retries the read.
 
 ---
 
@@ -241,6 +398,17 @@ sequenceDiagram
 - Optional: `0.0.0.0` (all interfaces, with security warning)
 - No external firewall; relies on Android's app sandbox, the network-binding choice (loopback by default), and the combined auth. When both auth methods are disabled, the network binding is the only remaining layer — stay on loopback unless you trust the network.
 
+### Approval Profiles (Per-App Action Policy)
+
+- Optional per-app profiles decide whether a tool call that acts on an app runs, needs the human's confirmation in the conversation, needs the owner's approval on the device, or is forbidden. Specification: [PROJECT.md](PROJECT.md#approval-profiles-per-app-action-policy).
+- **Own-package guard**: any non-read action on this app's own package (approval screen, settings, its notifications, intents to its components, coordinate taps on its windows) is forbidden, with or without profiles. Without it, an agent could approve its own requests.
+- **No agent path to an approval**: the approval notification has no action buttons, `android_confirm_human_approval` cannot approve a `NOTIFY` request, and a chat grant never satisfies a `NOTIFY` rule.
+- Fail-closed:
+  - an unclassified tool stops server start;
+  - an unreadable profile forbids every non-read action on its app, and an unreadable store forbids every non-read action on every app (reads that resolve to an app still run);
+  - while a profile exists, a call that cannot be attributed to an app is forbidden;
+  - an unidentifiable tap target in a profiled app counts as an action button.
+
 ---
 
 ## Configuration Flow
@@ -259,6 +427,9 @@ flowchart TB
 Settings are read at server start time. Changing settings while the server is
 running requires a restart (UI disables config editing when server is running).
 
+Approval profiles are the exception. They live in their own DataStore (`approval_profiles`) behind
+`ApprovalProfileRepository`, can be edited while the server runs, and apply to the next tool call.
+
 ---
 
 ## Permission Model
@@ -270,7 +441,7 @@ running requires a restart (UI disables config editing when server is running).
 | RECEIVE_BOOT_COMPLETED   | Normal        | Auto-granted (manifest)            | Auto-start on boot        |
 | QUERY_ALL_PACKAGES       | Normal        | Auto-granted (manifest)            | Listing installed apps    |
 | KILL_BACKGROUND_PROCESSES| Normal        | Auto-granted (manifest)            | Closing background apps   |
-| POST_NOTIFICATIONS       | Runtime (13+) | System dialog                      | Foreground notifications  |
+| POST_NOTIFICATIONS       | Runtime (13+) | System dialog                      | Foreground and action-approval notifications (pending approvals also show as a card on the Server screen, so they still reach the owner without it) |
 | Accessibility Service    | Special       | User enables in Settings           | UI introspection/actions  |
 | AccessibilityService takeScreenshot | Special | User enables in Settings | Screenshots (Android 11+) |
 | CAMERA                   | Runtime       | System dialog                      | Camera photo/video tools  |

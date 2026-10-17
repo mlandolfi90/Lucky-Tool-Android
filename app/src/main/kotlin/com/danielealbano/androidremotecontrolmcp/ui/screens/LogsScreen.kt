@@ -1,4 +1,4 @@
-@file:Suppress("FunctionNaming", "LongMethod", "MagicNumber")
+@file:Suppress("LongMethod", "MagicNumber")
 
 package com.danielealbano.androidremotecontrolmcp.ui.screens
 
@@ -36,6 +36,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -43,6 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.danielealbano.androidremotecontrolmcp.R
 import com.danielealbano.androidremotecontrolmcp.data.model.ServerLogEntry
 import com.danielealbano.androidremotecontrolmcp.data.repository.ServerLogIndexEntry
+import com.danielealbano.androidremotecontrolmcp.ui.components.logMessageText
 import com.danielealbano.androidremotecontrolmcp.ui.viewmodels.LogsViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -60,6 +63,7 @@ private val CHIP_DISPLAY_ORDER =
         ServerLogEntry.Type.AUTH,
         ServerLogEntry.Type.CHANNEL,
         ServerLogEntry.Type.SETTINGS,
+        ServerLogEntry.Type.APPROVAL,
     )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -74,11 +78,14 @@ fun LogsScreen(
 
     Column(modifier = Modifier.fillMaxSize()) {
         TopAppBar(
-            title = { Text(stringResource(R.string.server_logs_title)) },
+            title = { Text(stringResource(R.string.server_logs_title), modifier = Modifier.semantics { heading() }) },
             windowInsets = WindowInsets(0),
             navigationIcon = {
                 IconButton(onClick = onBack) {
-                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.approval_profiles_back),
+                    )
                 }
             },
             actions = {
@@ -179,7 +186,7 @@ private fun LogEntryRow(
                 color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.weight(1f),
             )
-            if (ref.type == ServerLogEntry.Type.TOOL_CALL) {
+            if (showsDuration(ref)) {
                 Text(
                     text = "${ref.durationMs ?: 0}ms",
                     style = MaterialTheme.typography.labelSmall,
@@ -196,7 +203,7 @@ private fun LogEntryRow(
             )
             if (!entry?.message.isNullOrEmpty()) {
                 Text(
-                    text = entry.message,
+                    text = logMessageText(ref.type, entry.message),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error,
                     maxLines = 2,
@@ -205,7 +212,7 @@ private fun LogEntryRow(
             }
         } else {
             Text(
-                text = entry?.message.orEmpty(),
+                text = logMessageText(ref.type, entry?.message.orEmpty()),
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
@@ -226,5 +233,11 @@ private fun typeLabel(type: ServerLogEntry.Type): String =
             ServerLogEntry.Type.CHANNEL -> R.string.server_logs_type_channel
             ServerLogEntry.Type.SETTINGS -> R.string.server_logs_type_settings
             ServerLogEntry.Type.PRIVACY -> R.string.server_logs_type_privacy
+            ServerLogEntry.Type.APPROVAL -> R.string.server_logs_type_approval
         },
     )
+
+/** TOOL_CALL rows always show a duration; APPROVAL rows only when the gate measured one. */
+private fun showsDuration(ref: ServerLogIndexEntry): Boolean =
+    ref.type == ServerLogEntry.Type.TOOL_CALL ||
+        (ref.type == ServerLogEntry.Type.APPROVAL && ref.durationMs != null)

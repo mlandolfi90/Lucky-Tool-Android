@@ -25,6 +25,7 @@ import com.danielealbano.androidremotecontrolmcp.mcp.oauth.installOAuthRoutes
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.LoggedToolRegistrar
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.McpToolUtils
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerAppManagementTools
+import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerApprovalTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerCameraTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerFileTools
 import com.danielealbano.androidremotecontrolmcp.mcp.tools.registerGestureTools
@@ -169,8 +170,10 @@ object McpIntegrationTestHelper {
 
     /**
      * Creates mocked service dependencies used by all tool handlers.
+     *
+     * @param notifyWaitMs How long a NOTIFY call waits in the real profile gate ([PolicyTestRig]).
      */
-    fun createMockDependencies(): MockDependencies {
+    fun createMockDependencies(notifyWaitMs: Long = PolicyTestRig.DEFAULT_NOTIFY_WAIT_MS): MockDependencies {
         val statusFlow = MutableStateFlow<PrivacyModeStatus>(PrivacyModeStatus.Disabled)
         // disabled by default; setPrivacy() changes it
         val configFlow = MutableStateFlow(PrivacyModeConfig())
@@ -199,6 +202,7 @@ object McpIntegrationTestHelper {
                         Redactor(pseudonymStore),
                     ),
             )
+        val serverLog = RecordingServerLogRepository()
         return MockDependencies(
             actionExecutor = mockk(relaxed = true),
             accessibilityServiceProvider = mockk(relaxed = true),
@@ -226,7 +230,8 @@ object McpIntegrationTestHelper {
             pseudonymStore = pseudonymStore,
             privacyToolGate = PrivacyToolGate(pipeline),
             placeholderSubstitutor = PlaceholderSubstitutor(pseudonymStore),
-            serverLog = RecordingServerLogRepository(),
+            policy = PolicyTestRig.create(serverLog, notifyWaitMs),
+            serverLog = serverLog,
         )
     }
 
@@ -253,7 +258,7 @@ object McpIntegrationTestHelper {
         perms: ToolPermissionsConfig = ToolPermissionsConfig(),
     ) {
         val toolNamePrefix = McpToolUtils.buildToolNamePrefix(deviceSlug)
-        val registrar = LoggedToolRegistrar(server, deps.serverLog)
+        val registrar = LoggedToolRegistrar(server, deps.serverLog, deps.policy.gate)
         registerScreenIntrospectionTools(
             registrar,
             deps.treeParser,
@@ -281,6 +286,7 @@ object McpIntegrationTestHelper {
         registerGestureTools(registrar, deps.actionExecutor, toolNamePrefix, perms)
         registerInteractionToolBundle(registrar, deps, toolNamePrefix, perms)
         registerNonAccessibilityTools(registrar, deps, toolNamePrefix, perms)
+        registerApprovalTools(registrar, deps.policy.coordinator, deps.policy::nowMs, toolNamePrefix)
     }
 
     private fun registerInteractionToolBundle(
@@ -617,5 +623,6 @@ data class MockDependencies(
     val pseudonymStore: PseudonymStore,
     val privacyToolGate: PrivacyToolGate,
     val placeholderSubstitutor: PlaceholderSubstitutor,
+    val policy: PolicyTestRig,
     val serverLog: RecordingServerLogRepository = RecordingServerLogRepository(),
 )

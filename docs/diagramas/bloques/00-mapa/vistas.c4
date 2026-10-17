@@ -1,0 +1,53 @@
+// EL MAPA: las tres vistas de todos los bloques juntos. Cada bloque tiene las suyas en su carpeta.
+//   index               ¿qué entra, qué se quiere y qué se obtiene, bloque por bloque?
+//   dependencias        ¿cómo se apoyan los bloques entre sí y con lo de afuera (Android, la PC, el túnel, las apps)?
+//   dependencias-datos  ¿qué datos toca cada bloque?
+// Un clic en una franja abre la franja de ese bloque. Cuando un bloque tenga su flujo, un clic en
+// lo que se quiere lo abrirá (`with { navigateTo flujo-… }`).
+views '00 · Mapa' {
+
+  view index {
+    title 'Los bloques: entrada, lo que se quiere, lo que se obtiene'
+    description '''
+      Cada franja es un bloque y se lee de izquierda a derecha: lo que llega, lo que se quiere y lo
+      que se obtiene. El color es el estado: verde, hecho en nuestra versión; violeta, plan
+      escrito; gris de puntos, idea sin plan. Un clic en una franja la abre sola.
+    '''
+    // Al sumar bloques, en orden inverso: LikeC4 apila de abajo hacia arriba, y así el 01 queda arriba.
+    // Sólo la cadena de cada franja: las piezas de adentro van en la vista de cada bloque.
+    include app.juez, app.juez.entrada, app.juez.obtiene
+    include app.juez.quiere with { navigateTo flujo-juez-decidir }
+    include app.configurar, app.configurar.entrada, app.configurar.obtiene
+    include app.configurar.quiere with { navigateTo flujo-configurar }
+    include app.conectar, app.conectar.entrada, app.conectar.obtiene
+    include app.conectar.quiere with { navigateTo flujo-conectar }
+    include app.aprobar, app.aprobar.entrada, app.aprobar.obtiene
+    include app.aprobar.quiere with { navigateTo flujo-aprobar-decidir }
+    include app.atender, app.atender.entrada, app.atender.obtiene
+    include app.atender.quiere with { navigateTo flujo-atender }
+    include app.arranque, app.arranque.entrada, app.arranque.obtiene
+    include app.arranque.quiere with { navigateTo flujo-arranque }
+    exclude * -> * where source.kind is bloque
+    exclude * -> * where source.kind is pieza
+    global style estados
+    autoLayout LeftRight
+  }
+
+  view dependencias {
+    title 'Cómo se apoyan los bloques entre sí y con lo de afuera'
+    description 'Las flechas punteadas son «usa»: un bloque se apoya en otro, o en algo de afuera. Quién pide cada bloque está en su franja; los datos que toca, en la vista siguiente.'
+    include android, pc, appsDelTelefono, tunelExterno
+    include app.*
+    global style estados
+    autoLayout TopBottom
+  }
+
+  view dependencias-datos {
+    title 'Qué datos toca cada bloque'
+    description 'Las flechas punteadas son «usa»: un bloque lee o escribe esos datos.'
+    include app.*
+    include ajustes, certificado, agentesConectados, perfiles, planes, registroServidor
+    global style estados
+    autoLayout LeftRight
+  }
+}

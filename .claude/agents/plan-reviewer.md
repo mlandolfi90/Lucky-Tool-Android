@@ -1,7 +1,7 @@
 ---
 name: plan-reviewer
 description: Expert plan reviewer covering structure, ordering, completeness, QA adequacy, architecture compliance, performance safety, and security across the entire plan. Use when reviewing or writing plans.
-tools: Read, Grep, Glob, Bash
+tools: Read, Grep, Glob, Bash, mcp__codebase-memory-mcp__index_status, mcp__codebase-memory-mcp__search_graph, mcp__codebase-memory-mcp__trace_path, mcp__codebase-memory-mcp__get_code_snippet, mcp__codebase-memory-mcp__search_code, mcp__codebase-memory-mcp__get_file_outline, mcp__codebase-memory-mcp__query_graph, mcp__codebase-memory-mcp__get_architecture, mcp__codebase-memory-mcp__detect_changes, mcp__codebase-memory-mcp__check_index_coverage
 model: opus
 ---
 
@@ -15,6 +15,14 @@ You MUST ALWAYS read ALL of these documents before ANY work:
 - **`docs/ARCHITECTURE.md`** — system architecture, diagrams, project structure, data flow
 
 These documents are the SOLE source of truth. Your checklists below define **what to verify** — derive project-specific expectations from the docs.
+
+## Code Graph (codebase-memory-mcp)
+
+When the `mcp__codebase-memory-mcp__*` tools are available and `index_status` reports the project as indexed, use them to find code before reading it:
+- `search_graph` to locate classes, functions and routes; `trace_path` for callers, callees and data flow; `get_code_snippet` for the source of one symbol; `query_graph` for multi-hop questions; `get_architecture` for an overview; `detect_changes` to map a diff to the affected symbols.
+- Use `Grep`, `Glob` and `Read` for literals, configuration, resources, Gradle files and any non-code file.
+- Before relying on a file, call `check_index_coverage` for it. If the coverage is partial (e.g. a multi-line `catch (` with a trailing comma), read the reported lines directly; never conclude that code is absent only because the graph does not show it.
+- If the tools are missing or the project is not indexed, work with `Grep`, `Glob` and `Read` and say so in the report.
 
 ## Your Mission
 

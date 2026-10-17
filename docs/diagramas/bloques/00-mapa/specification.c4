@@ -1,0 +1,73 @@
+// Vocabulario de los bloques. Dos ejes que no se mezclan:
+//   el TIPO dice qué papel cumple: cada bloque es una franja con su cadena adentro,
+//   entrada (lo que llega) → objetivo (lo que se quiere) → resultado (lo que se obtiene);
+//   el ESTADO, por etiqueta, dice dónde está hecho: lo pinta el grupo de estilo `estados`.
+// Los estados (decididos el 2026-10-16; la tabla, en el README de esta carpeta de bloques):
+//   #hecho   verde, borde continuo:  hecho en nuestra versión (la punta de la pila de ramas del fork);
+//   #plan    violeta, borde punteado: plan escrito en docs/plans/, sin implementar;
+//   #idea    gris, borde de puntos:  diseño o idea, sin plan.
+specification {
+  color violeta #7C3AED
+
+  element persona {
+    notation 'Persona'
+    style { shape person; color slate }
+  }
+  element externo {
+    notation 'Sistema de otro dueño'
+    style { color gray }
+  }
+  element sistema {
+    notation 'Sistema: Lucky-Tool-Android'
+    style { color primary }
+  }
+  element bloque {
+    notation 'Bloque de funcionalidad'
+    style { color primary }
+  }
+  element entrada {
+    notation 'Entrada: lo que llega'
+    style { color slate; size sm }
+  }
+  element objetivo {
+    notation 'Lo que se quiere'
+    style { shape component; color primary }
+  }
+  element resultado {
+    notation 'Resultado: lo que se obtiene'
+    style { shape document; color slate; size sm }
+  }
+  element datos {
+    notation 'Datos'
+    style { shape storage; color blue; size sm }
+  }
+  element pieza {
+    notation 'Pieza del código que hace andar un bloque'
+    style { shape component; color indigo; size sm }
+  }
+
+  relationship entra {
+    color slate
+    line solid
+  }
+  relationship da {
+    color slate
+    line solid
+  }
+  relationship usa {
+    color gray
+    line dashed
+  }
+
+  tag hecho
+  tag plan
+  tag idea
+}
+
+global {
+  styleGroup estados {
+    style element.tag = #hecho { color green; border solid }
+    style element.tag = #plan { color violeta; border dashed }
+    style element.tag = #idea { color muted; border dotted }
+  }
+}

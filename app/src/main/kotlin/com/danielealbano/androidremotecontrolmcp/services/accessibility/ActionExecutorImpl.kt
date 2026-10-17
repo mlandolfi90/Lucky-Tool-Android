@@ -978,7 +978,7 @@ class ActionExecutorImpl
             private const val TAG = "MCP:ActionExecutor"
             private const val TAP_DURATION_MS = 50L
             private const val DOUBLE_TAP_GAP_MS = 100L
-            private const val PINCH_BASE_DISTANCE = 100f
+            internal const val PINCH_BASE_DISTANCE = 100f
             private const val MIN_SCROLL_DISTANCE = 1f
             private const val GESTURE_TIMEOUT_MS = 10_000L
         }

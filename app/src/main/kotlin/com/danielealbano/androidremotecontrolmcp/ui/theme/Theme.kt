@@ -1,5 +1,3 @@
-@file:Suppress("FunctionNaming")
-
 package com.danielealbano.androidremotecontrolmcp.ui.theme
 
 import androidx.compose.foundation.isSystemInDarkTheme

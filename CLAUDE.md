@@ -610,6 +610,12 @@ Local development requires Android SDK, emulator/device, and standard Android de
 - Check Gradle daemon status: `./gradlew --status`.
 - Clear Gradle cache if needed: `./gradlew clean --no-daemon`.
 
+### Code graph (codebase-memory-mcp, when configured)
+- The graph is reindexed in the background after edits and git operations; a reindex takes about a minute, and until it finishes the graph still answers with the previous version.
+- After editing a file, do NOT rely on the graph for that file: read the file itself. Before relying on any file, call `check_index_coverage` for it.
+- `search_code` is case-sensitive by default; use `regex: true` with a `(?i)` prefix for a case-insensitive search.
+- `.cbmignore` keeps local-only folders and `docs/plans/` out of the graph: read plans with `Read`/`Grep`.
+
 ---
 
 ## 11) Deployment Rules (Android APK Building)
@@ -664,3 +670,27 @@ Local development requires Android SDK, emulator/device, and standard Android de
 - Jobs: lint → test-unit (includes JVM integration tests) → test-e2e → build-release.
 - Upload APK as artifact on successful build.
 - Fail build if any test or lint check fails.
+
+---
+
+## Fork Lucky-Tool-Android: leer también `REGLAS.md` y `docs/PENDIENTES.md`
+
+Este archivo es el de upstream (`danielealbano/android-remote-control-mcp`) y rige el código tal cual; no se
+reescribe. Al arrancar se leen también estos dos archivos:
+
+- [`REGLAS.md`](REGLAS.md), en la raíz: cómo se trabaja en el fork, y qué ya está decidido.
+  - No se mergea; nuestra versión es la punta de la pila de ramas.
+  - Una sola ronda de `code-reviewer`, al final.
+  - Tests y linters sólo al final; el CI se lee una vez, no se espera.
+  - Los textos van en `strings.xml`.
+  - Reglas para usar el teléfono del dueño.
+  - Las excepciones a este archivo.
+- [`docs/PENDIENTES.md`](docs/PENDIENTES.md): lo pedido para la app que falta hacer. Abre con un tablero:
+  el estado de cada punto y lo que queda por discutir. Cada punto separa lo **decidido** de lo que
+  **decide el humano**.
+
+Si este archivo y `REGLAS.md` chocan, rige la excepción escrita en `REGLAS.md`. Si no hay excepción
+escrita, se le pregunta al humano. Ninguno de los dos se cambia por cuenta propia.
+
+Lo que está decidido no se vuelve a preguntar. Lo que está «por discutir» no se decide solo: se trae al
+humano.

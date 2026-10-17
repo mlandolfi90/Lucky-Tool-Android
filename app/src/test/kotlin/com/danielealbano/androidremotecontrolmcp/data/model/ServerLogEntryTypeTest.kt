@@ -16,6 +16,8 @@ class ServerLogEntryTypeTest {
         assertEquals(4.toByte(), ServerLogEntry.Type.AUTH.id)
         assertEquals(5.toByte(), ServerLogEntry.Type.CHANNEL.id)
         assertEquals(6.toByte(), ServerLogEntry.Type.SETTINGS.id)
+        assertEquals(7.toByte(), ServerLogEntry.Type.PRIVACY.id)
+        assertEquals(8.toByte(), ServerLogEntry.Type.APPROVAL.id)
     }
 
     @Test
