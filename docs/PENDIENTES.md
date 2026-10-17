@@ -19,7 +19,7 @@ decide el humano. Cómo se trabaja y qué está decidido sobre la forma de traba
 | 9 | Manual de uso para el agente | Plan 72 escrito y decidido, sin implementar. | — |
 | 10 | La firma de los APK de prueba | Resuelto. | — |
 | 11 | Planes firmados y juez local | Diseño a dibujos y prueba medida, sin plan. | La lista «Por discutir» del punto. |
-| 12 | Reordenar el código en hexagonal | Decidido, sin plan. | La lista «Por discutir» del punto. |
+| 12 | Reordenar el código en hexagonal | Decidido: por partes, empezando por las aprobaciones, en inglés y antes del juez local. Sin plan. | Si el núcleo es un módulo de Gradle o una carpeta dentro de `:app`. |
 
 ## Cuándo
 
@@ -459,7 +459,8 @@ upstream».
 - **Por discutir (decide el humano):**
   - Si son módulos de Gradle (un núcleo en Kotlin puro, sin Android, que no compila si alguien importa
     Android) o carpetas dentro de `:app`.
-  - Si se hace por partes, empezando por las aprobaciones (`policy/`), o todo de una vez.
-  - Si los nombres de carpetas y clases van en inglés, como el código de hoy, o en español, como la
-    plantilla del taller.
-  - Si este reordenamiento va antes o después del plan del juez local.
+- **Decidido por el humano el 2026-10-17:**
+  - **Por partes.** Primero las aprobaciones (`policy/`), después las tools, una familia por vez. Cada
+    parte lleva su plan y su rama.
+  - **Nombres en inglés**, como el código de hoy (`domain`, `application`, `ports`, `adapters`).
+  - **Antes del juez local.** El juez se construye ya dentro del núcleo hexagonal.
