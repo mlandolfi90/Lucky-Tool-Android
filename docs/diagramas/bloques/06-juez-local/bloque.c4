@@ -1,0 +1,356 @@
+// BLOQUE 06 · Decidir con la IA local. La franja (sólo la capa de afuera), cinco sub-bloques con sus
+// piezas y sus vistas. Los flujos, en flujos.c4 de esta misma carpeta.
+// Es el diseño del «plan firmado» (borradorFlujos/flujo-plan-firmado-v4, 2026-10-14) con la decisión
+// en manos de una IA local. TODO LO NUEVO ES IDEA (gris, de puntos): no hay código ni plan escrito en
+// docs/plans/. Las piezas de color normal ya existen y son de los bloques 02, 03 y 05: acá se reusan,
+// no se duplican. El bloque 05 y los perfiles quedan como están hoy.
+// Se parte en cinco sub-bloques, cada uno con su cadena (entrada → lo que se quiere → lo que se obtiene),
+// sus piezas y su flujo:
+//   firmar    escribir un plan y firmarlo una vez con la huella
+//   ciclo     empezar un plan cuando el dueño lo manda, y cerrarlo
+//   decidir   qué pasa con cada acción del agente mientras el plan corre, hasta llegar a los jueces
+//   ia        los dos jueces: leer la acción con la IA local, comparar lo leído con el plan y dar el veredicto
+//   salirse   qué pasa cuando el agente se sale del plan
+// Las piezas que usan varios sub-bloques (el almacén de planes, la huella, el plan en marcha, el cierre y
+// los dos jueces) cuelgan directo del bloque. La vista `subbloques-juez` los muestra en el orden del tiempo.
+// Las piezas del juez local que ya tienen prototipo dicen su archivo:línea en la rama probe/juez-local
+// (punta 4d1e54a, fuera de nuestra pila de ramas), leído con `git show` el 2026-10-16; las medidas salen
+// de probes/juez-local/tools/REGISTRO.md de esa rama. Las piezas reusadas, verificadas con codebase-memory
+// y el código en feat/approval-profiles.
+model {
+  extend app {
+    juez = bloque 'Decidir con la IA local' {
+      #idea
+      description 'Idea, sin plan escrito'
+
+      entrada = entrada 'El agente pide una acción en una app protegida' {
+        description 'Con un plan que el dueño ya firmó con la huella. Sin plan, en una app protegida el agente sólo puede leer y navegar.'
+      }
+      quiere = objetivo 'Dejar correr sin huella sólo lo que está en el plan firmado' {
+        #idea
+        description 'Cada paso clave pasa por dos jueces, la app y una IA local, y tienen que decir sí los dos. Si todo va según el plan, el dueño no pone ninguna huella más. Si el agente se sale del plan, se detiene.'
+        technology 'el plan · los dos jueces · la IA local'
+      }
+      obtiene = resultado 'La acción corre, espera o se detiene' {
+        description 'Corre sin pedir la huella; o sigue la rama «si no» del plan; o se detiene y el dueño elige cortar o ampliar el plan.'
+      }
+      entrada -[entra]-> quiere
+      quiere -[da]-> obtiene
+
+      // ── Lo que comparten los sub-bloques ───────────────────────────────────────────────────
+      almacenPlanes = pieza 'El almacén de planes' {
+        #idea
+        description 'Guarda cada plan firmado y en qué estado está: en espera, en marcha o en el historial. El almacén de perfiles (bloque 05) hace algo parecido con los perfiles.'
+        technology 'idea · sin código'
+      }
+      huellaFuerte = pieza 'La huella del dueño' {
+        #idea
+        description 'La confirmación que firma un plan o lo amplía: huella fuerte, sin PIN. Es la única que se pide; si todo va según el plan, no se pide ninguna más.'
+        technology 'idea · sin código (hoy la app no tiene nada de huella)'
+      }
+      corredor = pieza 'El plan en marcha' {
+        #idea
+        description 'Lleva la cuenta del plan que está corriendo: en qué paso va (el 1 de 4), cuánto dinero ya usó y el tope de ejecución que el dueño programó al firmar (por defecto, 24 h). Avanza cuando una acción pasa.'
+        technology 'idea · sin código'
+      }
+      cierre = pieza 'El cierre del plan' {
+        #idea
+        description 'Cierra el plan cuando se cumple, cuando el agente dice «terminé», cuando el dueño toca CORTAR TODO, a los 15 min sin actividad o cuando vence el tope programado. El agente deja de actuar y el plan pasa al historial.'
+        technology 'idea · sin código'
+      }
+      jueces = pieza 'Los dos jueces' {
+        #idea
+        description 'Es la puerta de un paso clave: lo manda a la IA local (juez 2) y a la app (juez 1). Sólo deja correr si los dos dicen sí; si uno dice no, o la IA no está, el paso se detiene.'
+        technology 'idea · sin código'
+      }
+
+      // ── 1 · Firmar un plan ─────────────────────────────────────────────────────────────────
+      firmar = bloque 'Firmar un plan' {
+        #idea
+        description 'Idea, sin plan escrito'
+
+        entrada = entrada 'El dueño quiere que el agente haga una tarea en una app protegida' {
+          description 'Por ejemplo: «revisá el BDV y, si llegó el pago, liberá la orden de Binance».'
+        }
+        quiere = objetivo 'Un plan escrito y firmado una sola vez con la huella' {
+          #idea
+          description 'Los pasos, los límites de cada app y el tope de ejecución. Antes de firmar, la app muestra lo máximo que el plan puede mover («1 orden × 20.000 Bs»). Sólo la huella del dueño lo vuelve válido.'
+          technology 'la pantalla del plan · la huella · el almacén de planes'
+        }
+        obtiene = resultado 'Un plan guardado, en espera' {
+          description 'No corre solo. Si no empieza en 2 horas, se cancela y hay que firmarlo de nuevo.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        proponer = pieza 'La herramienta para proponer un plan' {
+          #idea
+          description 'Vía A: el dueño se lo pide al agente en el chat y el agente escribe los pasos por él. El plan llega sin firmar a la pantalla del plan.'
+          technology 'idea · sin código ni nombre de herramienta'
+        }
+        editorPlan = pieza 'La pantalla del plan' {
+          #idea
+          description 'Vía B: el dueño escribe el plan en la app. Un paso puede llevar una condición (si no se cumple: esperar, avisar o saltar) y puede ser otro plan ya aprobado, que conserva sus propios límites. Acá también se ve el plan que propuso el agente.'
+          technology 'idea · sin código'
+        }
+        revisor = pieza 'La exposición máxima' {
+          #idea
+          description 'Calcula lo máximo que el plan puede mover («1 orden × 20.000 Bs»; en una tanda se suman) para mostrarlo antes de firmar.'
+          technology 'idea · sin código'
+        }
+
+        proponer -> editorPlan 'el plan queda sin firmar'
+        editorPlan -> revisor 'calcula lo que puede mover'
+      }
+
+      // ── 2 · Empezar y cerrar un plan ───────────────────────────────────────────────────────
+      ciclo = bloque 'Empezar y cerrar un plan' {
+        #idea
+        description 'Idea, sin plan escrito'
+
+        entrada = entrada 'El dueño dice «ejecutá los planes aprobados»' {
+          description 'En el chat, para todos los planes en espera o por el nombre de uno. Empezar no pide la huella: ya la puso al firmar.'
+        }
+        quiere = objetivo 'Que el plan corra sólo cuando el dueño lo manda, y se archive al terminar' {
+          #idea
+          description 'Un plan en espera no se ejecuta solo y se cancela a las 2 horas. Al empezar, el dueño recibe un aviso con CORTAR TODO. Al cerrarse, el plan pasa al historial.'
+          technology 'empezar planes · la caducidad · el aviso · el cierre · el historial'
+        }
+        obtiene = resultado 'El plan cumplido o cortado, en el historial' {
+          description 'Desde el historial se puede usar un plan como plantilla, estudiarlo o borrarlo, también desde el agente.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        empezar = pieza 'La herramienta para empezar planes' {
+          #idea
+          description 'El agente la llama cuando el dueño dice «ejecutá los planes aprobados» (todos, o uno por su nombre). Busca los planes en espera y pone en marcha el elegido.'
+          technology 'idea · sin código ni nombre de herramienta'
+        }
+        caducidad = pieza 'La caducidad de las 2 horas' {
+          #idea
+          description 'Un plan en espera que no empezó en 2 horas se cancela solo: hay que firmarlo de nuevo.'
+          technology 'idea · sin código'
+        }
+        avisoPlan = pieza 'El aviso del plan en marcha' {
+          #idea
+          description 'Una notificación: «el agente empezó X», paso 1 de 4, usado 0 Bs, y CORTAR TODO. Abierto: la notificación de hoy (bloque 03) no tiene botones porque un agente podría apretarlos; falta decidir cómo se corta desde ella.'
+          technology 'idea · sin código (puede apoyarse en PolicyApprovalNotifier · services/mcp/PolicyApprovalNotifier.kt:47)'
+        }
+        historial = pieza 'El historial de planes' {
+          #idea
+          description 'Donde van los planes cumplidos o cerrados: plantilla, estudiar y borrar, también desde el agente. Propuesta sin decidir: que borrar desde el agente pida el OK del dueño en el chat y que los Logs de auditoría no se borren.'
+          technology 'idea · sin código'
+        }
+
+        empezar -> caducidad 'si pasaron 2 horas'
+        empezar -> avisoPlan 'si empieza'
+      }
+
+      // ── 3 · Decidir cada acción ────────────────────────────────────────────────────────────
+      decidir = bloque 'Decidir cada acción' {
+        #idea
+        description 'Idea, sin plan escrito'
+
+        entrada = entrada 'El agente pide una acción mientras un plan corre' {
+          description 'Llega al portón de aprobación, igual que hoy.'
+        }
+        quiere = objetivo 'Dejar correr sin huella sólo lo que está en el plan' {
+          #idea
+          description 'Una app libre corre como hoy. Una protegida sin plan sólo deja leer y navegar. Con un plan en marcha, lo que se deshace corre sin IA y lo dudoso o irreversible es un paso clave: pasa por los dos jueces.'
+          technology 'el filtro de apps y planes · el filtro de lo reversible'
+        }
+        obtiene = resultado 'La acción corre, o llega a los dos jueces' {
+          description 'Corre como hoy (app libre, o algo que se deshace); o sólo lee y navega; o es un paso clave y pasa a los dos jueces.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        filtro = pieza 'El filtro de apps y planes' {
+          #idea
+          description 'Dice si la app es LIBRE (el agente hace todo, como hoy) o PROTEGIDA, y si hay un plan en marcha que la nombra. Protegida y sin plan: sólo leer y navegar, y un paso clave pide que el agente escriba un plan. Por confirmar: que LIBRE y PROTEGIDA reemplacen a las cuatro reglas por app.'
+          technology 'idea · sin código (ocuparía el lugar del motor de perfiles: PolicyEngineImpl.evaluate · policy/engine/PolicyEngineImpl.kt:23)'
+        }
+        reversible = pieza 'El filtro de lo reversible' {
+          #idea
+          description 'Deja correr sin IA lo que se deshace: navegar, volver atrás, el teclado, pegar, desplazar, la cortina. Lo dudoso va como paso clave: un ícono sin nombre, un toque sin elemento, deslizar en una app de dinero, la tecla Enter.'
+          technology 'idea · sin código (puede apoyarse en TargetClassifier.classify · policy/engine/TargetClassifier.kt:23)'
+        }
+        filtro -> reversible 'con plan en marcha'
+      }
+
+      // ── 4 · Leer la acción con la IA local ─────────────────────────────────────────────────
+      ia = bloque 'Leer la acción con la IA local' {
+        #idea
+        description 'Idea, con prototipo medido'
+
+        entrada = entrada 'Un paso clave que necesita a los dos jueces' {
+          description 'La acción no se puede deshacer, o es dudosa. Hay que saber si es el paso del plan y con qué datos.'
+        }
+        quiere = objetivo 'Leer la acción con la IA y comparar lo leído con el plan' {
+          #idea
+          description 'Modo datos: el modelo no compara. Lee la acción y la pantalla (texto o captura), copia APP, MONTO y DESTINATARIO, y dice si es el paso. La app compara lo copiado, dato por dato, con lo que el plan acepta en ese paso.'
+          technology 'el servicio de la IA · el modelo · el lector · el comparador · el veredicto'
+        }
+        obtiene = resultado 'El veredicto: corre, sigue la rama «si no» o se detiene' {
+          description 'Los dos jueces tienen que decir sí para que corra. Una respuesta que no se puede leer no pasa.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        pregunta = pieza 'La pregunta en modo datos' {
+          #idea
+          description 'Arma lo que se le muestra al modelo: la acción, la pantalla y el paso actual del plan. Le pide copiar APP, MONTO (con su moneda y sin signo) y DESTINATARIO, y cerrar con «ES EL PASO: SI» o «NO».'
+          technology 'idea · prototipo: JudgeConfig.questionFor · probes/juez-local/.../probejuez/JudgeConfig.kt:61'
+        }
+        servicioIA = pieza 'El servicio de la IA local' {
+          #idea
+          description 'Un servicio en primer plano que carga el modelo y contesta aunque otra app esté al frente (medido: la prioridad no bajó con la Calculadora al frente). Si el modelo no carga, no hay IA.'
+          technology 'idea · prototipo: ProbeService.onStartCommand · .../probejuez/ProbeService.kt:30 (startForeground :35)'
+        }
+        motorIA = pieza 'El motor del modelo' {
+          #idea
+          description 'LiteRT-LM en la GPU, con la decodificación especulativa prendida (el modelo trae su borrador). Cargar el modelo tarda de 7 a 17 s.'
+          technology 'idea · prototipo: ProbeRunner.run · .../probejuez/ProbeRunner.kt:31 (enableSpeculativeDecoding :62, EngineConfig :66, Backend.GPU :151)'
+        }
+        modelo = pieza 'Juez 2 · el modelo Gemma 4 E4B' {
+          #idea
+          description 'El E4B genérico de Google (gemma-4-E4B-it.litertlm, 3,66 GB): lee texto y capturas y trae el borrador de la decodificación especulativa. Usa unos 3,8 GB de memoria con texto y de 4,2 a 5,3 GB con capturas. El archivo «-gpu» y el kit de Qualcomm (NPU) se midieron y se descartaron. Dice si la acción es el paso del plan.'
+          technology 'idea · prototipo medido: probes/juez-local/tools/REGISTRO.md (rama probe/juez-local)'
+        }
+        lector = pieza 'El lector de la respuesta' {
+          #idea
+          description 'Lee la respuesta con rigor: la marca «ES EL PASO» una sola vez y en la última línea, cada campo una sola vez y antes de la marca. Quita el pensamiento del modelo. Lo que no tiene ese formato es INVÁLIDO: nunca se adivina.'
+          technology 'idea · prototipo: ReplyReader.judge · .../probejuez/ReplyReader.kt:80'
+        }
+        comparador = pieza 'Juez 1 · la app compara' {
+          #idea
+          description 'Compara cada dato copiado con lo que el plan acepta en ese paso: los montos por número y moneda; los textos sin mayúsculas ni comillas que envuelvan todo el valor, sin quitar ningún otro carácter. En texto, el dato copiado también tiene que estar escrito en la acción como palabra entera. Sólo NINGUNO cuenta como «ninguno».'
+          technology 'idea · prototipo: PlanValues.same · .../probejuez/PlanValues.kt:30 (inText :52, Amounts.of :112)'
+        }
+
+        ramaNo = pieza 'La rama «si no» del plan' {
+          #idea
+          description 'Si falló sólo la condición del paso (todavía no llegó el pago), la acción no corre y sigue la rama «si no» del plan: esperar, avisar al dueño o saltar. No pide la huella.'
+          technology 'idea · sin código'
+        }
+
+        pregunta -> servicioIA 'la pregunta'
+        servicioIA -> motorIA 'carga el modelo'
+        motorIA -> modelo 'GPU, decodificación especulativa'
+        modelo -> lector 'la respuesta'
+        lector -> comparador 'los datos copiados'
+        comparador -> ramaNo 'si falló sólo la condición'
+      }
+
+      // ── 5 · Salirse del plan ───────────────────────────────────────────────────────────────
+      salirse = bloque 'Salirse del plan' {
+        #idea
+        description 'Idea, sin plan escrito'
+
+        entrada = entrada 'Un paso que no está en el plan' {
+          description 'Uno de los jueces dijo que no y no era sólo la condición del paso. O no hay IA para juzgarlo.'
+        }
+        quiere = objetivo 'Que el agente espere y el dueño decida' {
+          #idea
+          description 'La acción no corre y el agente no se cancela: espera. El dueño recibe un aviso («quiere hacer X, no está en el plan») y elige: CORTAR, que para al agente, o AMPLIAR el plan con la huella, que deja correr la acción y sigue.'
+          technology 'el freno · el aviso al dueño · la ampliación del plan'
+        }
+        obtiene = resultado 'El agente para, o el plan crece y la acción corre' {
+          description 'Huella sólo si el agente se sale del plan.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        freno = pieza 'El freno por salirse del plan' {
+          #idea
+          description 'Detiene la acción, deja al agente esperando (no lo cancela) y crea la pendiente. Sin IA disponible, el paso clave también se detiene acá y le pregunta al dueño.'
+          technology 'idea · sin código (la pendiente es ActionApprovalCoordinatorImpl.createOrJoin · policy/approval/ActionApprovalCoordinatorImpl.kt:31)'
+        }
+        ampliar = pieza 'La ampliación del plan' {
+          #idea
+          description 'Suma al plan el paso que el agente quería, con la huella del dueño, y deja correr la acción. Todo lo que siga sin estar en el plan vuelve a detenerse.'
+          technology 'idea · sin código'
+        }
+
+        freno -> ampliar 'si el dueño elige AMPLIAR'
+      }
+
+      // ── Relaciones entre las piezas compartidas ────────────────────────────────────────────
+      firmar.revisor -> huellaFuerte 'pide la huella'
+      huellaFuerte -> almacenPlanes 'si es válida: guarda el plan'
+      ciclo.empezar -> almacenPlanes 'busca los planes en espera'
+      almacenPlanes -> corredor 'lo pone en marcha'
+      corredor -> cierre 'termina'
+      decidir.reversible -> jueces 'paso clave'
+      jueces -> ia.pregunta 'arma la pregunta'
+      jueces -> salirse.freno 'si se salió del plan'
+      salirse.ampliar -> huellaFuerte 'pide la huella'
+    }
+  }
+
+  // Lo que reusa de los otros bloques (las piezas de color normal): el portón del 02 le pide la decisión;
+  // el 03 pone la pendiente, el aviso y la pantalla de aprobación; el 02 lee la pantalla y corre la acción.
+  app.atender.porton -[usa]-> app.juez.decidir.filtro 'en la idea, pide la decisión acá'
+  app.juez.decidir.reversible -[usa]-> app.aprobar.clasificador 'si es un toque'
+  app.juez.salirse.freno -[usa]-> app.aprobar.coordinador 'crea la pendiente'
+  app.juez.ia.pregunta -[usa]-> app.atender.accesibilidad 'pide la pantalla'
+  app.juez.ciclo.avisoPlan -[usa]-> app.aprobar.notificador 'se apoya en la notificación'
+
+  // Los datos que toca.
+  app.juez.decidir.filtro -[usa]-> perfiles 'si la app es LIBRE o PROTEGIDA'
+  app.juez.decidir.filtro -[usa]-> planes 'el plan en marcha'
+  app.juez.almacenPlanes -[usa]-> planes 'guarda y lee'
+  app.juez.ia.comparador -[usa]-> planes 'lo que el plan acepta en ese paso'
+  app.juez.corredor -[usa]-> registroServidor 'anota cada paso (Logs)'
+
+  // Quién interviene desde afuera.
+  humano -> app.juez.ciclo.entrada 'dice «ejecutá los planes aprobados»'
+  usuario -> app.juez.firmar.quiere 'firma con la huella'
+
+  // La capa de afuera: quién pide, a quién se recurre y quién recibe lo que sale. Es lo que dibuja la franja.
+  agente -> app.juez.entrada 'pide una acción en una app protegida'
+  app.juez.quiere -> usuario 'si el agente se sale del plan, le pide la huella'
+  app.juez.obtiene -> agente 'corre, espera o se detiene'
+}
+
+views '06 · Decidir con la IA local' {
+
+  // La franja: sólo la capa de afuera, sin piezas. Un clic en lo que se quiere abre el flujo principal.
+  view bloque-juez of app.juez {
+    title 'Franja: quién lo pide, qué se quiere, qué sale'
+    description 'Un clic en «Dejar correr sin huella sólo lo que está en el plan firmado» abre cómo se decide cada acción, paso a paso.'
+    include app.juez, app.juez.entrada, app.juez.obtiene
+    include app.juez.quiere with { navigateTo subbloques-juez }
+    include agente, usuario
+    global style estados
+    autoLayout LeftRight
+  }
+
+  // Los sub-bloques: la cadena de cada uno, en el orden del tiempo (LikeC4 apila de abajo hacia arriba,
+  // así que van en orden inverso). Un clic en lo que se quiere abre su flujo; el marco del bloque abre
+  // cómo se decide cada acción.
+  view subbloques-juez {
+    title 'Las cinco partes de decidir con la IA local'
+    description '''
+      Cada franja es una cosa que pasa, y se lee de izquierda a derecha: lo que llega, lo que se quiere y
+      lo que se obtiene. Un clic en «lo que se quiere» abre su flujo, paso a paso. El marco de arriba abre
+      cómo se decide cada acción.
+    '''
+    include app.juez with { navigateTo flujo-juez-decidir }
+    include app.juez.salirse, app.juez.salirse.entrada, app.juez.salirse.obtiene
+    include app.juez.salirse.quiere with { navigateTo flujo-juez-detener }
+    include app.juez.ia, app.juez.ia.entrada, app.juez.ia.obtiene
+    include app.juez.ia.quiere with { navigateTo flujo-juez-ia }
+    include app.juez.decidir, app.juez.decidir.entrada, app.juez.decidir.obtiene
+    include app.juez.decidir.quiere with { navigateTo flujo-juez-decidir }
+    include app.juez.ciclo, app.juez.ciclo.entrada, app.juez.ciclo.obtiene
+    include app.juez.ciclo.quiere with { navigateTo flujo-juez-ciclo }
+    include app.juez.firmar, app.juez.firmar.entrada, app.juez.firmar.obtiene
+    include app.juez.firmar.quiere with { navigateTo flujo-juez-firmar }
+    exclude * -> * where source.kind is bloque
+    exclude * -> * where source.kind is pieza
+    global style estados
+    autoLayout LeftRight
+  }
+}

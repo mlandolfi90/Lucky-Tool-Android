@@ -1,0 +1,414 @@
+// BLOQUE 06 · LOS FLUJOS de «Decidir con la IA local». Es una IDEA (el diseño del plan firmado, v4.2 del
+// 2026-10-14): las piezas grises de puntos no existen todavía; las de color normal son de los bloques 02,
+// 03 y 05 y ya funcionan. Son cinco flujos, uno por sub-bloque:
+//   flujo-juez-firmar   escribir un plan y firmarlo con la huella (10 pasos).
+//   flujo-juez-ciclo    empezar el plan, vigilarlo y cerrarlo (15 pasos).
+//   flujo-juez-decidir  qué pasa con cada acción del agente, hasta llegar a los jueces (13 pasos): el principal.
+//   flujo-juez-ia       los dos jueces: la IA lee, la app compara y sale el veredicto (16 pasos).
+//   flujo-juez-detener  el agente se salió del plan: el dueño corta o amplía (13 pasos).
+// Se llega de uno a otro con `navigateTo`: «Los dos jueces» (flujo de decidir) abre el de la IA, y «El freno
+// por salirse del plan» (flujo de la IA) abre el último.
+// Cada paso lleva en un comentario el número que dibuja LikeC4, para pedir cambios por paso
+// («en el paso 5, agregá…»). Lo medido sale de probes/juez-local/tools/REGISTRO.md (rama probe/juez-local).
+//
+// Forma: cajas unidas por flechas numeradas, sin líneas de vida. Una flecha quiere decir «la llamada o el
+// dato pasa de una pieza a la siguiente», en el orden en que ocurre. Los recuadros de los alt no se dibujan:
+// por eso cada paso de una rama dice su condición al principio de la etiqueta.
+//
+// Se abre en VS Code: este archivo, y Ctrl+Shift+P → «Open Preview» (LikeC4).
+views '06 · Decidir con la IA local' {
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 1 · firmar un plan
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-juez-firmar {
+    title 'Firmar un plan'
+    description '''
+      El dueño le pide una tarea al agente. El plan lo escribe el agente (vía A) o el dueño en la app
+      (vía B); da lo mismo, porque sólo la huella del dueño lo vuelve válido. La app calcula lo máximo que
+      el plan puede mover y se lo muestra antes de firmar. Con la huella, el plan queda guardado, en espera.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1 · la tarea
+    // 1
+    humano -> agente 'pide en el chat una tarea en una app protegida' {
+      notes '''
+        Ejemplo del diseño: «Cobrar y liberar la orden de 20.000 Bs». Pasos: 1) en el BDV, buscar un pago
+        de 20.000 Bs (sólo leer); 2) si llegó, seguir, y si no, esperar y avisar; 3) en Binance, abrir el
+        chat de la orden y revisarlo; 4) ejecutar el plan ya aprobado «Liberar orden». Límites: BDV sólo
+        leer, Binance 20.000 Bs, 1 orden. Condición: liberar sólo si el pago del BDV es igual al monto
+        de la orden.
+      '''
+    }
+
+    // 2 a 4 · quién escribe el plan
+    alt {
+      when 'vía A · el agente escribe el plan' {
+        // 2
+        agente -> app.juez.firmar.proponer 'vía A: propone los pasos y los límites' {
+          notes 'Abierto: el diseño no nombra la herramienta ni sus argumentos.'
+        }
+        // 3
+        app.juez.firmar.proponer -> app.juez.firmar.editorPlan 'vía A: el plan llega sin firmar a la pantalla del plan'
+      }
+      else 'vía B · el dueño lo escribe' {
+        // 4
+        usuario -> app.juez.firmar.editorPlan 'vía B: escribe los pasos y los límites en la app' {
+          notes 'Un paso puede ser otro plan ya aprobado (planes anidados): cada plan conserva sus propios límites. Un paso con condición sigue por «sí» o por «si no» (esperar, avisar o saltar).'
+        }
+      }
+    }
+
+    // 5 y 6 · lo que se ve antes de firmar
+    // 5
+    app.juez.firmar.editorPlan -> app.juez.firmar.revisor 'calcula lo máximo que el plan puede mover' {
+      notes 'Abierto: el diseño no dice si un plan con los límites incompletos se rechaza.'
+    }
+    // 6
+    app.juez.firmar.revisor -> app.juez.huellaFuerte 'muestra el plan y su exposición máxima, y pide la huella' {
+      notes 'Se muestra «1 orden × 20.000 Bs». En una tanda de planes, las exposiciones se suman. También se programa el tope de ejecución (por defecto, 24 h).'
+    }
+
+    // 7 a 10 · la huella
+    // 7
+    usuario -> app.juez.huellaFuerte 'revisa el plan y apoya el dedo' {
+      notes 'Huella fuerte, sin PIN. Hoy la app no tiene ninguna pantalla ni código de huella.'
+    }
+    alt {
+      when 'la huella es válida' {
+        // 8
+        app.juez.huellaFuerte -> app.juez.almacenPlanes 'si la huella es válida: guarda el plan firmado'
+        // 9
+        app.juez.almacenPlanes -> planes 'si la huella es válida: el plan queda en espera' {
+          notes 'No se ejecuta solo. Si no empieza en 2 horas, se cancela y hay que firmarlo de nuevo.'
+        }
+      }
+      else 'sin huella válida' {
+        // 10
+        app.juez.huellaFuerte -> app.juez.firmar.editorPlan 'sin huella válida: el plan queda sin firmar y no corre'
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 2 · empezar y cerrar un plan
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-juez-ciclo {
+    title 'Empezar un plan, vigilarlo y cerrarlo'
+    description '''
+      Un plan en espera no se ejecuta solo: empieza cuando el dueño dice «ejecutá los planes aprobados».
+      Empezar no pide la huella (ya la puso al firmar) y le llega un aviso con CORTAR TODO. Mientras el
+      plan corre, cada acción del agente pasa por el portón (flujo «Decidir cada acción»). El plan se cierra
+      por una de cinco razones y pasa al historial.
+    '''
+    autoLayout LeftRight
+    global style estados
+    include app.atender.porton with { navigateTo flujo-juez-decidir }
+
+    // 1 a 4 · empezar
+    // 1
+    humano -> agente 'dice «ejecutá los planes aprobados» (o uno por su nombre)'
+    // 2
+    agente -> app.juez.ciclo.empezar 'llama a la herramienta que empieza planes' {
+      notes 'Abierto: el diseño no nombra la herramienta. Más adelante, un aviso (por ejemplo, que llegó el pago al BDV) podría arrancar el plan solo; depende de poder despertar al agente (pendiente 7 de PENDIENTES.md).'
+    }
+    // 3
+    app.juez.ciclo.empezar -> app.juez.almacenPlanes 'busca los planes en espera'
+    // 4
+    app.juez.almacenPlanes -> planes 'lee el plan elegido y cuánto lleva en espera'
+
+    // 5 a 15 · caduca, o empieza
+    alt {
+      when 'lleva más de 2 horas en espera' {
+        // 5
+        app.juez.almacenPlanes -> app.juez.ciclo.caducidad 'si lleva más de 2 horas: se cancela solo' {
+          notes 'Decidido en el diseño: un plan aprobado que no empieza en 2 horas se cancela, y no se puede ejecutar sin una firma nueva. La herramienta le responde al agente que hay que firmarlo de nuevo.'
+        }
+      }
+      else 'sigue en espera' {
+        // 6
+        app.juez.almacenPlanes -> app.juez.corredor 'si sigue en espera: lo pone en marcha, sin pedir la huella'
+        // 7
+        app.juez.ciclo.empezar -> agente 'si empieza: le responde que el plan quedó en marcha'
+        // 8
+        app.juez.corredor -> app.juez.ciclo.avisoPlan 'avisa «el agente empezó X»: paso 1 de 4, usado 0 Bs, CORTAR TODO' {
+          notes 'Abierto: la notificación de hoy (bloque 03) no lleva botones porque un agente podría apretarlos. Falta decidir cómo se corta desde el aviso.'
+        }
+        // 9
+        app.juez.ciclo.avisoPlan -> usuario 'le llega al dueño, que puede cortar en cualquier momento'
+        // 10
+        app.juez.corredor -> app.atender.porton 'mientras corre: cada acción del agente pasa por el portón' {
+          notes 'Sigue en el flujo «Decidir cada acción». Cada acción que pasa avanza el plan y suma lo gastado; cada paso se anota en los Logs.'
+        }
+        alt {
+          when 'el dueño toca CORTAR TODO' {
+            // 11
+            usuario -> app.juez.cierre 'si toca CORTAR TODO: cierra el plan'
+          }
+          else 'el plan termina solo' {
+            // 12
+            app.juez.corredor -> app.juez.cierre 'si termina solo: plan cumplido, el agente dijo «terminé», 15 min sin actividad o venció el tope' {
+              notes 'El tope de ejecución lo programa el dueño al firmar (por defecto, 24 h).'
+            }
+          }
+        }
+        // 13
+        app.juez.cierre -> app.juez.ciclo.historial 'al cerrarse: el plan pasa al historial'
+        // 14
+        app.juez.ciclo.historial -> planes 'queda guardado: plantilla, estudiar o borrar' {
+          notes 'Propuesta sin decidir: borrar desde el agente pide el OK del dueño en el chat, y los Logs de auditoría no se borran.'
+        }
+        // 15
+        app.juez.cierre -> app.atender.porton 'al cerrarse: el portón ya no deja pasar acciones de ese plan' {
+          notes 'Sin plan en marcha, en una app protegida el agente sólo puede leer y navegar.'
+        }
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 3 · decidir cada acción
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-juez-decidir {
+    title 'Decidir cada acción del agente'
+    description '''
+      La acción llega al portón y pasa lo mismo que hoy hasta saber sobre qué app actúa. Ahí el filtro
+      pregunta si la app es libre o protegida y si hay un plan en marcha. Una app libre corre; una
+      protegida sin plan sólo deja leer y navegar. Con plan, lo que se deshace corre sin IA, y el resto es
+      un paso clave: pasa a los dos jueces, que siguen en el flujo de la IA («Los dos jueces» lo abre).
+    '''
+    autoLayout LeftRight
+    global style estados
+    include app.juez.jueces with { navigateTo flujo-juez-ia }
+
+    // 1 y 2 · llega la llamada
+    // 1
+    app.atender.registro -> app.atender.porton 'guard: la herramienta y sus argumentos' {
+      notes 'Es el mismo portón de hoy (bloques 02 y 03). La idea cambia lo que decide, no por dónde pasa la llamada.'
+    }
+    // 2
+    app.atender.porton -> app.aprobar.catalogo '¿qué clase de herramienta es?'
+
+    // 3 a 13 · actúa o no sobre una app
+    alt {
+      when 'actúa sobre una app' {
+        // 3
+        app.aprobar.catalogo -> app.aprobar.cola 'si actúa sobre una app: toma la cola'
+        // 4
+        app.aprobar.cola -> app.aprobar.resolutor 'si actúa sobre una app: ¿sobre qué app actúa y qué hace?'
+        // 5
+        app.aprobar.resolutor -> app.juez.decidir.filtro 'la app y el tipo de acción' {
+          notes 'El filtro ocuparía el lugar del motor de perfiles del bloque 03. Se va lo que había: las cuatro reglas por tipo de acción y las excepciones que el dueño fue aprobando. Se reaprovecha la notificación, la pantalla de aprobación, el límite de monto y los Logs.'
+        }
+        // 6
+        app.juez.decidir.filtro -> perfiles '¿la app es LIBRE o PROTEGIDA?' {
+          notes 'Por confirmar: en el diseño cada app es LIBRE o PROTEGIDA y el perfil sólo guarda una plantilla de límites (moneda, monto máximo) para prellenar planes. Hoy el perfil tiene cuatro reglas por app (bloque 05).'
+        }
+        // 7
+        app.juez.decidir.filtro -> planes '¿hay un plan en marcha que nombre esta app?'
+        alt {
+          when 'la app es LIBRE' {
+            // 8
+            app.juez.decidir.filtro -> app.atender.indicador 'si la app es LIBRE: corre, como hoy'
+          }
+          when 'es PROTEGIDA y no hay un plan en marcha' {
+            // 9
+            app.juez.decidir.filtro -> agente 'si es PROTEGIDA y no hay plan: sólo leer y navegar; un paso clave pide que el agente escriba un plan' {
+              notes 'Un pedido suelto es un plan de un solo paso.'
+            }
+          }
+          else 'es PROTEGIDA y hay un plan en marcha' {
+            // 10
+            app.juez.decidir.filtro -> app.juez.decidir.reversible 'si hay plan en marcha: ¿se puede deshacer?'
+            alt {
+              when 'se puede deshacer' {
+                // 11
+                app.juez.decidir.reversible -> app.atender.indicador 'si se deshace: corre, rápido y sin IA' {
+                  notes 'Navegar, volver atrás, el teclado, pegar, desplazar y la cortina. Se anota en los Logs.'
+                }
+              }
+              else 'no se puede deshacer, o es dudoso' {
+                // 12
+                app.juez.decidir.reversible -> app.juez.jueces 'paso clave: los dos jueces tienen que decir sí' {
+                  notes 'Dudoso cuenta como paso clave: un ícono sin nombre, un toque sin elemento, deslizar en una app de dinero, la tecla Enter. Un clic en «Los dos jueces» abre cómo se juzga.'
+                }
+              }
+            }
+          }
+        }
+      }
+      else 'no actúa sobre ninguna app' {
+        // 13
+        app.aprobar.catalogo -> app.atender.indicador 'si no actúa sobre una app: corre, como hoy' {
+          notes 'Archivos, cámara, ubicación y las demás herramientas que no tocan una app pasan sin mirar planes ni perfiles, igual que hoy.'
+        }
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 4 · los dos jueces
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-juez-ia {
+    title 'Los dos jueces: la IA lee, la app compara'
+    description '''
+      Modo datos. La IA local no compara nada: lee la acción y la pantalla, copia APP, MONTO y
+      DESTINATARIO, y dice si la acción es el paso del plan. La app lee esa respuesta con rigor y compara
+      cada dato copiado con lo que el plan acepta en ese paso. Los dos tienen que decir sí para que corra;
+      si no, sigue la rama «si no» del plan o el paso se detiene.
+    '''
+    autoLayout LeftRight
+    global style estados
+    include app.juez.jueces with { navigateTo flujo-juez-decidir }
+    include app.juez.salirse.freno with { navigateTo flujo-juez-detener }
+
+    // 1 a 4 · se arma la pregunta
+    // 1
+    app.juez.jueces -> app.atender.accesibilidad 'paso clave: pide la pantalla (texto o captura)' {
+      notes 'Abierto: qué se le manda al modelo, y cuándo. El diseño dice «sólo datos ordenados (nunca el chat libre)»; la prueba le dio texto o una captura de la pantalla, chat incluido.'
+    }
+    // 2
+    app.atender.accesibilidad -> app.juez.ia.pregunta 'la acción y la pantalla'
+    // 3
+    planes -> app.juez.ia.pregunta 'el paso actual del plan' {
+      notes 'Abierto: la revisión de código de la prueba sugirió no mostrarle al modelo los datos del plan.'
+    }
+    // 4
+    app.juez.ia.pregunta -> app.juez.ia.servicioIA 'la pregunta en modo datos' {
+      notes 'Le pide copiar APP, MONTO (con su moneda y sin signo) y DESTINATARIO, y cerrar con «ES EL PASO: SI» o «NO».'
+    }
+
+    // 5 a 16 · la IA contesta y la app compara
+    alt {
+      when 'el modelo está listo' {
+        // 5
+        app.juez.ia.servicioIA -> app.juez.ia.motorIA 'carga el modelo, si no estaba cargado' {
+          notes 'Medido: cargar el E4B tarda de 7 a 17 s. Con el servicio en primer plano, la prioridad no bajó con otra app al frente.'
+        }
+        // 6
+        app.juez.ia.motorIA -> app.juez.ia.modelo 'GPU, con decodificación especulativa' {
+          notes 'La decodificación especulativa conviene siempre: +25 % pensando y ×2,6 en el modo lista, las dos contra su control apagado. En el modo datos, una respuesta tarda unos 1,6 s con texto y 2,4 s con captura.'
+        }
+        // 7
+        app.juez.ia.modelo -> app.juez.ia.lector 'escribe APP, MONTO y DESTINATARIO, y «ES EL PASO: SI» o «NO»' {
+          notes 'Medido en 44 preguntas (v7): texto 35 de 35 y capturas 8 de 9, sin ningún sí peligroso. Ojo: v7 se ajustó mirando esas mismas preguntas. El lote ciego v8, de 100 preguntas, está preregistrado (commit 4d1e54a) y sus corridas esperan al teléfono.'
+        }
+        alt {
+          when 'la respuesta no tiene el formato pedido' {
+            // 8
+            app.juez.ia.lector -> app.juez.salirse.freno 'si no se puede leer: INVÁLIDO, el paso se detiene' {
+              notes 'Nunca se adivina: la marca va una sola vez y en la última línea; cada campo, una sola vez y antes de la marca.'
+            }
+          }
+          else 'la respuesta se pudo leer' {
+            // 9
+            app.juez.ia.lector -> app.juez.ia.comparador 'los datos copiados y el sí o no del modelo'
+            // 10
+            planes -> app.juez.ia.comparador 'lo que el plan acepta en este paso' {
+              notes 'Cada paso acepta sólo lo que hace su acción (los datos de cada paso, o NINGUNO).'
+            }
+            alt {
+              when 'el modelo dijo sí y todos los datos coinciden' {
+                // 11
+                app.juez.ia.comparador -> app.juez.corredor 'si el modelo dijo sí y todos los datos coinciden: los dos dicen sí, avanza el plan' {
+                  notes 'Los montos se comparan por número y moneda; los textos, sin mayúsculas ni comillas. «juanp2p_» no es «juanp2p» ni «pedro099» es «pedro99». El modelo copia bien pero compara mal: por eso compara la app. Suma el monto usado.'
+                }
+                // 12
+                app.juez.corredor -> app.atender.indicador 'si los dos dicen sí: corre, sin pedir la huella' {
+                  notes 'Se anota en los Logs. Si todo va según el plan, no se pide ninguna huella más.'
+                }
+              }
+              when 'falló sólo la condición del plan' {
+                // 13
+                app.juez.ia.comparador -> app.juez.ia.ramaNo 'si falló sólo la condición del plan: no corre' {
+                  notes 'Por ejemplo, todavía no llegó el pago. Abierto: la prueba compara APP, MONTO, DESTINATARIO y «es el paso»; la condición de un paso (pago del BDV = monto de la orden) todavía no se midió.'
+                }
+                // 14
+                app.juez.ia.ramaNo -> agente 'sigue la rama «si no» del plan: esperar o avisar al dueño, sin pedir la huella'
+              }
+              else 'el modelo dijo no, o un dato no coincide' {
+                // 15
+                app.juez.ia.comparador -> app.juez.salirse.freno 'si el modelo dijo no o un dato no coincide: el paso se detiene' {
+                  notes 'Con v7, el modelo solo dijo no en 20 de las 26 preguntas que debían frenarse; las otras 6 las frenó la app por un dato distinto del plan. Preregistro del lote v8: aun con la copia perfecta, la app frenaría 2 de las 40 preguntas que debían pasar (límites de la regla de comparación).'
+                }
+              }
+            }
+          }
+        }
+      }
+      else 'el modelo no carga o falta memoria' {
+        // 16
+        app.juez.ia.servicioIA -> app.juez.salirse.freno 'si no hay IA: el paso clave se detiene y le pregunta al dueño' {
+          notes 'Decidido en el diseño: sin IA disponible, el paso clave nunca corre solo.'
+        }
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 5 · salirse del plan
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-juez-detener {
+    title 'Salirse del plan: el dueño corta o amplía'
+    description '''
+      El paso se detiene y el agente espera: no se cancela. La pendiente y el aviso son los del bloque 03
+      («quiere hacer X, no está en el plan»). El dueño elige cortar, y el plan se cierra, o ampliar el plan
+      con la huella, y la acción corre y el plan sigue. Si no responde, la pendiente vence.
+    '''
+    autoLayout LeftRight
+    global style estados
+    include app.juez.jueces with { navigateTo flujo-juez-ia }
+
+    // 1 a 6 · se detiene y se avisa
+    // 1
+    app.juez.jueces -> app.juez.salirse.freno 'se salió del plan, o no hay IA' {
+      notes 'Viene de «Los dos jueces»: pasos 8, 15 y 16.'
+    }
+    // 2
+    app.juez.salirse.freno -> agente 'la acción no corre: el agente espera, no se cancela' {
+      notes 'Hoy (bloque 03) el agente recibe awaiting_approval y consulta con get_approval_status.'
+    }
+    // 3
+    app.juez.salirse.freno -> app.aprobar.coordinador 'crea la pendiente'
+    // 4
+    app.aprobar.coordinador -> app.aprobar.notificador 'la lista cambió: avisa al dueño' {
+      notes 'En el bloque 03, un observador mira la lista de pendientes y se la pasa al notificador.'
+    }
+    // 5
+    app.aprobar.notificador -> usuario 'le avisa: «quiere hacer X, no está en el plan»'
+    // 6
+    usuario -> app.aprobar.pantallaDueno 'toca el aviso y ve la acción'
+
+    // 7 a 13 · el dueño decide
+    alt {
+      when 'el dueño elige CORTAR' {
+        // 7
+        app.aprobar.pantallaDueno -> app.juez.cierre 'CORTAR: cierra el plan'
+        // 8
+        app.juez.cierre -> app.atender.porton 'CORTAR: el portón ya no deja pasar acciones de ese plan' {
+          notes 'El agente para. Sin plan en marcha, en una app protegida sólo puede leer y navegar.'
+        }
+      }
+      when 'el dueño elige AMPLIAR el plan' {
+        // 9
+        app.aprobar.pantallaDueno -> app.juez.salirse.ampliar 'AMPLIAR: suma este paso al plan'
+        // 10
+        app.juez.salirse.ampliar -> app.juez.huellaFuerte 'AMPLIAR: pide la huella' {
+          notes 'Si la huella no es válida, el plan no cambia y la pendiente sigue sin decidir.'
+        }
+        // 11
+        app.juez.huellaFuerte -> app.juez.almacenPlanes 'si la huella es válida: guarda el plan ampliado'
+        // 12
+        app.juez.almacenPlanes -> app.atender.indicador 'si la huella es válida: la acción corre y el plan sigue'
+      }
+      else 'el dueño no responde' {
+        // 13
+        app.aprobar.coordinador -> agente 'si no responde: la pendiente vence y la acción no corre' {
+          notes 'Abierto: el diseño no dice cuánto espera el agente. Hoy (bloque 03) una pendiente vence a los 5 minutos.'
+        }
+      }
+    }
+  }
+}

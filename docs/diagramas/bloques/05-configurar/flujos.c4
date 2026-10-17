@@ -1,0 +1,474 @@
+// BLOQUE 05 · LOS FLUJOS de «Configurar los perfiles de aprobación»: uno por sub-bloque, más el camino
+// completo.
+//   flujo-listar       ver los perfiles y borrar uno (17 pasos).
+//   flujo-agregar      elegir la app y la plantilla de un perfil nuevo (11 pasos).
+//   flujo-reglas       cambiar la regla de un tipo de acción (5 pasos).
+//   flujo-monto        poner el tope de monto y los escalones (10 pasos).
+//   flujo-excepciones  ver y quitar las excepciones (9 pasos).
+//   flujo-guardar      escribir el perfil (11 pasos).
+//   flujo-configurar   el camino completo, de Ajustes al perfil guardado (11 pasos).
+// Se llega a cada uno desde la vista `subbloques-configurar` (un clic en «lo que se quiere» del
+// sub-bloque); el camino completo, desde el marco de esa vista.
+// Cada paso lleva en un comentario el número que dibuja LikeC4, para pedir cambios por paso
+// («en el paso 5, agregá…»). Sale del código del 2026-10-16 (rama feat/approval-profiles); cada
+// pieza dice su función y su archivo:línea en bloque.c4. El portón es del bloque 02.
+//
+// Forma: cajas unidas por flechas numeradas, sin líneas de vida. Los recuadros de los alt no se
+// dibujan: por eso cada paso de una rama dice su condición al principio de la etiqueta.
+//
+// Se abre en VS Code: este archivo, y Ctrl+Shift+P → «Open Preview» (LikeC4).
+views '05 · Configurar perfiles' {
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 1 · ver y borrar perfiles
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-listar {
+    title 'Ver y borrar perfiles'
+    description '''
+      El dueño abre la lista. La lista pide los perfiles al almacén; si no se pueden leer, aparece una
+      tarjeta de error con «Reintentar». Si se leyeron, salen ordenados por nombre. Borrar pide
+      confirmación y, si el almacén escribe, el portón deja de aplicar ese perfil.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1 a 4 · abrir la lista
+    // 1
+    usuario -> app.configurar.listar.ajustes 'abre Ajustes → Perfiles de aprobación'
+    // 2
+    app.configurar.listar.ajustes -> app.configurar.listar.lista 'abre la lista'
+    // 3
+    app.configurar.listar.lista -> app.configurar.listar.listaVM 'pide los perfiles' {
+      notes 'También carga las apps del teléfono para ponerle a cada perfil su nombre y su ícono; la lista aparece en cuanto tiene lo primero.'
+    }
+    // 4
+    app.configurar.listar.listaVM -> app.configurar.almacen 'lee los perfiles y sigue sus cambios' {
+      notes 'La primera vez lee el almacén del disco; después sigue la memoria, así que un cambio hecho en el editor se ve solo.'
+    }
+
+    // 5 a 8 · se pudo leer o no
+    alt {
+      when 'el almacén no se puede leer' {
+        // 5
+        app.configurar.almacen -> app.configurar.listar.tarjetaError 'si no se puede leer: la tarjeta de error' {
+          notes 'No se lee como «sin perfiles»: mientras no se pueda leer, el portón prohíbe toda acción que no sea lectura (bloque 03).'
+        }
+        // 6
+        usuario -> app.configurar.listar.tarjetaError 'si no se puede leer: toca «Reintentar»'
+        // 7
+        app.configurar.listar.tarjetaError -> app.configurar.almacen 'si no se puede leer: vuelve a leer' {
+          notes 'Si sigue fallando, la tarjeta queda.'
+        }
+      }
+      else 'se pudo leer' {
+        // 8
+        app.configurar.listar.listaVM -> app.configurar.listar.lista 'si se leyó: los perfiles, por nombre' {
+          notes 'Un perfil guardado que no se puede decodificar sale en rojo y sólo deja borrarlo: no se puede abrir.'
+        }
+      }
+    }
+
+    // 9 a 17 · borrar
+    // 9
+    usuario -> app.configurar.listar.lista 'toca el tacho de un perfil'
+    // 10
+    app.configurar.listar.lista -> app.configurar.listar.borrarDialogo 'pide confirmar'
+    // 11
+    usuario -> app.configurar.listar.borrarDialogo 'confirma'
+    // 12
+    app.configurar.listar.borrarDialogo -> app.configurar.listar.listaVM 'confirma: delete(paquete)' {
+      notes 'La confirmación no habla con el almacén: se lo pasa al cerebro de la lista, que primero limpia el aviso de un borrado fallido anterior.'
+    }
+    // 13
+    app.configurar.listar.listaVM -> app.configurar.almacen 'borra el perfil'
+    alt {
+      when 'se borró' {
+        // 14
+        app.configurar.almacen -> perfiles 'si se borró: lo saca del disco y de la memoria' {
+          notes 'Desde la próxima llamada el portón no lo aplica: la app vuelve a comportarse como si no tuviera perfil.'
+        }
+        // 15
+        app.configurar.listar.listaVM -> registroServidor 'si se borró: anota profile_deleted' {
+          notes 'Lo anota el cerebro de la lista, no el almacén (ApprovalEventLogger, que escribe en el registro del servidor). Sólo el nombre del paquete, nada más. Si no había nada guardado de esa app, no borra ni anota.'
+        }
+      }
+      when 'no se pudo escribir' {
+        // 16
+        app.configurar.almacen -> app.configurar.listar.listaVM 'si falla: el almacén no está disponible'
+        // 17
+        app.configurar.listar.listaVM -> app.configurar.listar.lista 'si falla: un mensaje de error que se puede cerrar'
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 2 · agregar un perfil
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-agregar {
+    title 'Agregar un perfil a una app'
+    description '''
+      El dueño toca «+», elige una app de la lista (o escribe su paquete) y elige una plantilla. El
+      editor se abre con un perfil nuevo que todavía no se guardó.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1 y 2 · las apps
+    // 1
+    app.configurar.listar.lista -> app.configurar.agregar.selector 'toca «+»'
+    // 2
+    app.configurar.agregar.selector -> appsDelTelefono 'lee las apps del teléfono' {
+      notes 'Muestra las apps que se pueden abrir, con su ícono. Saca esta misma app y las que ya tienen perfil (también las que no se pueden leer).'
+    }
+
+    // 3 a 6 · la app, de la lista o a mano
+    alt {
+      when 'elige una app de la lista' {
+        // 3
+        usuario -> app.configurar.agregar.selector 'si elige de la lista: busca y toca una app' {
+          notes 'La búsqueda mira el nombre y el paquete, sin distinguir mayúsculas.'
+        }
+        // 4
+        app.configurar.agregar.selector -> app.configurar.agregar.plantillaDialogo 'si elige de la lista: abre la elección de plantilla'
+      }
+      when 'escribe un paquete a mano' {
+        // 5
+        usuario -> app.configurar.agregar.escribirPaquete 'si lo escribe: el nombre del paquete'
+        // 6
+        app.configurar.agregar.escribirPaquete -> app.configurar.agregar.plantillaDialogo 'si lo escribe y es válido: abre la elección de plantilla' {
+          notes '''
+            Antes de aceptarlo revisa que no esté vacío, que tenga formato de paquete, que no sea esta
+            misma app y que no tenga ya un perfil. El botón queda apagado con cualquiera de esos errores,
+            y dice cuál es.
+          '''
+        }
+      }
+    }
+
+    // 7 a 11 · la plantilla
+    // 7
+    usuario -> app.configurar.agregar.plantillaDialogo 'elige una plantilla y toca «Continuar»' {
+      notes 'La de dinero viene preseleccionada.'
+    }
+    // 8
+    app.configurar.agregar.plantillaDialogo -> app.configurar.editor 'cierra la pantalla de agregar y abre el editor con la app y el nombre de la plantilla' {
+      notes 'Sólo viaja el nombre de la plantilla (de dinero o común): el diálogo no arma ningún valor.'
+    }
+    // 9
+    app.configurar.editor -> app.configurar.editorVM 'load(app, plantilla)' {
+      notes 'Sólo la primera llamada cuenta. Un perfil ya guardado de esa app gana siempre sobre la plantilla.'
+    }
+    // 10
+    app.configurar.editorVM -> app.configurar.agregar.plantilla 'si no hay perfil guardado: pide los valores de esa plantilla'
+    // 11
+    app.configurar.agregar.plantilla -> app.configurar.borrador 'el perfil nuevo queda sólo en el borrador, sin guardar' {
+      notes '''
+        No se escribe nada hasta «Guardar». De dinero: leer y navegar corren, escribir pregunta en el chat,
+        el botón de acción avisa al dueño y el tope es obligatorio. Común: todo corre menos el botón de
+        acción, que pregunta en el chat.
+      '''
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 3 · cambiar las reglas
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-reglas {
+    title 'Cambiar las reglas del perfil'
+    description '''
+      El dueño elige, para un tipo de acción, qué pasa. El editor cambia el borrador, lo valida y
+      muestra el resultado: si las cuatro reglas están puestas, no hay error.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1
+    usuario -> app.configurar.reglas.reglasUI 'elige qué pasa con un tipo de acción' {
+      notes '''
+        Cuatro tipos: leer, navegar, escribir y botón de acción; debajo de cada uno, lo que cubre. Cuatro
+        modos: correr, preguntar en el chat, avisar al dueño y prohibir. El portón aplica la regla del
+        tipo que le toque a cada llamada y, si hay tope de monto, gana lo más estricto (bloque 03).
+      '''
+    }
+    // 2
+    app.configurar.reglas.reglasUI -> app.configurar.editorVM 'setRule(tipo, modo)' {
+      notes 'No hace nada si no hay borrador o si se está guardando. Un cambio borra el error de un guardado anterior.'
+    }
+    // 3
+    app.configurar.editorVM -> app.configurar.borrador 'cambia la regla en el borrador'
+    // 4
+    app.configurar.borrador -> app.configurar.validador 'lo valida' {
+      notes 'Con las cuatro reglas puestas está completo. Si falta alguna, «reglas incompletas».'
+    }
+    // 5
+    app.configurar.validador -> app.configurar.editor 'la lista de errores' {
+      notes 'La pantalla se redibuja con los errores; «Guardar» se prende o se apaga.'
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 4 · poner un tope de monto
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-monto {
+    title 'Poner un tope de monto'
+    description '''
+      El dueño escribe un tope y, si quiere, escalones. El editor cambia el borrador, lo valida y
+      muestra los errores: los del tope, junto al campo, y todos, en la tarjeta de errores. Los números
+      no se escriben hasta «Guardar».
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1 y 2 · el tope
+    // 1
+    usuario -> app.configurar.monto.montoUI 'escribe el tope de monto' {
+      notes '''
+        Sólo números con punto decimal, hasta 8 decimales. La pantalla dice cómo lo va a leer: «1.500» se
+        guarda como «1.5». En los perfiles de dinero es obligatorio.
+      '''
+    }
+    // 2
+    app.configurar.monto.montoUI -> app.configurar.editorVM 'setMaxAmount(texto)' {
+      notes 'Hasta 30 caracteres.'
+    }
+
+    // 3 a 6 · los escalones
+    alt {
+      when 'agrega un escalón' {
+        // 3
+        usuario -> app.configurar.monto.montoUI 'si agrega un escalón: toca «Agregar escalón»' {
+          notes 'Hasta 5. El nuevo copia la regla del último, o «preguntar en el chat» si es el primero.'
+        }
+        // 4
+        app.configurar.monto.montoUI -> app.configurar.editorVM 'si agrega un escalón: addTier()'
+      }
+      when 'cambia o quita un escalón' {
+        // 5
+        usuario -> app.configurar.monto.montoUI 'si lo cambia: escribe «hasta cuánto» y elige la regla'
+        // 6
+        app.configurar.monto.montoUI -> app.configurar.editorVM 'si lo cambia o lo quita: setTier / removeTier'
+      }
+    }
+
+    // 7 a 9 · validar
+    // 7
+    app.configurar.editorVM -> app.configurar.borrador 'cambia el tope o los escalones en el borrador'
+    // 8
+    app.configurar.borrador -> app.configurar.validador 'lo valida' {
+      notes '''
+        Tope: un decimal mayor que 0. Escalones: hasta 5, de menor a mayor, ninguno sobre el tope, nunca
+        más flojos al subir el monto, y sólo si hay tope. Ya guardado, el portón prohíbe todo monto sobre
+        el tope y aplica el primer escalón que lo cubre; un monto que pasa el último escalón pero no llega
+        al tope usa el modo del último escalón (bloque 03).
+      '''
+    }
+    // 9
+    app.configurar.validador -> app.configurar.monto.montoUI 'los errores del tope, junto al campo' {
+      notes '''
+        Junto al campo del tope salen sólo tres: «un perfil de dinero necesita un tope», «el tope tiene que
+        ser un número mayor que 0» y «los escalones necesitan un tope». Un escalón sólo marca su campo
+        cuando su monto es inválido.
+      '''
+    }
+    // 10
+    app.configurar.validador -> app.configurar.editor 'todos los errores, en la tarjeta de errores' {
+      notes 'Los demás errores de escalones (más de 5, no van de menor a mayor, uno sobre el tope, uno más flojo que el de abajo) salen sólo en la tarjeta de errores del editor.'
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 5 · ver y quitar excepciones
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-excepciones {
+    title 'Ver y quitar excepciones'
+    description '''
+      El editor muestra las excepciones del perfil guardado. Quitar una pide confirmación y se aplica al
+      instante, sin esperar a «Guardar»: el almacén escribe y el portón deja de tenerla en cuenta.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1
+    app.configurar.editor -> app.configurar.excepciones.excepcionesUI 'muestra las excepciones del perfil guardado' {
+      notes '''
+        Salen de la memoria del almacén, no del borrador. Dos listas: «no es un monto» y «no es un botón
+        de acción». Cada una dice el nombre del campo o del botón, de qué tipo es (id o texto) y cuándo se
+        agregó. Las excepciones no se crean acá: nacen de la pantalla de aprobación (bloque 03).
+      '''
+    }
+    // 2
+    usuario -> app.configurar.excepciones.excepcionesUI 'toca el tacho de una excepción'
+    // 3
+    usuario -> app.configurar.excepciones.excepcionesUI 'confirma en el diálogo'
+    // 4
+    app.configurar.excepciones.excepcionesUI -> app.configurar.editorVM 'removeException(tipo, selector)' {
+      notes 'No espera a «Guardar».'
+    }
+    // 5
+    app.configurar.editorVM -> app.configurar.almacen 'quita la excepción' {
+      notes 'Bajo el candado del almacén: valida, escribe el disco y después la memoria.'
+    }
+    alt {
+      when 'se quitó' {
+        // 6
+        app.configurar.almacen -> perfiles 'si se quitó: la saca del disco y de la memoria'
+        // 7
+        app.configurar.editorVM -> registroServidor 'si se quitó: anota exception_removed' {
+          notes 'Sólo si de verdad estaba en la lista.'
+        }
+        // 8
+        perfiles -> app.atender.porton 'si se quitó: desde la próxima llamada ya no vale' {
+          notes 'El elemento vuelve a contar como monto, o como botón de acción (bloque 03).'
+        }
+      }
+      when 'no se pudo escribir' {
+        // 9
+        app.configurar.editorVM -> app.configurar.editor 'si falla: un mensaje de error que se puede cerrar' {
+          notes 'Si el perfil ya no existe no hay mensaje: no había nada que quitar.'
+        }
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 6 · guardar el perfil
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-guardar {
+    title 'Guardar el perfil'
+    description '''
+      El dueño toca «Guardar». El editor arma el perfil con el borrador y se lo pasa al almacén: si es
+      nuevo lo crea, si ya existía lo actualiza. El almacén valida otra vez y recién después escribe.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1 a 3 · el toque
+    // 1
+    usuario -> app.configurar.guardar.botonGuardar 'toca «Guardar»' {
+      notes 'Está apagado si hay errores, si no hay borrador, o si ya se está guardando o ya se guardó.'
+    }
+    // 2
+    app.configurar.guardar.botonGuardar -> app.configurar.editorVM 'save()' {
+      notes 'Vuelve a comprobar que el borrador es válido y marca «guardando»: un segundo toque no hace nada.'
+    }
+    // 3
+    app.configurar.editorVM -> app.configurar.guardar.guardarBorrador 'arma el perfil con el borrador' {
+      notes 'El perfil sale con las listas de excepciones vacías: el almacén conserva las que ya tenía.'
+    }
+
+    // 4 y 5 · nuevo o existente
+    alt {
+      when 'es un perfil nuevo' {
+        // 4
+        app.configurar.guardar.guardarBorrador -> app.configurar.almacen 'si es nuevo: lo crea (upsert)' {
+          notes 'Si ya hay 100 perfiles, no lo guarda.'
+        }
+      }
+      else 'ya existía' {
+        // 5
+        app.configurar.guardar.guardarBorrador -> app.configurar.almacen 'si ya existía: lo actualiza (updateSettings)' {
+          notes 'Cambia la plantilla, las reglas, el tope y los escalones de una vez, sin tocar las excepciones. Si el perfil desapareció mientras tanto, no lo encuentra.'
+        }
+      }
+    }
+
+    // 6 · validar
+    app.configurar.almacen -> app.configurar.validador 'lo valida otra vez antes de escribir' {
+      notes 'El botón apagado no alcanza: un perfil inválido no se escribe aunque llegue hasta acá.'
+    }
+
+    // 7 a 11 · el resultado
+    alt {
+      when 'se guardó' {
+        // 7
+        app.configurar.almacen -> perfiles 'si se guardó: escribe el disco y después la memoria'
+        // 8
+        app.configurar.editorVM -> registroServidor 'si se guardó: anota profile_created o profile_updated' {
+          notes 'Sólo el nombre del paquete: nunca montos, reglas ni textos.'
+        }
+        // 9
+        app.configurar.editorVM -> app.configurar.editor 'si se guardó: cierra el editor'
+        // 10
+        perfiles -> app.atender.porton 'si se guardó: la próxima llamada lo lee' {
+          notes 'El portón lee la memoria: el cambio vale sin reiniciar el servidor. Sigue en el bloque 03.'
+        }
+      }
+      else 'no se pudo guardar' {
+        // 11
+        app.configurar.almacen -> app.configurar.editor 'si no se pudo: el motivo, para corregirlo' {
+          notes '''
+            El perfil es inválido; ya hay 100; el perfil ya no existe; o el almacén no se pudo escribir.
+            El mensaje desaparece con el próximo cambio.
+          '''
+        }
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // El camino completo
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-configurar {
+    title 'El camino completo: de Ajustes a un perfil guardado'
+    description '''
+      El dueño abre la lista de perfiles y agrega uno (elige la app y una plantilla) o abre uno que ya
+      existe. En el editor cambia las reglas y el tope; el validador revisa cada cambio. Al guardar, el
+      almacén lo valida otra vez y lo escribe, y desde la próxima llamada el portón lo aplica. Cada parte
+      se ve en detalle en su sub-bloque.
+    '''
+    autoLayout LeftRight
+    global style estados
+    include app.configurar.listar.lista with { navigateTo flujo-listar }
+    include app.configurar.agregar.selector with { navigateTo flujo-agregar }
+    include app.configurar.validador with { navigateTo flujo-reglas }
+    include app.configurar.almacen with { navigateTo flujo-guardar }
+
+    // 1 a 3 · la lista
+    // 1
+    usuario -> app.configurar.listar.ajustes 'abre Ajustes → Perfiles de aprobación'
+    // 2
+    app.configurar.listar.ajustes -> app.configurar.listar.lista 'abre la lista'
+    // 3
+    app.configurar.listar.lista -> app.configurar.almacen 'lee los perfiles' {
+      notes 'Si el almacén no se puede leer, la lista muestra una tarjeta de error con «Reintentar». También desde acá se borra un perfil, con confirmación.'
+    }
+
+    // 4 a 7 · agregar o editar
+    alt {
+      when 'agrega un perfil' {
+        // 4
+        app.configurar.listar.lista -> app.configurar.agregar.selector 'si agrega uno: toca «+» y elige una app'
+        // 5
+        app.configurar.agregar.selector -> app.configurar.agregar.plantillaDialogo 'si agrega uno: elige una plantilla'
+        // 6
+        app.configurar.agregar.plantillaDialogo -> app.configurar.editor 'si agrega uno: abre el editor con la plantilla elegida' {
+          notes 'Al abrirse, el editor arma los valores de partida con la plantilla (el detalle está en «Agregar un perfil»).'
+        }
+      }
+      else 'edita uno que ya existe' {
+        // 7
+        app.configurar.listar.lista -> app.configurar.editor 'si edita uno: lo abre con lo guardado' {
+          notes 'Un perfil guardado gana siempre sobre la plantilla. Las excepciones que el dueño fue aprobando (bloque 03) se ven y se quitan acá.'
+        }
+      }
+    }
+
+    // 8 a 11 · guardar
+    // 8
+    app.configurar.editor -> app.configurar.validador 'a cada cambio: ¿se puede guardar?' {
+      notes '«Guardar» queda apagado mientras haya errores, y el editor dice cuáles son.'
+    }
+    // 9
+    app.configurar.editor -> app.configurar.almacen 'al tocar Guardar' {
+      notes 'Un perfil nuevo se crea; uno que ya existe se actualiza sin perder sus excepciones. Si se guardó, el editor se cierra.'
+    }
+    // 10
+    app.configurar.almacen -> perfiles 'lo valida otra vez y lo guarda' {
+      notes 'Escribe primero el disco y después la memoria. Hasta 100 perfiles.'
+    }
+    // 11
+    perfiles -> app.atender.porton 'la próxima llamada lo lee' {
+      notes 'El portón lee la memoria: el cambio vale sin reiniciar el servidor. Sigue en el bloque 03.'
+    }
+  }
+}

@@ -1,0 +1,326 @@
+// BLOQUE 05 · Configurar los perfiles de aprobación. La franja (sólo la capa de afuera), seis
+// sub-bloques con sus piezas y sus vistas. Los flujos, en flujos.c4 de esta misma carpeta.
+// Es el lado del dueño del bloque 03: ahí el portón lee los perfiles, acá se escriben.
+// Se parte en seis sub-bloques, uno por cosa que el dueño hace, cada uno con su cadena
+// (entrada → lo que se quiere → lo que se obtiene), sus piezas y su flujo:
+//   listar       ver los perfiles y borrar uno
+//   agregar      elegir la app y la plantilla de un perfil nuevo
+//   reglas       decir qué pasa con cada tipo de acción
+//   monto        poner un tope de monto y escalones
+//   excepciones  ver y quitar las excepciones
+//   guardar      escribir el perfil
+// Las piezas que usan varios sub-bloques (el editor, el borrador, el validador, el almacén) cuelgan
+// directo del bloque. La vista `subbloques-configurar` los muestra juntos, en el orden en que se usan.
+// Cada pieza: su función y su archivo:línea (bajo app/src/main/kotlin/com/danielealbano/
+// androidremotecontrolmcp/), verificados el 2026-10-16 con codebase-memory y el código, en la rama
+// feat/approval-profiles (la punta de nuestra versión). Todas están hechas.
+model {
+  extend app {
+    configurar = bloque 'Configurar los perfiles de aprobación' {
+      #hecho
+      description 'Hecho en nuestra versión'
+
+      entrada = entrada 'El dueño quiere ponerle reglas a una app' {
+        description 'Abre Ajustes → Perfiles de aprobación para crear un perfil, cambiar uno o borrarlo.'
+      }
+      quiere = objetivo 'Que cada app tenga las reglas que el dueño quiere' {
+        #hecho
+        description 'Un perfil por app, con una regla para leer, navegar, escribir y tocar un botón de acción, y un tope de monto si la app mueve dinero. Sólo se guarda un perfil válido.'
+        technology 'la lista de perfiles · el editor · el almacén de perfiles'
+      }
+      obtiene = resultado 'Un perfil guardado' {
+        description 'Queda en el teléfono y vale desde la próxima llamada del agente, sin reiniciar el servidor.'
+      }
+      entrada -[entra]-> quiere
+      quiere -[da]-> obtiene
+
+      // ── Lo que comparten los sub-bloques ───────────────────────────────────────────────────
+      editor = pieza 'La pantalla del editor' {
+        description 'Junta las reglas, el tope de monto, las excepciones y el botón Guardar de un perfil, y muestra los errores. Se abre desde la lista (un perfil guardado) o desde la pantalla de agregar (un perfil nuevo).'
+        technology 'ApprovalProfileEditorScreen · ui/screens/settings/ApprovalProfileEditorScreen.kt:47'
+      }
+      editorVM = pieza 'El cerebro del editor' {
+        description 'Guarda el borrador que el dueño va cambiando, lo valida a cada cambio, lo guarda y quita excepciones al instante. No cambia nada mientras se está guardando.'
+        technology 'ApprovalProfileEditorViewModel · ui/viewmodels/ApprovalProfileEditorViewModel.kt:33 (setRule :70, setMaxAmount :77, addTier :82, setTier :94, removeTier :108, removeException :113, save :141)'
+      }
+      borrador = pieza 'El borrador' {
+        description 'Una copia editable de lo que el dueño puede cambiar: las reglas, el tope y los escalones. No se escribe nada hasta Guardar.'
+        technology 'ProfileDraft · ui/viewmodels/ApprovalProfileEditorState.kt:24 (editDraft, ApprovalProfileEditorViewModel.kt:164)'
+      }
+      validador = pieza 'El validador' {
+        description 'Revisa un perfil: app válida, las cuatro reglas puestas, el tope (obligatorio en los de dinero), los escalones y las excepciones (hasta 100 por lista, cada una con un selector válido). Lo usa el editor a cada cambio y el almacén antes de escribir.'
+        technology 'ApprovalProfileValidator.validate · policy/model/ApprovalProfileValidator.kt:7 (amountErrors :16, exceptionErrors :49)'
+      }
+      almacen = pieza 'El almacén de perfiles' {
+        description 'Guarda los perfiles en el teléfono, hasta 100. Valida antes de escribir, escribe primero el disco y después la memoria, y desde ahí el portón lee la memoria.'
+        technology 'ApprovalProfileRepositoryImpl · data/repository/ApprovalProfileRepositoryImpl.kt:43 (upsert :77, updateSettings :96, delete :122, removeException :166, saveLocked :235)'
+      }
+
+      // ── 1 · Ver y borrar perfiles ──────────────────────────────────────────────────────────
+      listar = bloque 'Ver y borrar perfiles' {
+        #hecho
+        description 'Hecho en nuestra versión'
+
+        entrada = entrada 'El dueño abre la lista de perfiles' {
+          description 'Entra a Ajustes → Perfiles de aprobación.'
+        }
+        quiere = objetivo 'Ver qué apps tienen perfil, y borrar los que no quiere' {
+          #hecho
+          description 'La lista sale ordenada por nombre. Borrar pide confirmación. Si el almacén no se puede leer, lo dice y deja reintentar.'
+          technology 'la lista de perfiles'
+        }
+        obtiene = resultado 'La lista al día, o un perfil menos' {
+          description 'Un perfil borrado deja de aplicarse desde la próxima llamada: la app vuelve a comportarse como si no tuviera perfil.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        ajustes = pieza 'El menú de Ajustes' {
+          description 'Una de sus entradas es «Perfiles de aprobación».'
+          technology 'SettingsIndexScreen (ApprovalProfilesEntry) · ui/screens/settings/SettingsIndexScreen.kt:121'
+        }
+        lista = pieza 'La lista de perfiles' {
+          description 'Muestra las apps que ya tienen perfil, para abrirlas o borrarlas. Tiene el botón «+» para agregar uno.'
+          technology 'ApprovalProfilesScreen · ui/screens/settings/ApprovalProfilesScreen.kt:50'
+        }
+        listaVM = pieza 'El cerebro de la lista' {
+          description 'Junta los perfiles con el nombre y el ícono de cada app, los ordena por nombre y pone aparte los que no se pueden leer. También borra un perfil en el almacén y, si se borró, lo anota en el registro del servidor.'
+          technology 'ApprovalProfilesViewModel.listState · ui/viewmodels/ApprovalProfilesViewModel.kt:51 (profileListItems · ui/viewmodels/ApprovalProfilesListState.kt:35, loadApps :65, delete :83)'
+        }
+        tarjetaError = pieza 'La tarjeta de error' {
+          description 'Sale cuando el almacén no se puede leer, con el botón «Reintentar».'
+          technology 'StoreUnreadableCard · ui/screens/settings/ApprovalProfilesScreen.kt:124 · retryLoad · ui/viewmodels/ApprovalProfilesViewModel.kt:73'
+        }
+        borrarDialogo = pieza 'La confirmación de borrar' {
+          description 'Pregunta si de verdad se borra el perfil de esa app; al confirmar, se lo pasa al cerebro de la lista, que lo borra.'
+          technology 'DeleteProfileDialog · ui/screens/settings/ApprovalProfilesScreen.kt:211'
+        }
+
+        ajustes -> lista 'abre la lista'
+        lista -> listaVM 'pide los perfiles'
+        listaVM -> lista 'los perfiles, por nombre'
+        lista -> borrarDialogo 'toca el tacho'
+        borrarDialogo -> listaVM 'confirma'
+      }
+
+      // ── 2 · Agregar un perfil ──────────────────────────────────────────────────────────────
+      agregar = bloque 'Agregar un perfil a una app' {
+        #hecho
+        description 'Hecho en nuestra versión'
+
+        entrada = entrada 'El dueño toca «+» en la lista' {
+          description 'Quiere ponerle reglas a una app que todavía no tiene perfil.'
+        }
+        quiere = objetivo 'Elegir la app y la plantilla de partida' {
+          #hecho
+          description 'La app sale de la lista del teléfono o se escribe a mano. La plantilla (de dinero o común) da los valores de partida, que después se cambian.'
+          technology 'el selector de apps · las plantillas'
+        }
+        obtiene = resultado 'El editor abierto con un perfil nuevo' {
+          description 'El perfil nuevo sólo existe en el borrador: no se escribe nada hasta Guardar.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        selector = pieza 'El selector de apps' {
+          description 'Lista las apps del teléfono con búsqueda por nombre o paquete. No ofrece esta misma app ni las que ya tienen perfil.'
+          technology 'ApprovalProfileAddScreen · ui/screens/settings/ApprovalProfileAddScreen.kt:60 (AppPickerList :138) · toPickerApps · ui/viewmodels/ApprovalProfilesListState.kt:54'
+        }
+        escribirPaquete = pieza 'El paquete escrito a mano' {
+          description 'Para una app que no aparece en la lista. Revisa que no esté vacío, que tenga formato de paquete, que no sea esta misma app y que no tenga ya un perfil.'
+          technology 'ManualPackageEntry · ui/screens/settings/ApprovalProfileAddScreen.kt:103 · manualPackageError · ui/viewmodels/ApprovalProfilesListState.kt:67'
+        }
+        plantillaDialogo = pieza 'La elección de plantilla' {
+          description 'Un diálogo con las dos plantillas; la de dinero viene preseleccionada. Al continuar abre el editor con la app y el nombre de la plantilla: no arma ningún valor.'
+          technology 'TemplateChoiceDialog · ui/screens/settings/ApprovalProfileAddScreen.kt:199'
+        }
+        plantilla = pieza 'La plantilla' {
+          description 'Los valores de partida, que arma el cerebro del editor al abrirse (sólo si la app no tiene ya un perfil guardado). De dinero: leer y navegar corren, escribir pregunta en el chat, el botón de acción avisa al dueño y el tope es obligatorio. Común: todo corre menos el botón de acción, que pregunta en el chat.'
+          technology 'ProfileTemplates.newProfile · policy/model/ProfileTemplates.kt:30 · llamada desde ApprovalProfileEditorViewModel.load · ui/viewmodels/ApprovalProfileEditorViewModel.kt:51 (:64)'
+        }
+
+        selector -> plantillaDialogo 'una app elegida'
+        escribirPaquete -> plantillaDialogo 'un paquete válido'
+      }
+
+      // ── 3 · Cambiar las reglas ─────────────────────────────────────────────────────────────
+      reglas = bloque 'Cambiar las reglas del perfil' {
+        #hecho
+        description 'Hecho en nuestra versión'
+
+        entrada = entrada 'El dueño tiene abierto el editor' {
+          description 'Quiere cambiar qué pasa con cada tipo de acción en esa app.'
+        }
+        quiere = objetivo 'Decir qué pasa con cada tipo de acción' {
+          #hecho
+          description 'Cuatro tipos (leer, navegar, escribir, botón de acción) y cuatro modos (correr, preguntar en el chat, avisar al dueño, prohibir).'
+          technology 'las reglas del editor · el validador'
+        }
+        obtiene = resultado 'Cuatro reglas completas en el borrador' {
+          description 'Si falta una, el editor lo dice y Guardar queda apagado.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        reglasUI = pieza 'Las reglas del editor' {
+          description 'Una fila por tipo de acción, con lo que cubre y un menú con los cuatro modos.'
+          technology 'RulesSection · ui/screens/settings/ApprovalProfileEditorScreen.kt:188 · RuleRow :200 · RuleModeDropdown · ui/screens/settings/ApprovalProfileComponents.kt:82'
+        }
+      }
+
+      // ── 4 · Poner un tope de monto ─────────────────────────────────────────────────────────
+      monto = bloque 'Poner un tope de monto' {
+        #hecho
+        description 'Hecho en nuestra versión'
+
+        entrada = entrada 'El dueño quiere limitar el dinero que mueve el agente' {
+          description 'Quiere que, pasado cierto monto, la app no deje o pida más aprobación.'
+        }
+        quiere = objetivo 'Poner un tope y, si quiere, escalones' {
+          #hecho
+          description 'El tope es el monto máximo: sobre él, el portón prohíbe. Los escalones endurecen la regla a medida que sube el monto.'
+          technology 'la sección de monto · el validador'
+        }
+        obtiene = resultado 'Un tope y unos escalones válidos en el borrador' {
+          description 'El tope se guarda en su forma canónica (1.500 → 1.5).'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        montoUI = pieza 'La sección de monto' {
+          description 'El campo del tope, que dice cómo lo va a leer, y hasta 5 escalones, cada uno con «hasta cuánto» y su regla.'
+          technology 'AmountSection · ui/screens/settings/ApprovalProfileAmountSection.kt:35 (TierRow :90)'
+        }
+      }
+
+      // ── 5 · Ver y quitar excepciones ───────────────────────────────────────────────────────
+      excepciones = bloque 'Ver y quitar excepciones' {
+        #hecho
+        description 'Hecho en nuestra versión'
+
+        entrada = entrada 'El dueño quiere revisar lo que fue aprobando' {
+          description 'Abre un perfil que ya tiene excepciones.'
+        }
+        quiere = objetivo 'Ver las excepciones del perfil y quitar las que no quiere' {
+          #hecho
+          description 'Hay dos listas: «no es un monto» y «no es un botón de acción». Las excepciones no se crean acá: nacen de la pantalla de aprobación (bloque 03).'
+          technology 'la sección de excepciones · el almacén de perfiles'
+        }
+        obtiene = resultado 'La excepción quitada' {
+          description 'Deja de valer en cuanto el almacén escribe, sin esperar a Guardar.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        excepcionesUI = pieza 'La sección de excepciones' {
+          description 'Dos listas con el nombre del campo o botón, de qué tipo es y cuándo se agregó. Cada una tiene su tacho, con confirmación.'
+          technology 'ExceptionsSection · ui/screens/settings/ApprovalProfileExceptionsSection.kt:36 (RemoveExceptionDialog :118)'
+        }
+      }
+
+      // ── 6 · Guardar el perfil ──────────────────────────────────────────────────────────────
+      guardar = bloque 'Guardar el perfil' {
+        #hecho
+        description 'Hecho en nuestra versión'
+
+        entrada = entrada 'El dueño toca «Guardar»' {
+          description 'Terminó de cambiar el perfil nuevo o el que ya existía.'
+        }
+        quiere = objetivo 'Escribir el perfil, sólo si es válido' {
+          #hecho
+          description 'Un perfil nuevo se crea (hasta 100); uno que ya existía se actualiza sin perder sus excepciones. El almacén vuelve a validar antes de escribir.'
+          technology 'el editor · el almacén de perfiles'
+        }
+        obtiene = resultado 'El perfil guardado, o el motivo por el que no se pudo' {
+          description 'Si se guardó, el editor se cierra y el cambio vale desde la próxima llamada. Si no, el editor dice por qué.'
+        }
+        entrada -[entra]-> quiere
+        quiere -[da]-> obtiene
+
+        botonGuardar = pieza 'El botón «Guardar»' {
+          description 'Se apaga si hay errores, si no hay borrador, o si ya se está guardando o ya se guardó. Arriba del botón sale el motivo si el último intento falló.'
+          technology 'SaveSection · ui/screens/settings/ApprovalProfileEditorScreen.kt:248'
+        }
+        guardarBorrador = pieza 'El armado del perfil a guardar' {
+          description 'Convierte el borrador en un perfil. Si ya había uno guardado, lo actualiza de una vez; si no, lo crea.'
+          technology 'saveDraft · ui/viewmodels/ApprovalProfileEditorViewModel.kt:184'
+        }
+
+        botonGuardar -> guardarBorrador 'guarda el borrador'
+      }
+
+      // ── Relaciones entre las piezas ────────────────────────────────────────────────────────
+      editorVM -> borrador 'cambia el borrador'
+      borrador -> validador 'lo valida'
+      editorVM -> almacen 'guarda y quita excepciones'
+      almacen -> validador 'lo valida otra vez'
+      listar.lista -> editor 'abre un perfil'
+      agregar.plantillaDialogo -> editor 'abre un perfil nuevo, con el nombre de la plantilla'
+      editorVM -> agregar.plantilla 'arma los valores de partida'
+      listar.listaVM -> almacen 'lee y borra'
+      listar.lista -> agregar.selector 'toca «+»'
+      reglas.reglasUI -> editorVM 'setRule'
+      monto.montoUI -> editorVM 'setMaxAmount, escalones'
+      excepciones.excepcionesUI -> editorVM 'removeException'
+      guardar.botonGuardar -> editorVM 'save'
+    }
+  }
+
+  app.configurar.almacen -[usa]-> perfiles 'guarda y lee'
+  app.configurar.listar.listaVM -[usa]-> registroServidor 'anota profile_deleted'
+  app.configurar.editorVM -[usa]-> registroServidor 'anota los cambios de perfil'
+  app.configurar.agregar.selector -[usa]-> appsDelTelefono 'lee las apps instaladas'
+  usuario -> app.configurar.listar.ajustes 'abre Ajustes → Perfiles de aprobación'
+
+  // Lo que los otros bloques usan de este: el portón lee los perfiles; la pantalla de aprobación
+  // (bloque 03) puede sumarles una excepción.
+  app.atender.porton -[usa]-> app.configurar.almacen 'lee los perfiles'
+  app.aprobar.pantallaDueno -[usa]-> app.configurar.almacen 'guarda una excepción'
+
+  // La capa de afuera: quién pide, y quién usa lo que sale. Es lo que dibuja la franja.
+  usuario -> app.configurar.entrada 'quiere reglas para una app'
+  app.configurar.obtiene -> app.aprobar 'lo aplica a cada llamada'
+}
+
+views '05 · Configurar perfiles' {
+
+  // La franja: sólo la capa de afuera, sin piezas. Un clic en lo que se quiere abre los sub-bloques.
+  view bloque-configurar of app.configurar {
+    title 'Franja: quién lo pide, qué se quiere, qué sale'
+    description 'Un clic en «Que cada app tenga las reglas que el dueño quiere» abre sus seis partes.'
+    include app.configurar, app.configurar.entrada, app.configurar.obtiene
+    include app.configurar.quiere with { navigateTo subbloques-configurar }
+    include usuario, app.aprobar
+    global style estados
+    autoLayout LeftRight
+  }
+
+  // Los sub-bloques: la cadena de cada uno, en el orden en que se usan (LikeC4 apila de abajo hacia
+  // arriba, así que van en orden inverso). Un clic en lo que se quiere abre su flujo; el marco del bloque
+  // abre el camino completo, de Ajustes al perfil guardado.
+  view subbloques-configurar {
+    title 'Las seis partes de configurar un perfil'
+    description '''
+      Cada franja es una cosa que el dueño hace, y se lee de izquierda a derecha: lo que llega, lo que
+      se quiere y lo que se obtiene. Un clic en «lo que se quiere» abre su flujo, paso a paso. El marco
+      de arriba abre el camino completo, de Ajustes al perfil guardado.
+    '''
+    include app.configurar with { navigateTo flujo-configurar }
+    include app.configurar.guardar, app.configurar.guardar.entrada, app.configurar.guardar.obtiene
+    include app.configurar.guardar.quiere with { navigateTo flujo-guardar }
+    include app.configurar.excepciones, app.configurar.excepciones.entrada, app.configurar.excepciones.obtiene
+    include app.configurar.excepciones.quiere with { navigateTo flujo-excepciones }
+    include app.configurar.monto, app.configurar.monto.entrada, app.configurar.monto.obtiene
+    include app.configurar.monto.quiere with { navigateTo flujo-monto }
+    include app.configurar.reglas, app.configurar.reglas.entrada, app.configurar.reglas.obtiene
+    include app.configurar.reglas.quiere with { navigateTo flujo-reglas }
+    include app.configurar.agregar, app.configurar.agregar.entrada, app.configurar.agregar.obtiene
+    include app.configurar.agregar.quiere with { navigateTo flujo-agregar }
+    include app.configurar.listar, app.configurar.listar.entrada, app.configurar.listar.obtiene
+    include app.configurar.listar.quiere with { navigateTo flujo-listar }
+    exclude * -> * where source.kind is bloque
+    exclude * -> * where source.kind is pieza
+    global style estados
+    autoLayout LeftRight
+  }
+}

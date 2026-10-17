@@ -1,0 +1,162 @@
+// BLOQUE 03 · Aprobar una acción. La franja (sólo la capa de afuera), las piezas que usan los flujos y
+// su vista. Los flujos, en flujos.c4 de esta misma carpeta. Abre por dentro la caja «El portón de
+// aprobación» del bloque 02 (app.atender.porton), que ahí es una sola pieza.
+// Cada pieza: su función y su archivo:línea (bajo app/src/main/kotlin/com/danielealbano/
+// androidremotecontrolmcp/), verificados el 2026-10-16 con codebase-memory y el código, en la rama
+// feat/approval-profiles (la punta de nuestra versión). Todas están hechas.
+model {
+  extend app {
+    aprobar = bloque 'Aprobar una acción' {
+      #hecho
+      description 'Hecho en nuestra versión'
+
+      entrada = entrada 'Una llamada del agente a una herramienta' {
+        description 'Cualquier tools/call que llegó hasta el portón de aprobación: el nombre de la herramienta y sus argumentos.'
+      }
+      quiere = objetivo 'Dejar correr sólo lo que el dueño permitió' {
+        #hecho
+        description 'Según el perfil de cada app destino: correr, preguntar en el chat, avisar al dueño y esperar, o prohibir. Lo que no se puede atribuir a una app se prohíbe mientras haya perfiles.'
+        technology 'el portón de aprobación · los perfiles · el coordinador de aprobaciones'
+      }
+      obtiene = resultado 'La llamada corre, se frena o espera una aprobación' {
+        description 'Corre la herramienta, o vuelve un resultado de error o de espera: forbidden, needs_human_confirmation, awaiting_approval, denied, expired, not_required, already_used o too_many_pending.'
+      }
+      entrada -[entra]-> quiere
+      quiere -[da]-> obtiene
+
+      // Decidir: la llamada pasa el catálogo, se resuelve a qué app toca y el motor aplica el perfil.
+      catalogo = pieza 'El catálogo de herramientas' {
+        description 'Dice de cada herramienta si actúa sobre una app (tocar, escribir, abrir…) o no (archivos, cámara, ubicación, las dos tools de aprobación, salir al inicio). Las que no actúan sobre una app pasan sin mirar los perfiles.'
+        technology 'ToolPolicyCatalog.requireClass · policy/subject/ToolPolicyCatalog.kt:85'
+      }
+      cola = pieza 'La cola de acciones' {
+        description 'Mientras haya algún perfil, las acciones que no son lecturas se evalúan y corren de a una, con la cola tomada. Las lecturas no esperan.'
+        technology 'ToolPolicyGateImpl.guardSerialized · policy/gate/ToolPolicyGateImpl.kt:68 (mutationMutex :50)'
+      }
+      resolutor = pieza 'Quién es el destino' {
+        description 'Averigua sobre qué app actúa la llamada y qué hace (leer, navegar, escribir, botón de acción). Para un toque: lee las ventanas y ve qué elemento queda bajo el punto.'
+        technology 'ToolSubjectResolverImpl.resolve · policy/subject/ToolSubjectResolverImpl.kt:26 · CoordinateSubjectResolver.resolve :24 (el ejemplo, tap)'
+      }
+      motor = pieza 'El motor de perfiles' {
+        description 'Aplica la regla del perfil a cada app destino y se queda con el modo más estricto: correr, preguntar en el chat, avisar al dueño, prohibir. Tocar esta misma app siempre se prohíbe.'
+        technology 'PolicyEngineImpl.evaluate · policy/engine/PolicyEngineImpl.kt:23'
+      }
+      clasificador = pieza 'El clasificador del toque' {
+        description 'Si lo tocado tiene una palabra de acción (pagar, enviar, confirmar…, en español y en inglés) es botón de acción; si tiene nombre, es navegar; si no se sabe qué es, cuenta como botón de acción.'
+        technology 'TargetClassifier.classify · policy/engine/TargetClassifier.kt:23'
+      }
+      monto = pieza 'La regla del monto' {
+        description 'Si el perfil tiene tope, lee los números del texto y manda el mayor. Sobre el tope: prohibido. Si no, el escalón que le toca.'
+        technology 'AmountRule.evaluate · policy/engine/AmountRule.kt:23'
+      }
+      huella = pieza 'La huella de la llamada' {
+        description 'Un SHA-256 de la herramienta, sus argumentos, la app y el elemento. Un permiso sirve sólo para la llamada idéntica.'
+        technology 'CallFingerprint.of · policy/approval/CallFingerprint.kt:21'
+      }
+      autorizador = pieza 'El autorizador' {
+        description 'Convierte la decisión en un veredicto: correr, frenar con un resultado, o pedir aprobación. Antes de pedirla, busca un permiso sin usar de esa huella.'
+        technology 'GateAuthorizer.authorize · policy/gate/GateAuthorizer.kt:21 (authorizeDecision :96)'
+      }
+      coordinador = pieza 'El coordinador de aprobaciones' {
+        description 'Guarda en memoria las pendientes (hasta 10, 5 min cada una) y los permisos de un solo uso (2 min). Una llamada idéntica se une a la pendiente que ya existe.'
+        technology 'ActionApprovalCoordinatorImpl · policy/approval/ActionApprovalCoordinatorImpl.kt:21 (createOrJoin :31, consumeGrant :123)'
+      }
+
+      // Preguntar en el chat.
+      pedirChat = pieza 'Pedir confirmación en el chat' {
+        description 'Crea la pendiente y le dice al agente que le pregunte a la persona. La app no puede comprobar que se le preguntó: se apoya en el modelo.'
+        technology 'GateAuthorizer.requestConfirmation · policy/gate/GateAuthorizer.kt:129'
+      }
+      confirmarChat = pieza 'La herramienta confirm_human_approval' {
+        description 'El agente la llama cuando la persona dijo que sí: marca la pendiente como aprobada con un permiso de 2 min. No sirve para las que decide el dueño.'
+        technology 'ConfirmHumanApprovalTool.execute · mcp/tools/ApprovalTools.kt:153'
+      }
+
+      // Avisar al dueño.
+      avisarDueno = pieza 'Avisar al dueño' {
+        description 'Crea la pendiente y deja que decida el dueño, en el teléfono. Sólo él puede aprobar.'
+        technology 'GateAuthorizer.requestOwnerApproval · policy/gate/GateAuthorizer.kt:153'
+      }
+      observador = pieza 'El observador de pendientes' {
+        description 'Mientras el servidor corre, mira la lista de pendientes y le pasa al notificador sólo las de «avisar al dueño», y sólo cuando cambian.'
+        technology 'policyApprovalObserverJob (en startServer) · services/mcp/McpServerService.kt:424'
+      }
+      notificador = pieza 'La notificación al dueño' {
+        description 'Una notificación de prioridad alta y sin botones (un agente podría apretarlos): al tocarla se abre la pantalla de aprobación. En la pantalla bloqueada no dice app ni acción, y en ninguna muestra el monto.'
+        technology 'PolicyApprovalNotifier.update · services/mcp/PolicyApprovalNotifier.kt:47 (awaitingChanges :38)'
+      }
+      pantallaDueno = pieza 'La pantalla de aprobación' {
+        description 'Lista las pendientes con app, acción, monto y cuenta regresiva; el dueño aprueba o deniega. Ningún agente puede actuar sobre ella: la app prohíbe tocarse a sí misma.'
+        technology 'PolicyApprovalActivity · ui/PolicyApprovalActivity.kt:17 · PolicyApprovalViewModel.approve :61, deny :82 (ui/viewmodels/PolicyApprovalViewModel.kt)'
+      }
+      espera = pieza 'La espera del dueño' {
+        description 'Con la cola suelta, espera hasta 25 s la respuesta del dueño. Si aprueba, deja seguir; si deniega, frena; si no responde, devuelve awaiting_approval.'
+        technology 'GateAuthorizer.awaitOwner · policy/gate/GateAuthorizer.kt:37 (afterOwner, ToolPolicyGateImpl.kt:107)'
+      }
+      esperaPantalla = pieza 'La espera de que se cierre la pantalla' {
+        description 'Una aprobación se usa recién cuando la pantalla de aprobación se cierra (hasta 3 s), para que la segunda revisión lea la app de abajo y no la pantalla.'
+        technology 'ApprovalScreenVisibilityImpl.awaitHidden · policy/approval/ApprovalScreenVisibility.kt:38'
+      }
+      revisar = pieza 'La segunda revisión' {
+        description 'Con la cola otra vez tomada, vuelve a resolver y evaluar la llamada, sin esperar. Corre sólo si la huella es la misma y la decisión no es más estricta; si no, devuelve el resultado nuevo.'
+        technology 'ToolPolicyGateImpl.recheckAndExecute · policy/gate/ToolPolicyGateImpl.kt:140'
+      }
+      consultarEstado = pieza 'La herramienta get_approval_status' {
+        description 'Dice cómo va una pendiente (pending, approved, denied, expired…). Con wait_ms espera, hasta 25 s, a que se decida.'
+        technology 'GetApprovalStatusTool.execute · mcp/tools/ApprovalTools.kt:84'
+      }
+
+      catalogo -> cola 'si actúa sobre una app'
+      cola -> resolutor 'una a la vez'
+      resolutor -> motor 'la app y el tipo de acción'
+      motor -> clasificador 'si es un toque'
+      motor -> monto 'si el perfil tiene tope'
+      motor -> huella 'la decisión'
+      huella -> autorizador 'la huella'
+      autorizador -> coordinador '¿hay un permiso sin usar?'
+      autorizador -> pedirChat 'si el modo es preguntar en el chat'
+      autorizador -> avisarDueno 'si el modo es avisar al dueño'
+      pedirChat -> coordinador 'crea la pendiente'
+      avisarDueno -> coordinador 'crea la pendiente'
+      confirmarChat -> coordinador 'confirma en el chat'
+      consultarEstado -> coordinador 'cómo va la pendiente'
+      coordinador -> observador 'la lista cambió'
+      observador -> notificador 'las de avisar al dueño'
+      notificador -> pantallaDueno 'al tocarla'
+      pantallaDueno -> coordinador 'aprobar o denegar'
+      avisarDueno -> espera 'hasta 25 s'
+      espera -> esperaPantalla 'si aprobó'
+      esperaPantalla -> revisar 'cuando se cerró'
+    }
+  }
+
+  // El portón del bloque 02 pide la decisión a este bloque.
+  app.atender.porton -[usa]-> app.aprobar.catalogo 'pide la decisión'
+
+  app.aprobar.motor -[usa]-> perfiles 'la regla de cada app'
+  app.aprobar.resolutor -[usa]-> appsDelTelefono 'lee las ventanas'
+  app.aprobar.autorizador -[usa]-> registroServidor 'anota cada resultado (APPROVAL)'
+  app.aprobar.notificador -> usuario 'le avisa'
+  usuario -> app.aprobar.pantallaDueno 'aprueba o deniega'
+  agente -> app.aprobar.confirmarChat 'confirm_human_approval'
+  agente -> app.aprobar.consultarEstado 'get_approval_status'
+
+  // La capa de afuera: quién pide, a quién se recurre y quién recibe lo que sale. Es lo que dibuja la franja.
+  agente -> app.aprobar.entrada 'llama a una herramienta'
+  app.aprobar.quiere -> usuario 'si hace falta, le pide que apruebe o deniegue'
+  app.aprobar.obtiene -> agente 'corre, o se frena y dice por qué'
+}
+
+views '03 · Aprobar una acción' {
+
+  // La franja: sólo la capa de afuera, sin piezas. Las piezas, paso a paso, están en los flujos.
+  view bloque-aprobar of app.aprobar {
+    title 'Franja: quién lo pide, qué se quiere, qué sale'
+    description 'Un clic en «Dejar correr sólo lo que el dueño permitió» abre el flujo, paso a paso y con las piezas.'
+    include app.aprobar, app.aprobar.entrada, app.aprobar.obtiene
+    include app.aprobar.quiere with { navigateTo flujo-aprobar-decidir }
+    include agente, usuario
+    global style estados
+    autoLayout LeftRight
+  }
+}

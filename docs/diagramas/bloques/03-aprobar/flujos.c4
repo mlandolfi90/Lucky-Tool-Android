@@ -1,0 +1,404 @@
+// BLOQUE 03 · LOS FLUJOS de «Aprobar una acción»: cómo el portón decide si una llamada corre, se frena
+// o pide aprobación, y cómo se resuelve cada pedido de aprobación. Son tres porque juntos pasan de 50
+// pasos (cada rama cuenta en la numeración):
+//   flujo-aprobar-decidir  del portón a «corre», «prohibido» o «hace falta aprobación» (19 pasos).
+//   flujo-aprobar-chat     preguntar en el chat: el agente le pregunta a la persona (13 pasos).
+//   flujo-aprobar-avisar   avisar al dueño: notificación, espera de 25 s y el seguimiento (20 pasos).
+// En el primero, «Pedir confirmación en el chat» y «Avisar al dueño» llevan al segundo y al tercero
+// (`navigateTo`); en los otros dos, «El autorizador» y «El portón de aprobación» llevan de vuelta al
+// primero (la llamada repetida entra por el portón y sigue allá, en los pasos 16 y 17).
+// Cada paso lleva en un comentario el número que dibuja LikeC4, para pedir cambios por paso
+// («en el paso 5, agregá…»). Sale del código del 2026-10-16 (rama feat/approval-profiles); cada
+// pieza dice su función y su archivo:línea en bloque.c4. El portón, el registro y el aviso en
+// pantalla son piezas del bloque 02.
+//
+// Forma: cajas unidas por flechas numeradas, sin líneas de vida. Dentro del portón, una flecha
+// quiere decir «la llamada pasa de una pieza a la siguiente», en el orden en que la usa el código:
+// así los pasos se dibujan en cadena y no como una estrella alrededor del portón. Los recuadros de
+// los alt no se dibujan: por eso cada paso de una rama dice su condición al principio de la etiqueta.
+//
+// Se abre en VS Code: este archivo, y Ctrl+Shift+P → «Open Preview» (LikeC4).
+views '03 · Aprobar una acción' {
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 1 de 3 · decidir
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-aprobar-decidir {
+    title 'Flujo 1 de 3: ¿deja correr esta llamada?'
+    description '''
+      La llamada llega al portón. El catálogo dice si actúa sobre una app; si actúa, se averigua
+      sobre qué app cae y el motor aplica la regla del perfil (y el monto, si hay tope). El resultado
+      es uno de tres: corre, se prohíbe, o hace falta aprobación (si ya hay un permiso sin usar,
+      corre). Los dos tipos de aprobación siguen en los otros dos flujos.
+    '''
+    autoLayout LeftRight
+    global style estados
+    include app.aprobar.pedirChat with { navigateTo flujo-aprobar-chat }
+    include app.aprobar.avisarDueno with { navigateTo flujo-aprobar-avisar }
+
+    // 1 · llega la llamada
+    app.atender.registro -> app.atender.porton 'guard: la herramienta y sus argumentos' {
+      notes '''
+        Es el paso 7 del flujo «Atender un pedido»: la segunda capa de cada herramienta,
+        logged(gate(indicator(handler))). El resultado del portón vuelve al registro.
+      '''
+    }
+
+    // 2 · la clase de herramienta
+    app.atender.porton -> app.aprobar.catalogo '¿qué clase de herramienta es?' {
+      notes 'Una herramienta sin clase en el catálogo no deja ni registrarla: así ninguna se salta el portón.'
+    }
+
+    // 3 a 13 · actúa o no sobre una app
+    alt {
+      when 'no actúa sobre ninguna app' {
+        // 3
+        app.aprobar.catalogo -> app.atender.indicador 'si no actúa sobre una app: corre, sin mirar los perfiles' {
+          notes '''
+            Archivos, cámara, ubicación, portapapeles de lectura, compartir, listar apps, las dos
+            tools de aprobación y las salidas libres (inicio, recientes, notificaciones, ajustes
+            rápidos, cerrar el teclado). Un almacén de perfiles roto no las frena.
+          '''
+        }
+      }
+      else 'actúa sobre una app' {
+        // 4
+        app.aprobar.catalogo -> app.aprobar.cola 'si actúa sobre una app: toma la cola, si hay perfiles y no es una lectura' {
+          notes '''
+            Para saber si hay perfiles, el portón lee el almacén. Si no se puede leer, no cuenta como
+            «sin perfiles»: cada app destino cuenta como con perfil ilegible y toda acción que no sea
+            lectura se prohíbe; la próxima llamada vuelve a intentar leerlo. Con la cola, las acciones
+            corren de a una: una acción larga (escribir, unos 250 ms por letra) hace esperar a las
+            demás. Las lecturas, y todo cuando no hay perfiles, siguen sin cola.
+          '''
+        }
+        // 5
+        app.aprobar.cola -> app.aprobar.resolutor 'si actúa sobre una app: ¿sobre qué app actúa y qué hace?' {
+          notes '''
+            Un resolutor por tipo de herramienta (ventana, nodo, coordenada, texto, notificación,
+            lanzamiento). El portón nunca decide por la app que está al frente: mira dónde cae la llamada.
+          '''
+        }
+        // 6
+        app.aprobar.resolutor -> appsDelTelefono 'si actúa sobre una app: lee las ventanas y ve qué toca' {
+          notes 'En un toque (tap): hit-test del punto sobre cada ventana, más el elemento interactivo más cercano.'
+        }
+        alt {
+          when 'no se sabe sobre qué app actúa' {
+            // 7
+            app.atender.registro <- app.aprobar.resolutor 'si no se sabe la app: forbidden' {
+              notes '''
+                Con algún perfil, se bloquea lo que no se puede atribuir: destino sin resolver, toque en
+                el teclado de una app con perfil, intent implícito sin resolver, broadcast o servicio
+                implícito, y broadcast o servicio hacia una app con perfil. Sin perfiles, una llamada
+                sin atribuir corre igual. Se anota en el registro del servidor y vuelve
+                {status: forbidden, app, action, reason}, nunca con monto, texto ni etiquetas.
+              '''
+            }
+          }
+          else 'se sabe sobre qué app actúa' {
+            // 8
+            app.aprobar.resolutor -> app.aprobar.motor 'si se sabe la app: la app y el tipo de acción' {
+              notes 'Se resuelve y se evalúa en un solo paso (GateAssessor.assess, GateAssessment.kt:115). Con varias apps destino, gana la más estricta.'
+            }
+            // 9
+            app.aprobar.motor -> perfiles 'si se sabe la app: la regla del perfil de cada app' {
+              notes '''
+                Sin perfil: correr. Perfil ilegible: prohibido, salvo lectura. Tocar esta misma app:
+                prohibido siempre, aunque no haya perfiles (si no, el agente podría aprobarse solo).
+              '''
+            }
+            // 10
+            app.aprobar.motor -> app.aprobar.clasificador 'si se sabe la app y es un toque: ¿navegar o botón de acción?' {
+              notes 'Una palabra de acción gana incluso sobre una excepción del dueño. Lo que no se identifica cuenta como botón de acción.'
+            }
+            // 11
+            app.aprobar.motor -> app.aprobar.monto 'si se sabe la app y el perfil tiene tope: ¿cuánto dinero?' {
+              notes '''
+                Cuenta cada número de los textos que escribe la llamada; gana el mayor. No cuentan los
+                campos de contraseña ni los que el dueño marcó como «no es un monto». Sobre el tope:
+                prohibido; si no, el escalón que le toca. Se combina con la regla y gana lo más estricto.
+              '''
+            }
+            // 12
+            app.aprobar.motor -> app.aprobar.huella 'si se sabe la app: con la decisión, saca la huella de la llamada' {
+              notes 'Herramienta, argumentos, app y elemento, en SHA-256. Dos llamadas idénticas comparten huella.'
+            }
+            // 13
+            app.aprobar.huella -> app.aprobar.autorizador 'si se sabe la app: la decisión y su huella'
+          }
+        }
+      }
+    }
+
+    // 14 a 19 · lo que hace el autorizador con la decisión
+    alt {
+      when 'la decisión es prohibir' {
+        // 14
+        app.aprobar.autorizador -> app.atender.registro 'si es prohibir: forbidden' {
+          notes 'Con el motivo: la regla del perfil, un monto sobre el tope, esta misma app, un perfil ilegible…'
+        }
+      }
+      when 'la decisión es correr' {
+        // 15
+        app.aprobar.autorizador -> app.atender.indicador 'si es correr: corre' {
+          notes '''
+            Con la cola tomada, corre antes de soltarla. Una lectura, o una llamada que llegó sin
+            perfiles, corre sin cola.
+          '''
+        }
+      }
+      when 'la decisión es pedir aprobación y hay un permiso' {
+        // 16
+        app.aprobar.autorizador -> app.aprobar.coordinador 'si pide aprobación y hay un permiso sin usar para la huella: lo gasta' {
+          notes '''
+            El permiso sirve una vez y dura 2 min. El que dio el dueño en el teléfono vale para las dos
+            clases de aprobación; el que dio el chat, sólo para «preguntar en el chat».
+          '''
+        }
+        // 17
+        app.aprobar.autorizador -> app.atender.indicador 'si pide aprobación y hay un permiso: corre'
+      }
+      when 'la decisión es preguntar en el chat y no hay permiso' {
+        // 18
+        app.aprobar.autorizador -> app.aprobar.pedirChat 'si es preguntar en el chat y no hay permiso: pide confirmación' {
+          notes 'Sigue en el flujo 2 de 3.'
+        }
+      }
+      when 'la decisión es avisar al dueño y no hay permiso' {
+        // 19
+        app.aprobar.autorizador -> app.aprobar.avisarDueno 'si es avisar al dueño y no hay permiso: lo avisa' {
+          notes 'Sigue en el flujo 3 de 3.'
+        }
+      }
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 2 de 3 · preguntar en el chat
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-aprobar-chat {
+    title 'Flujo 2 de 3: preguntar en el chat'
+    description '''
+      El portón no deja correr la llamada: crea una pendiente y le responde al agente
+      needs_human_confirmation. El agente le pregunta a la persona; si dice que sí, llama a
+      confirm_human_approval, que deja un permiso de un solo uso. El agente repite la llamada idéntica,
+      el portón vuelve a decidir, gasta el permiso y la herramienta corre.
+    '''
+    autoLayout LeftRight
+    global style estados
+    include app.aprobar.autorizador with { navigateTo flujo-aprobar-decidir }
+    include app.atender.porton with { navigateTo flujo-aprobar-decidir }
+
+    // 1 · viene de decidir
+    app.aprobar.autorizador -> app.aprobar.pedirChat 'la decisión es preguntar en el chat y no hay permiso' {
+      notes 'Viene del paso 18 del flujo «¿deja correr esta llamada?».'
+    }
+
+    // 2 · la pendiente
+    app.aprobar.pedirChat -> app.aprobar.coordinador 'crea la pendiente, o se une a una igual' {
+      notes '''
+        Una igual es la que tiene la misma huella. La pendiente dura 5 min, su id son 16 bytes al azar
+        y puede haber 10 a la vez; unirse a una existente no cuenta. Si la nueva llamada es más
+        estricta, la pendiente se vuelve más estricta.
+      '''
+    }
+
+    // 3 a 6 · lo que se le responde al agente
+    alt {
+      when 'ya hay 10 pendientes' {
+        // 3
+        app.atender.registro <- app.aprobar.pedirChat 'si ya hay 10 pendientes: too_many_pending'
+      }
+      when 'se unió a una pendiente que sólo decide el dueño' {
+        // 4
+        app.atender.registro <- app.aprobar.pedirChat 'si se unió a una de avisar al dueño: awaiting_approval' {
+          notes 'Una llamada idéntica ya pidió la aprobación del dueño, que es más estricta: el chat no puede aprobarla.'
+        }
+      }
+      else 'es una pendiente de chat' {
+        // 5
+        app.atender.registro <- app.aprobar.pedirChat 'si es una pendiente de chat: needs_human_confirmation + approval_id' {
+          notes '''
+            Dice la app, la acción, cuándo vence y qué hacer; nunca el monto ni el texto. En el registro
+            del servidor, la llamada queda marcada como needs_confirmation.
+          '''
+        }
+      }
+    }
+    // 6
+    agente <- app.atender.registro 'la respuesta, con el approval_id' {
+      notes 'Sale por el SDK, como toda respuesta (pasos 19 y 20 del flujo «Atender un pedido»).'
+    }
+
+    // 7 y 8 · la conversación
+    // 7
+    agente -> humano 'describe la acción y pregunta si la hace' {
+      notes 'La app no puede comprobar que se le preguntó a la persona: este modo se apoya en el modelo. Donde haga falta garantía, el perfil debe usar «avisar al dueño» o «prohibir».'
+    }
+    // 8
+    humano -> agente 'dice que sí'
+
+    // 9 a 12 · la confirmación
+    // 9
+    agente -> app.aprobar.confirmarChat 'confirm_human_approval(approval_id)' {
+      notes 'Pasa por el registro, el SDK y el portón como cualquier herramienta, pero no actúa sobre una app: el portón la deja correr sin mirar los perfiles.'
+    }
+    // 10
+    app.aprobar.confirmarChat -> app.aprobar.coordinador 'confirma la pendiente'
+    alt {
+      when 'no se puede confirmar' {
+        // 11
+        agente <- app.aprobar.confirmarChat 'si no se puede confirmar: un error con el estado' {
+          notes '''
+            not_confirmable: la pendiente es de las que decide el dueño. denied, expired, not_required o
+            already_used: la pendiente ya se cerró de otra forma.
+          '''
+        }
+      }
+      else 'se confirmó' {
+        // 12
+        agente <- app.aprobar.confirmarChat 'si se confirmó: approved' {
+          notes 'Deja un permiso de un solo uso, de 2 min, con fuerza «chat»: vale sólo para esta llamada idéntica.'
+        }
+      }
+    }
+
+    // 13 · el agente repite la llamada
+    agente -> app.atender.porton 'repite la llamada, idéntica' {
+      notes '''
+        Entra por el SDK y el registro, como la primera vez, y sigue en el flujo 1 de 3: vuelve a
+        decidir (el perfil puede haber cambiado), encuentra el permiso de la misma huella (paso 16),
+        lo gasta, anota approved en el registro del servidor y corre (paso 17). Si cambia un argumento,
+        la huella cambia y se vuelve a pedir. Si el permiso venció o ya se usó, pide confirmación otra vez.
+      '''
+    }
+  }
+
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  // 3 de 3 · avisar al dueño
+  // ───────────────────────────────────────────────────────────────────────────────────────────
+  dynamic view flujo-aprobar-avisar {
+    title 'Flujo 3 de 3: avisar al dueño y esperar'
+    description '''
+      El portón crea la pendiente, el dueño recibe una notificación sin botones y la llamada espera
+      hasta 25 s con la cola suelta. Si el dueño aprueba, el portón vuelve a evaluar la llamada y, si
+      sigue igual, la corre. Si no responde, vuelve awaiting_approval y el agente consulta con
+      get_approval_status hasta que se decida.
+    '''
+    autoLayout LeftRight
+    global style estados
+    include app.aprobar.autorizador with { navigateTo flujo-aprobar-decidir }
+    include app.atender.porton with { navigateTo flujo-aprobar-decidir }
+
+    // 1 · viene de decidir
+    app.aprobar.autorizador -> app.aprobar.avisarDueno 'la decisión es avisar al dueño y no hay permiso' {
+      notes 'Viene del paso 19 del flujo «¿deja correr esta llamada?».'
+    }
+
+    // 2 y 3 · la pendiente
+    // 2
+    app.aprobar.avisarDueno -> app.aprobar.coordinador 'crea la pendiente, o se une a una igual' {
+      notes 'Dura 5 min, puede haber 10 a la vez. Unirse a una existente no cuenta.'
+    }
+    alt {
+      when 'ya hay 10 pendientes' {
+        // 3
+        app.atender.registro <- app.aprobar.avisarDueno 'si ya hay 10 pendientes: too_many_pending'
+      }
+    }
+
+    // 4 a 6 · la notificación
+    // 4
+    app.aprobar.coordinador -> app.aprobar.observador 'la lista de pendientes cambió'
+    // 5
+    app.aprobar.observador -> app.aprobar.notificador 'las de avisar al dueño, si cambió el conjunto' {
+      notes 'Las pendientes de chat no avisan. Si sólo cambia una de chat, o se repiten los mismos ids, no se publica nada.'
+    }
+    // 6
+    app.aprobar.notificador -> usuario 'notificación de prioridad alta, sin botones' {
+      notes '''
+        Sin botones, porque un agente podría apretarlos con las herramientas de notificación. Sin el
+        permiso de notificaciones no se publica; la tarjeta de pendientes de la pantalla del servidor
+        abre la misma pantalla de aprobación.
+      '''
+    }
+
+    // 7 · la espera
+    app.aprobar.avisarDueno -> app.aprobar.espera 'suelta la cola y espera hasta 25 s' {
+      notes 'Soltar la cola deja pasar a las demás acciones mientras el dueño decide. El aviso en pantalla de la herramienta tampoco se ve todavía.'
+    }
+
+    // 8 y 9 · el dueño
+    // 8
+    usuario -> app.aprobar.pantallaDueno 'toca la notificación: se abre la pantalla de aprobación' {
+      notes 'Es la única pantalla que muestra el monto, y nunca el de un campo de contraseña.'
+    }
+    // 9
+    app.aprobar.pantallaDueno -> app.aprobar.coordinador 'aprueba o deniega' {
+      notes '''
+        Aprobar deja un permiso de un solo uso, de 2 min. Si la ventana de 5 min ya se cerró, no
+        aprueba. Aprobar o denegar despierta la espera de la llamada.
+      '''
+    }
+
+    // 10 a 20 · lo que pasa con la llamada
+    alt {
+      when 'el dueño aprueba antes de 25 s' {
+        // 10
+        app.aprobar.espera -> app.aprobar.esperaPantalla 'si aprueba a tiempo: espera que se cierre la pantalla' {
+          notes 'Hasta 3 s. Si sigue abierta (el dueño tiene más pedidos), vuelve awaiting_approval y el permiso queda para la repetición.'
+        }
+        // 11
+        app.aprobar.esperaPantalla -> app.aprobar.revisar 'si aprueba a tiempo: retoma la cola y vuelve a evaluar' {
+          notes '''
+            Re-resuelve y re-evalúa sin esperar. Corre sólo si la huella es la misma y la decisión no
+            es más estricta. Si no, devuelve el resultado nuevo. Una lectura, o una llamada que llegó
+            sin perfiles, no pasa por esta revisión: gasta el permiso y corre.
+          '''
+        }
+        // 12
+        app.aprobar.revisar -> app.aprobar.coordinador 'si aprueba a tiempo: gasta el permiso' {
+          notes '''
+            Recién acá, justo antes de correr: así una revisión que falla (la app no está en pantalla,
+            porque el dueño aprobó desde esta misma app) deja el permiso para la repetición. Si otra
+            llamada idéntica lo gastó antes, vuelve already_used y el agente tiene que releer la
+            pantalla antes de repetir.
+          '''
+        }
+        // 13
+        app.aprobar.revisar -> app.atender.indicador 'si aprueba a tiempo: corre'
+      }
+      when 'el dueño deniega' {
+        // 14
+        app.atender.registro <- app.aprobar.espera 'si deniega: denied'
+      }
+      when 'pasan 25 s sin respuesta' {
+        // 15
+        app.atender.registro <- app.aprobar.espera 'si no responde: awaiting_approval + approval_id' {
+          notes 'La llamada termina y la pendiente sigue abierta hasta los 5 min.'
+        }
+        // 16
+        agente <- app.atender.registro 'si no responde: la respuesta, con el approval_id'
+        // 17
+        agente -> app.aprobar.consultarEstado 'si no responde: get_approval_status(approval_id, wait_ms)' {
+          notes 'Pasa por el portón sin mirar los perfiles. wait_ms va de 0 a 25 000.'
+        }
+        // 18
+        app.aprobar.consultarEstado -> app.aprobar.coordinador 'si no responde: ¿cómo va? espera hasta wait_ms'
+        // 19
+        agente <- app.aprobar.consultarEstado 'si no responde: pending, approved, denied, expired…' {
+          notes '''
+            approved: repetir la llamada idéntica en 2 min. denied: parar. expired: pasaron 5 min sin
+            decidir (o el id no existe). not_required: el dueño marcó una excepción y ahora corre sin
+            aprobación. already_used: una llamada idéntica ya gastó el permiso; releer la pantalla.
+          '''
+        }
+        // 20
+        agente -> app.atender.porton 'si no responde y dice approved: repite la llamada, idéntica' {
+          notes 'Sigue en el flujo 1 de 3: vuelve a decidir, gasta el permiso del dueño (paso 16) y corre (paso 17).'
+        }
+      }
+    }
+  }
+}

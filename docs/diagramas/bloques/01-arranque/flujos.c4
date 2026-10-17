@@ -1,0 +1,125 @@
+// BLOQUE 01 · EL FLUJO de «Arrancar el servidor»: cómo un pedido de arranque, llegue por la puerta
+// que llegue, termina en el servidor MCP escuchando.
+//   flujo-arranque  las cuatro puertas, el servicio en primer plano y el armado del servidor.
+// Cada paso lleva en un comentario el número que dibuja LikeC4, para pedir cambios por paso
+// («en el paso 5, agregá…»). Sale del código del 2026-10-16 (rama feat/approval-profiles); cada
+// pieza dice su función y su archivo:línea en bloque.c4.
+//
+// Forma (la de SecondBrian): cajas unidas por flechas numeradas, sin líneas de vida. Los recuadros
+// de los alt no se dibujan: por eso cada paso de una rama dice su condición al principio de la
+// etiqueta. Los alt se escriben igual, porque ordenan la numeración y el archivo.
+//
+// Se abre en VS Code: este archivo, y Ctrl+Shift+P → «Open Preview» (LikeC4).
+views '01 · Arrancar el servidor' {
+
+  dynamic view flujo-arranque {
+    title 'Flujo: de un pedido de arranque al servidor escuchando'
+    description '''
+      Cuatro puertas mandan el mismo pedido (ACTION_START) al servicio, y Android puede revivirlo
+      solo. El servicio muestra la notificación, anota que quedó prendido y, si no hay otro arranque
+      en curso, arma el servidor: ajustes, certificado (sólo con HTTPS), herramientas, servidor web
+      y túnel.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    // 1 a 10 · por dónde llega el pedido
+    alt {
+      when 'tocas «Iniciar»' {
+        // 1
+        usuario -> app.arranque.botonIniciar 'si tocas «Iniciar»: el botón'
+        // 2
+        app.arranque.botonIniciar -> app.arranque.servicio 'si tocas «Iniciar»: ACTION_START' {
+          notes 'Antes pone el estado de la pantalla en «arrancando».'
+        }
+      }
+      when 'el teléfono se enciende' {
+        // 3
+        android -> app.arranque.autoinicio 'si se enciende: BOOT_COMPLETED'
+        // 4
+        app.arranque.autoinicio -> ajustes 'si se enciende: ¿está prendido el inicio automático?' {
+          notes 'Con tiempo límite para leer los ajustes. Si está apagado, no hace nada.'
+        }
+        // 5
+        app.arranque.autoinicio -> app.arranque.servicio 'si se enciende y está prendido: ACTION_START'
+      }
+      when 'se actualizó la app' {
+        // 6
+        android -> app.arranque.trasActualizar 'si se actualizó la app: MY_PACKAGE_REPLACED'
+        // 7
+        app.arranque.trasActualizar -> ajustes 'si se actualizó la app: ¿había quedado prendido?'
+        // 8
+        app.arranque.trasActualizar -> app.arranque.servicio 'si se actualizó y estaba prendido: ACTION_START'
+      }
+      else 'una orden por adb' {
+        // 9
+        pc -> app.arranque.ordenAdb 'si es por adb: am start de la actividad invisible'
+        // 10
+        app.arranque.ordenAdb -> app.arranque.servicio 'si es por adb: ACTION_START' {
+          notes 'La actividad invisible le da a la app el permiso de arrancar un servicio en primer plano aunque esté en segundo plano.'
+        }
+      }
+    }
+
+    // 11 · Android también lo revive sin pedido de nadie
+    android -> app.arranque.servicio 'o: Android revive el servicio (START_STICKY), sin pedido' {
+      notes 'Llega sin acción; el servicio lo trata igual que un ACTION_START.'
+    }
+
+    // 12 · el servicio en primer plano
+    app.arranque.servicio -> ajustes 'anota «servidor prendido»' {
+      notes '''
+        Antes que nada muestra la notificación fija (startForeground): Android exige hacerlo en
+        pocos segundos. La marca «servidor prendido» es la que lee la vuelta tras actualizar.
+      '''
+    }
+
+    // 13 · uno solo
+    app.arranque.servicio -> app.arranque.armado 'si no hay otro arranque en curso: armá el servidor' {
+      notes 'Si ya hay uno arrancando o corriendo, el pedido se ignora: dos pedidos juntos dan un solo servidor.'
+    }
+
+    // 14 a 16 · el armado
+    app.arranque.armado -> ajustes 'lee la configuración' {
+      notes 'Puerto, dirección, HTTPS, túnel, permisos de las herramientas, límite de archivos, aviso de herramienta en uso.'
+    }
+    app.arranque.armado -> certificado 'si HTTPS está prendido: lo crea o lo lee'
+    app.arranque.armado -> app.arranque.herramientas 'registrá las herramientas' {
+      notes '''
+        Sólo las que dejan los permisos dados (cámara, micrófono, ubicación, notificaciones) y los
+        ajustes de cada una. Una herramienta sin clasificar en el catálogo de políticas no deja
+        arrancar el servidor.
+      '''
+    }
+
+    // 17 · el servidor web
+    app.arranque.armado -> app.arranque.servidorWeb 'crealo y levantalo' {
+      notes 'Ktor, por HTTP (por defecto) o HTTPS, con la autenticación y el OAuth propios.'
+    }
+
+    // 18 a 20 · el túnel
+    alt {
+      when 'túnel prendido y sin HTTPS' {
+        // 18
+        app.arranque.armado -> app.arranque.tunel 'si el túnel está prendido y no hay HTTPS: arrancalo' {
+          notes 'Si falla, el servidor sigue sin túnel. Con HTTPS el túnel no corre: siempre apunta a http://localhost.'
+        }
+        // 19
+        app.arranque.tunel -> app.arranque.relay 'si el proveedor es el relay: el WebSocket al relay' {
+          notes 'El tercer proveedor, junto a Cloudflare y ngrok.'
+        }
+        // 20
+        app.arranque.tunel -> tunelExterno 'si el túnel está prendido: abre la dirección pública'
+      }
+    }
+
+    // 21 · lo que sale
+    app.arranque.armado -> usuario 'el estado «corriendo» con puerto y dirección' {
+      notes '''
+        Si algo falló en el armado, el estado es «error» con el motivo, y se puede volver a pedir el
+        arranque. Al final empieza a vigilar el túnel y las aprobaciones pendientes, para avisar con
+        notificaciones.
+      '''
+    }
+  }
+}

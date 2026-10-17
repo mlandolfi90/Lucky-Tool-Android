@@ -1,0 +1,120 @@
+// BLOQUE 04 · EL FLUJO de «Conectar un agente»: cómo un agente sin credencial termina con una que
+// la puerta con llave del bloque 02 deja pasar.
+//   flujo-conectar  los dos caminos: el token fijo (3 pasos) y OAuth (16 pasos), en 19.
+// Versión simple. Cada paso lleva en un comentario el número que dibuja LikeC4, para pedir cambios por
+// paso («en el paso 5, agregá…»). Sale del código del 2026-10-16 (rama feat/approval-profiles); cada
+// pieza dice su función y su archivo:línea en bloque.c4. La puerta con llave es del bloque 02.
+//
+// Forma: cajas unidas por flechas numeradas, sin líneas de vida. Los recuadros de los alt no se
+// dibujan: por eso cada paso de una rama dice su condición al principio de la etiqueta.
+//
+// Se abre en VS Code: este archivo, y Ctrl+Shift+P → «Open Preview» (LikeC4).
+views '04 · Conectar un agente' {
+
+  dynamic view flujo-conectar {
+    title 'Flujo: de un agente sin credencial a una credencial válida'
+    description '''
+      Hay dos caminos. Con el token fijo, el dueño lo copia de la app y se lo da al agente. Con OAuth,
+      el agente se registra, pide permiso y el dueño lo aprueba en el teléfono comparando un código de
+      2 dígitos; el agente cambia el permiso por un token. En los dos casos termina llamando a /mcp,
+      donde la puerta con llave del bloque 02 revisa la credencial.
+    '''
+    autoLayout LeftRight
+    global style estados
+
+    alt {
+      when 'con el token fijo' {
+        // 1
+        usuario -> app.conectar.tokenFijo 'si es con el token fijo: lo copia de la pantalla del servidor' {
+          notes 'Se crea solo, una vez, al primer arranque. En la pantalla del servidor viene tapado, con un botón para verlo y otro para copiar.'
+        }
+        // 2
+        app.conectar.tokenFijo -> agente 'si es con el token fijo: se lo da al agente' {
+          notes 'Se lo pega a mano en el agente.'
+        }
+        // 3
+        agente -> app.atender.llave 'si es con el token fijo: POST /mcp con el token' {
+          notes 'La puerta con llave lo compara en tiempo constante con el que tiene guardado. Sigue en el bloque 02.'
+        }
+      }
+      else 'con OAuth' {
+        // 4
+        agente -> app.atender.llave 'si es con OAuth: POST /mcp, sin credencial' {
+          notes 'Sólo si OAuth está prendido. Con OAuth apagado, las rutas de OAuth ni existen.'
+        }
+        // 5
+        agente <- app.atender.llave 'si es con OAuth: 401, con la dirección del OAuth' {
+          notes 'El 401 dice dónde leer cómo registrarse y pedir permiso (/.well-known/…). Con eso el agente sigue solo.'
+        }
+        // 6
+        agente -> app.conectar.registro 'si es con OAuth: se registra con su nombre y su dirección de vuelta' {
+          notes 'Sólo acepta agentes que vuelven a claude.ai, a chatgpt.com o a localhost. Cualquier otra dirección se rechaza y queda en el registro del servidor.'
+        }
+        // 7
+        app.conectar.registro -> agentesConectados 'si es con OAuth: lo anota' {
+          notes 'Guarda el nombre, las direcciones de vuelta y la fecha de último uso. Si el agente sale de la lista, su token deja de valer al instante.'
+        }
+        // 8
+        app.conectar.registro -> app.conectar.permiso 'si es con OAuth: ya registrado, pide permiso (GET /authorize)' {
+          notes 'Lo pide el agente. La app revisa que esté registrado, que vuelva a una dirección permitida y que pida PKCE (S256). Si no, no abre nada.'
+        }
+        // 9
+        app.conectar.permiso -> app.conectar.coordinador 'si es con OAuth: abre una pendiente, con un código de 2 dígitos' {
+          notes 'Dura 5 min. Puede haber 10 a la vez; si llega otra, se descarta la más vieja. La página que recibe el agente muestra el mismo código.'
+        }
+        // 10
+        app.conectar.coordinador -> app.conectar.notificacion 'si es con OAuth: hay una pendiente' {
+          notes 'Sin el permiso de notificaciones no avisa.'
+        }
+        // 11
+        app.conectar.notificacion -> usuario 'si es con OAuth: le avisa al dueño'
+        // 12
+        usuario -> app.conectar.pantalla 'si es con OAuth: abre la app y compara el código' {
+          notes '''
+            La pantalla muestra el nombre del agente, de qué dirección viene, su IP con la ciudad, el
+            código y una cuenta regresiva. El código es una confirmación, no un secreto: la única puerta
+            es tocar Aprobar acá. La página del agente no tiene botón de aprobar.
+          '''
+        }
+        // 13
+        app.conectar.pantalla -> app.conectar.coordinador 'si es con OAuth: aprueba o deniega' {
+          notes 'Aprobar deja de estar disponible cuando se acaba el tiempo. Cada decisión queda en el registro del servidor.'
+        }
+        // 14
+        app.conectar.permiso -> app.conectar.estado 'si es con OAuth: la página pregunta cada 2 s si ya decidió' {
+          notes 'La página de aprobación se abre en el navegador del agente y no tiene botón de aprobar: sólo muestra el código y espera.'
+        }
+        alt {
+          when 'el dueño aprueba' {
+            // 15
+            agente <- app.conectar.estado 'si el dueño aprueba: un código de un solo uso' {
+              notes 'Dura 60 s. Vuelve a la dirección registrada del agente.'
+            }
+            // 16
+            agente -> app.conectar.token 'si el dueño aprueba: lo cambia por un token (POST /token)' {
+              notes 'La app comprueba que el código es el de ese agente, que vuelve a la misma dirección y la prueba PKCE.'
+            }
+            // 17
+            agente <- app.conectar.token 'si el dueño aprueba: token de acceso (24 h) y de refresco (90 d)' {
+              notes '''
+                Con el de refresco el agente pide uno de acceso nuevo sin molestar al dueño; cada refresco
+                cambia el de refresco anterior. Se anota en el registro del servidor y se guarda el
+                refresco en la lista de agentes conectados.
+              '''
+            }
+            // 18
+            agente -> app.atender.llave 'si el dueño aprueba: POST /mcp con el token de acceso' {
+              notes 'La puerta con llave valida la firma, que el token sea para este servidor y que el agente siga en la lista. Sigue en el bloque 02.'
+            }
+          }
+          else 'el dueño deniega o se acaba el tiempo' {
+            // 19
+            agente <- app.conectar.estado 'si deniega o vence: sin código, no hay token' {
+              notes 'El agente tiene que pedir permiso otra vez.'
+            }
+          }
+        }
+      }
+    }
+  }
+}
