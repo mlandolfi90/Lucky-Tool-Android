@@ -74,11 +74,11 @@ piezas de la IA citan su archivo:línea del prototipo.
 - Cómo se corta desde la notificación: la de hoy no tiene botones, porque un agente podría apretarlos.
 - Cuánto espera el agente si el dueño no responde (hoy, 5 minutos).
 - Si el revisor rechaza un plan con los límites incompletos.
-- Cómo se mide la condición de un paso (pago del BDV = monto de la orden): la prueba no la midió.
+- Cómo se mide la condición de un paso (pago del banco = monto de la orden): la prueba no la midió.
 - Los nombres y argumentos de las herramientas para proponer y empezar planes.
 - Borrar del historial desde el agente: propuesta de pedir el OK del dueño en el chat, y que los Logs de
   auditoría no se borren.
-- Que un aviso (por ejemplo, que llegó el pago al BDV) arranque el plan solo: depende de despertar al agente
+- Que un aviso (por ejemplo, que llegó el pago al banco) arranque el plan solo: depende de despertar al agente
   (punto 7 de `PENDIENTES.md`).
 - El riesgo que queda, dicho en el diseño: dentro de los números del plan, una IA engañada podría aceptar un
   paso equivocado. Lo acotan el juez 1, la contraparte fijada al crear la orden y la condición de pago antes

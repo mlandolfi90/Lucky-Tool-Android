@@ -70,7 +70,7 @@ model {
         description 'Idea, sin plan escrito'
 
         entrada = entrada 'El dueño quiere que el agente haga una tarea en una app protegida' {
-          description 'Por ejemplo: «revisá el BDV y, si llegó el pago, liberá la orden de Binance».'
+          description 'Por ejemplo: «revisá el banco y, si llegó el pago, liberá la orden de la app de cambio».'
         }
         quiere = objetivo 'Un plan escrito y firmado una sola vez con la huella' {
           #idea

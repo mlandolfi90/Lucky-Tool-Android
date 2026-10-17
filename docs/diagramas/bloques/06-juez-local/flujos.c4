@@ -35,10 +35,10 @@ views '06 · Decidir con la IA local' {
     // 1
     humano -> agente 'pide en el chat una tarea en una app protegida' {
       notes '''
-        Ejemplo del diseño: «Cobrar y liberar la orden de 20.000 Bs». Pasos: 1) en el BDV, buscar un pago
-        de 20.000 Bs (sólo leer); 2) si llegó, seguir, y si no, esperar y avisar; 3) en Binance, abrir el
-        chat de la orden y revisarlo; 4) ejecutar el plan ya aprobado «Liberar orden». Límites: BDV sólo
-        leer, Binance 20.000 Bs, 1 orden. Condición: liberar sólo si el pago del BDV es igual al monto
+        Ejemplo del diseño: «Cobrar y liberar la orden de 20.000 Bs». Pasos: 1) en el banco, buscar un pago
+        de 20.000 Bs (sólo leer); 2) si llegó, seguir, y si no, esperar y avisar; 3) en la app de cambio, abrir el
+        chat de la orden y revisarlo; 4) ejecutar el plan ya aprobado «Liberar orden». Límites: banco sólo
+        leer, app de cambio 20.000 Bs, 1 orden. Condición: liberar sólo si el pago del banco es igual al monto
         de la orden.
       '''
     }
@@ -112,7 +112,7 @@ views '06 · Decidir con la IA local' {
     humano -> agente 'dice «ejecutá los planes aprobados» (o uno por su nombre)'
     // 2
     agente -> app.juez.ciclo.empezar 'llama a la herramienta que empieza planes' {
-      notes 'Abierto: el diseño no nombra la herramienta. Más adelante, un aviso (por ejemplo, que llegó el pago al BDV) podría arrancar el plan solo; depende de poder despertar al agente (pendiente 7 de PENDIENTES.md).'
+      notes 'Abierto: el diseño no nombra la herramienta. Más adelante, un aviso (por ejemplo, que llegó el pago al banco) podría arrancar el plan solo; depende de poder despertar al agente (pendiente 7 de PENDIENTES.md).'
     }
     // 3
     app.juez.ciclo.empezar -> app.juez.almacenPlanes 'busca los planes en espera'
@@ -323,7 +323,7 @@ views '06 · Decidir con la IA local' {
               when 'falló sólo la condición del plan' {
                 // 13
                 app.juez.ia.comparador -> app.juez.ia.ramaNo 'si falló sólo la condición del plan: no corre' {
-                  notes 'Por ejemplo, todavía no llegó el pago. Abierto: la prueba compara APP, MONTO, DESTINATARIO y «es el paso»; la condición de un paso (pago del BDV = monto de la orden) todavía no se midió.'
+                  notes 'Por ejemplo, todavía no llegó el pago. Abierto: la prueba compara APP, MONTO, DESTINATARIO y «es el paso»; la condición de un paso (pago del banco = monto de la orden) todavía no se midió.'
                 }
                 // 14
                 app.juez.ia.ramaNo -> agente 'sigue la rama «si no» del plan: esperar o avisar al dueño, sin pedir la huella'
