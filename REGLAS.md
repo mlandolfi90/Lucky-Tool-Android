@@ -126,7 +126,16 @@ no lo repite, agrega lo de la casa. Hay tres puntos que chocan con hábitos del 
 
 ## Excepciones a `CLAUDE.md`
 
-Las decidió el humano. Fuera de estos puntos, `CLAUDE.md` rige tal cual: la app sigue sin root y sin
+Las decidió el humano.
+
+- **Arquitectura hexagonal** (2026-10-17, ver «Repo y upstream»). Lo que `CLAUDE.md` dice de la estructura
+  (§5 y §7: servicios, repositorios, ViewModels, tools MCP) se lee dentro de ese corte:
+  - el servicio de accesibilidad, Ktor y el SDK MCP, DataStore y la UI son **adaptadores**;
+  - las reglas de negocio viven en el núcleo, sin `import android`.
+
+  El resto de `CLAUDE.md` (lifecycle, concurrencia, seguridad, tests) rige igual.
+
+Fuera de estos puntos, `CLAUDE.md` rige tal cual: la app sigue sin root y sin
 reflexión sobre APIs ocultas.
 
 - **Una ronda de revisión, no «hasta que salga limpio»** (2026-10-13). `CLAUDE.md` pide volver a correr
@@ -153,6 +162,16 @@ reflexión sobre APIs ocultas.
 - `origin` → `mlandolfi90/Lucky-Tool-Android`, fork **público**: GitHub no permite un fork privado de un
   repo público.
 - `upstream` → `danielealbano/android-remote-control-mcp` (MIT).
+- **Nos separamos del orden de upstream: el código pasa a hexagonal** (2026-10-17: *«nos separamos del orden
+  que propone el upstream, aplicamos hexagonal que conocemos para un fácil desarrollo y agregación de
+  módulos»*).
+  - Se usa el corte de la plantilla hexagonal del taller: un núcleo sin Android, Ktor ni DataStore; puertos
+    con nombre de necesidad; adaptadores para cada tecnología, y una configuración que arma todo.
+  - Las dependencias sólo bajan: un adaptador conoce al núcleo, el núcleo no conoce a nadie.
+  - Consecuencia aceptada: traer cambios de upstream deja de ser un `git merge`. Lo que sirva se toma a
+    mano.
+  - El cómo (módulos, orden, nombres) va en un plan en `docs/plans/`. Lo abierto está en `PENDIENTES.md`,
+    punto 12.
 - Ramas, commits y PRs siguen [`docs/TOOLS.md`](docs/TOOLS.md), con una excepción: no se sale de `main`, se
   sale de la punta (ver «Nuestra versión y las ramas»).
 - Lo que sirve a todos puede volver a upstream por PR ([`CONTRIBUTING.md`](CONTRIBUTING.md)). Lo decide el

@@ -19,6 +19,7 @@ decide el humano. Cómo se trabaja y qué está decidido sobre la forma de traba
 | 9 | Manual de uso para el agente | Plan 72 escrito y decidido, sin implementar. | — |
 | 10 | La firma de los APK de prueba | Resuelto. | — |
 | 11 | Planes firmados y juez local | Diseño a dibujos y prueba medida, sin plan. | La lista «Por discutir» del punto. |
+| 12 | Reordenar el código en hexagonal | Decidido, sin plan. | La lista «Por discutir» del punto. |
 
 ## Cuándo
 
@@ -438,3 +439,27 @@ El diseño se hizo a dibujos. Los borradores están fuera de git, y la versión 
   - El riesgo que queda, dicho una vez: dentro de los números del plan, una IA engañada podría aceptar un
     paso equivocado. Lo acotan el juez 1, la contraparte fijada y la condición de pago.
 - Después: un plan con el proceso de `CLAUDE.md`, con el número que dé el contador.
+
+## 12. Reordenar el código en hexagonal
+
+Decidido por el humano el 2026-10-17: *«nos separamos del orden que propone el upstream, aplicamos hexagonal
+que conocemos para un fácil desarrollo y agregación de módulos»*. La regla está en `REGLAS.md`, en «Repo y
+upstream».
+
+- **Medido el 2026-10-17 en la punta:**
+  - Hoy el código se ordena por tipo técnico: `data`, `di`, `mcp`, `policy`, `services`, `ui` y `utils`.
+  - `policy/` (76 archivos, casi todo nuestro) es lo más cercano a un núcleo: sólo 3 archivos importan
+    Android y ninguno importa Ktor.
+  - Pero `policy/` usa clases de `services/accessibility`, y `CoordinateSubjectResolver` usa la
+    implementación `ActionExecutorImpl` en lugar de su interfaz.
+  - `services/`: 55 de sus 96 archivos importan Android.
+- **Lo que gana el juez local (punto 11):** los dos jueces, los planes firmados y el historial son reglas
+  puras. En un núcleo hexagonal se prueban sin teléfono, y la IA, la huella, la pantalla y el almacén
+  quedan como adaptadores intercambiables.
+- **Por discutir (decide el humano):**
+  - Si son módulos de Gradle (un núcleo en Kotlin puro, sin Android, que no compila si alguien importa
+    Android) o carpetas dentro de `:app`.
+  - Si se hace por partes, empezando por las aprobaciones (`policy/`), o todo de una vez.
+  - Si los nombres de carpetas y clases van en inglés, como el código de hoy, o en español, como la
+    plantilla del taller.
+  - Si este reordenamiento va antes o después del plan del juez local.
