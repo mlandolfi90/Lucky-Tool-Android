@@ -168,6 +168,12 @@ reflexión sobre APIs ocultas.
   - Se usa el corte de la plantilla hexagonal del taller: un núcleo sin Android, Ktor ni DataStore; puertos
     con nombre de necesidad; adaptadores para cada tecnología, y una configuración que arma todo.
   - Las dependencias sólo bajan: un adaptador conoce al núcleo, el núcleo no conoce a nadie.
+  - **Piezas de lego** (2026-10-17: *«como si la app se construyera de cero, con cada funcionalidad anexada
+    sin depender de lo que viene… para poder intercambiar lo del juez u otras funciones»*).
+    - Cada funcionalidad es su propio módulo de Gradle.
+    - Una pieza depende sólo del núcleo, nunca de otra pieza.
+    - La app sólo arma: elige qué piezas enchufa y las conecta.
+    - Cambiar una pieza (por ejemplo, el juez) no toca las demás.
   - Consecuencia aceptada: traer cambios de upstream deja de ser un `git merge`. Lo que sirva se toma a
     mano.
   - El cómo (módulos, orden, nombres) va en un plan en `docs/plans/`. Lo abierto está en `PENDIENTES.md`,

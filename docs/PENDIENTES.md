@@ -19,7 +19,7 @@ decide el humano. Cómo se trabaja y qué está decidido sobre la forma de traba
 | 9 | Manual de uso para el agente | Plan 72 escrito y decidido, sin implementar. | — |
 | 10 | La firma de los APK de prueba | Resuelto. | — |
 | 11 | Planes firmados y juez local | Diseño a dibujos y prueba medida, sin plan. | La lista «Por discutir» del punto. |
-| 12 | Reordenar el código en hexagonal | Decidido: por partes, empezando por las aprobaciones, en inglés y antes del juez local. Sin plan. | Si el núcleo es un módulo de Gradle o una carpeta dentro de `:app`. |
+| 12 | Reordenar el código en hexagonal | Decidido: por partes, empezando por las aprobaciones, en inglés y antes del juez local. Sin plan. | Si se mueve el código que ya anda o se reescribe. El mapa de piezas. |
 
 ## Cuándo
 
@@ -464,3 +464,6 @@ upstream».
     parte lleva su plan y su rama.
   - **Nombres en inglés**, como el código de hoy (`domain`, `application`, `ports`, `adapters`).
   - **Antes del juez local.** El juez se construye ya dentro del núcleo hexagonal.
+  - **Piezas de lego, con módulos de Gradle.** Se ordena como si la app se construyera de cero: cada
+    funcionalidad es un módulo que depende sólo del núcleo, nunca de otra funcionalidad, y se puede
+    intercambiar. La app sólo arma las piezas.
